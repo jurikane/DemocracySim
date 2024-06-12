@@ -4,8 +4,6 @@ In a world brimming with complexities and uncertainties, we find ourselves at a 
 We face a myriad of pressing global challenges — from climate change[^9] and social inequality[^8] 
 to the ethical dilemmas posed by the rapid advancement of artificial intelligence (AI)[^4].
 
-![problems.png](images%2Fproblems.png)
-
 Imagine a future where AI surpasses individual human intelligence across many domains[^3].
 How do we safely integrate this expertise into existing governance structures?
 At present, AI algorithms, mostly devoid of ethical considerations, perpetuate biases[^5] and render decisions 
@@ -43,7 +41,7 @@ on evaluating methods against reasonable assumptions (like Pareto optimality, Co
 non-dictatorship, etc.), demonstrating mathematically that no method will ever satisfy all criteria[^1]. 
 But the complexity of the problem is even greater when we consider collective decision-making in real-world societies.
 Real-world democratic governance goes far beyond merely aligning individual interests — it involves intricate 
-path dependencies from past decisions and lack of participation, to name just the most obvious.
+path dependencies from past decisions, disinformation and lack of participation, to name just the most obvious.
 
 Addressing these challenges requires a novel approach. 
 This research aims to pioneer a new path by incorporating these complexities through multi-agent-based simulations.
@@ -57,13 +55,13 @@ our collective intelligence.
 
 ## References
 
-[^1]: Felix Brandt, Vincent Conitzer, Ulle Endriss, J ́erˆome Lang, and Ariel D. Procaccia, editors. Handbook of Computational Social Choice. Cambridge University Press, 2016.
+[^1]: Felix Brandt, Vincent Conitzer, Ulle Endriss, Jérôme Lang, and Ariel D. Procaccia, editors. Handbook of Computational Social Choice. Cambridge University Press, 2016.
 
-[^2]: Jana Fehr, Brian Citro, Rohit Malpani, Christoph Lippert, and Vince I Madai. A trustworthy ai reality-check: the lack of transparency of artificial intelligence products in healthcare. Frontiers in Digital Health, 6:1267290, 2024.
+[^2]: Jana Fehr, Brian Citro, Rohit Malpani, Christoph Lippert, and Vince I Madai. A trustworthy AI reality-check: the lack of transparency of artificial intelligence products in healthcare. Frontiers in Digital Health, 6:1267290, 2024.
 
 [^3]: Katja Grace, John Salvatier, Allan Dafoe, Baobao Zhang, and Owain Evans. Viewpoint: When will AI exceed human performance? evidence from AI experts. J. Artif. Intell. Res., 62:729–754, 2018.
 
-[^4]: Benjamin Hilton. Preventing an ai-related catastrophe: Ai might bring huge benefits — if we avoid the risks.
+[^4]: Benjamin Hilton. Preventing an AI-related catastrophe: AI might bring huge benefits — if we avoid the risks.
 
 [^5]: Susan Leavy, Barry O’Sullivan, and Eugenia Siapera. Data, power and bias in artificial intelligence. CoRR, abs/2008.07341, 2020.
 
@@ -73,4 +71,4 @@ our collective intelligence.
 
 [^8]: Thomas Piketty. Das Kapital im 21. Jahrhundert. CH Beck, 2014.
 
-[^9]: Hans-Otto P ̈ortner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. Climate change 2022: Impacts, adaptation and vulnerability. IPCC Sixth Assessment Report, 2022.
+[^9]: Hans-Otto Pörtner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. Climate change 2022: Impacts, adaptation and vulnerability. IPCC Sixth Assessment Report, 2022.

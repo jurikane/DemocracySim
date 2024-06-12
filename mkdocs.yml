@@ -1,11 +1,11 @@
 # Project information
-site_name: Master thesis "Participation"
-site_description: Documentation of the master thesis "Participation"
-site_url: https://jurikane.github.io/participation/
+site_name: DemocracySim
+site_description: Documentation DemocracySim and the accompanying master thesis
+site_url: https://jurikane.github.io/DemocracySim/
 site_author: Paul Kühnel
 
 # Repository
-repo_url: https://github.com/jurikane/participation
+repo_url: https://github.com/jurikane/DemocracySim
 
 edit_uri: edit/dev/docs/
 
@@ -40,11 +40,6 @@ theme:
       toggle:
         icon: material/brightness-3
         name: Switch to system preference
-  plugins:
-    - git-revision-date-localized:
-        enable_creation_date: true
-    - search.highlight
-    - social
   features:
     - navigation.expand
     - navigation.indexes

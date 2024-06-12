@@ -1,10 +1,21 @@
-# Participation: multy-agent-based simulation based on mesa
+[![Pages](https://github.com/jurikane/DemocracySim/actions/workflows/ci.yml/badge.svg)](https://jurikane.github.io/DemocracySim/)
+[![pytest main](https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml/badge.svg?branch=main)](https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml)
+[![codecov](https://codecov.io/gh/jurikane/DemocracySim/graph/badge.svg?token=QVNSXWIGNE)](https://codecov.io/gh/jurikane/DemocracySim)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[//]: # ([![pytest dev]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml/badge.svg?branch=dev&#41;]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml&#41;)
+
+# DemocracySim: Multi-Agent Simulations to research democratic voting and participation
 
 Codebase of a simulation for the master thesis 
 "Influence of different voting rules on participation and welfare in a simulated multi-agent democracy" 
 at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de) 
 at the [Faculty of Mathematics and Computer Science](https://www.mathcs.uni-leipzig.de/en)
 of [Leipzig University](https://www.uni-leipzig.de/en).
+
+### Documentation
+
+For details see the [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-pages.
 
 ## Short overview in German
 
