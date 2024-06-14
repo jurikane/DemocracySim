@@ -48,7 +48,9 @@ This research aims to pioneer a new path by incorporating these complexities thr
 
 While the model and research inquiries within the proposed master thesis 
 can only represent this approach in its infancy, the potential of multi-agent-based modeling 
-to eventually encapsulate all essential facets of real-world democratic governance can hardly be overstated.
+to eventually encapsulate all essential facets of real-world democratic governance can hardly be overstated[^10].
+To the best of our knowledge, this approach has not been systematically applied to researching social choice 
+or collective decision-making.
 It stands poised to boost what may be the most underestimated cornerstone of human society:
 our collective intelligence.
 
@@ -72,3 +74,5 @@ our collective intelligence.
 [^8]: Thomas Piketty. Das Kapital im 21. Jahrhundert. CH Beck, 2014.
 
 [^9]: Hans-Otto Pörtner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. [Climate change 2022: Impacts, adaptation and vulnerability](https://hal.science/hal-03774939/document). IPCC Sixth Assessment Report, 2022.
+
+[^10]: Robert L Axtell and J Doyne Farmer. [Agent-based modeling in economics and finance](https://oms-inet.files.svdcdn.com/production/files/JEL-v2.0.pdf): Past, present, and future. In: Journal of Economic Literature (2022), pp. 1–10
