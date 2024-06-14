@@ -12,6 +12,7 @@ Codebase of a simulation for the master thesis
 at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de) 
 at the [Faculty of Mathematics and Computer Science](https://www.mathcs.uni-leipzig.de/en)
 of [Leipzig University](https://www.uni-leipzig.de/en).
+This project is kindly supported by [OpenPetition](https://osd.foundation).
 
 ### Documentation
 
@@ -67,8 +68,3 @@ Auch interessant:
 - was passiert, wenn die Gruppe der abstimmenden Agenten zufällig ausgewählt wird 
 („Bürgerräte“ also kostenlose oder vergütete Teilnahme von x% aller Agenten)? 
 (werden die Entscheidungen „besser“, wie verteilt sich der Wohlstand, …) 
-
-## Citing Mesa
-
-To cite Mesa in your publication, 
-you can use the [CITATION.bib](https://github.com/projectmesa/mesa/blob/main/CITATION.bib).

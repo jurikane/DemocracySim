@@ -1,6 +1,6 @@
 # Project information
 site_name: DemocracySim
-site_description: Documentation DemocracySim and the accompanying master thesis
+site_description: Welcome to the documentation of the DemocracySim project and its accompanying master thesis.
 site_url: https://jurikane.github.io/DemocracySim/
 site_author: Paul Kühnel
 
@@ -13,7 +13,7 @@ edit_uri: edit/dev/docs/
 nav:
     - Home: index.md
     - Teaser: teaser.md
-    - Mesa Documentation: mesa_docs.md
+    - Mesa: mesa_docs.md
 
 theme:
   name: material

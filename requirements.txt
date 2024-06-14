@@ -8,6 +8,7 @@ click~=8.1.7
 networkx~=3.3
 pandas~=2.2.2
 pytest~=8.2.0
+pytest-cov~=5.0.0
 toml~=0.10.2
 Flask~=3.0.3
 altair~=5.3.0

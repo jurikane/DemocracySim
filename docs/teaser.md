@@ -55,20 +55,20 @@ our collective intelligence.
 
 ## References
 
-[^1]: Felix Brandt, Vincent Conitzer, Ulle Endriss, Jérôme Lang, and Ariel D. Procaccia, editors. Handbook of Computational Social Choice. Cambridge University Press, 2016.
+[^1]: Felix Brandt, Vincent Conitzer, Ulle Endriss, Jérôme Lang, and Ariel D. Procaccia, editors. [Handbook of Computational Social Choice](http://dx.doi.org/10.1017/CBO9781107446984). Cambridge University Press, 2016
 
-[^2]: Jana Fehr, Brian Citro, Rohit Malpani, Christoph Lippert, and Vince I Madai. A trustworthy AI reality-check: the lack of transparency of artificial intelligence products in healthcare. Frontiers in Digital Health, 6:1267290, 2024.
+[^2]: Jana Fehr, Brian Citro, Rohit Malpani, Christoph Lippert, and Vince I Madai. [A trustworthy AI reality-check: the lack of transparency of artificial intelligence products in healthcare](https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2024.1267290/full). Frontiers in Digital Health, 6:1267290, 2024. 
 
-[^3]: Katja Grace, John Salvatier, Allan Dafoe, Baobao Zhang, and Owain Evans. Viewpoint: When will AI exceed human performance? evidence from AI experts. J. Artif. Intell. Res., 62:729–754, 2018.
+[^3]: Katja Grace, John Salvatier, Allan Dafoe, Baobao Zhang, and Owain Evans. [Viewpoint: When will AI exceed human performance? evidence from AI experts](https://jair.org/index.php/jair/article/view/11222). J. Artif. Intell. Res., 62:729–754, 2018.
 
-[^4]: Benjamin Hilton. Preventing an AI-related catastrophe: AI might bring huge benefits — if we avoid the risks.
+[^4]: Benjamin Hilton. [Preventing an AI-related catastrophe: AI might bring huge benefits — if we avoid the risks](https://80000hours.org/problem-profiles/artificial-intelligence/).
 
-[^5]: Susan Leavy, Barry O’Sullivan, and Eugenia Siapera. Data, power and bias in artificial intelligence. CoRR, abs/2008.07341, 2020.
+[^5]: Susan Leavy, Barry O’Sullivan, and Eugenia Siapera. [Data, power and bias in artificial intelligence](https://arxiv.org/abs/2008.07341). CoRR, abs/2008.07341, 2020.
 
-[^6]: Jan Marco Leimeister. Collective intelligence. Business & Information Systems Engineering, 2:245–248, 2010.
+[^6]: Jan Marco Leimeister. [Collective intelligence](https://link.springer.com/article/10.1007/s12599-010-0114-8). Business & Information Systems Engineering, 2:245–248, 2010.
 
-[^7]: Thomas W Malone. Superminds: The surprising power of people and computers thinking together. Little, Brown Spark, 2018.
+[^7]: Thomas W Malone. Superminds: [The surprising power of people and computers thinking together](https://cci.mit.edu/superminds-by-thomas-w-malone/). Little, Brown Spark, 2018.
 
 [^8]: Thomas Piketty. Das Kapital im 21. Jahrhundert. CH Beck, 2014.
 
-[^9]: Hans-Otto Pörtner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. Climate change 2022: Impacts, adaptation and vulnerability. IPCC Sixth Assessment Report, 2022.
+[^9]: Hans-Otto Pörtner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. [Climate change 2022: Impacts, adaptation and vulnerability](https://hal.science/hal-03774939/document). IPCC Sixth Assessment Report, 2022.
