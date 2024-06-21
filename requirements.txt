@@ -16,3 +16,4 @@ streamlit~=1.34.0
 mkdocs-git-revision-date-localized-plugin~=0.9.0
 mkdocs-static-i18n
 mkdocs-static-i18n[material]
+git+https://github.com/Logende/mesa-replay@main#egg=Mesa-Replay
