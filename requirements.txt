@@ -1,6 +1,6 @@
 Mesa~=2.3.0
 numpy~=1.26.4
-solara~=1.32.1
+solara~=1.33
 matplotlib~=3.9.0
 ipyvuetify~=1.9.4
 seaborn~=0.13.2

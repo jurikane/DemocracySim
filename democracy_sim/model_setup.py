@@ -6,7 +6,7 @@ the drawing of the model representation on the canvas
 import mesa
 from mesa.visualization.modules import ChartModule
 from participation_model import ParticipationModel
-from participation_agent import ColorCell
+from participation_agent import ColorCell, VoteAgent
 
 _COLORS = [
     "White",
@@ -25,7 +25,22 @@ _COLORS = [
     "Purple",
     "Silver",
     "Teal",
-]
+    "Pink",
+    "Brown",
+    "Gold",
+    "Coral",
+    "Crimson",
+    "DarkBlue",
+    "DarkRed",
+    "DarkGreen",
+    "DarkKhaki",
+    "DarkMagenta",
+    "DarkOliveGreen",
+    "DarkOrange",
+    "DarkTurquoise",
+    "DarkViolet",
+    "DeepPink",
+]  # 30 colors
 
 
 def participation_draw(cell: ColorCell):
@@ -39,16 +54,24 @@ def participation_draw(cell: ColorCell):
     """
     if cell is None:
         raise AssertionError
-    # num_agents_at_cell = cell.model.grid.get_cell_list_contents([cell.pos])
+    if isinstance(cell, VoteAgent):
+        return None
+    # # Retrieve the agents of the cell
+    # agents = cell.model.grid.get_cell_list_contents([cell.pos])
+    # # Count the number of ParticipationAgents (subtracting the color cell)
+    # nr_agents = len(agents)
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col,
                  "Color": _COLORS[cell.color]}
+    if cell.num_agents_in_cell > 0:
+        portrayal["text"] = str(cell.num_agents_in_cell)
+        portrayal["text_color"] = "Black"
     return portrayal
 
 
-grid_rows = 160
-grid_cols = 200
-cell_size = 5
+grid_rows = 80
+grid_cols = 100
+cell_size = 10
 canvas_width = grid_rows * cell_size
 canvas_height = grid_cols * cell_size
 
@@ -72,18 +95,18 @@ wealth_chart = mesa.visualization.modules.ChartModule(
 
 model_params = {
     "height": mesa.visualization.Slider(
-        name="World Height", value=200, min_value=10, max_value=1000, step=10,
-        description="Select the height of the world"
+        name="World Height", value=grid_cols, min_value=10, max_value=1000,
+        step=10, description="Select the height of the world"
     ),
     "width": mesa.visualization.Slider(
-        name="World Width", value=160, min_value=10, max_value=1000, step=10,
-        description="Select the width of the world"
+        name="World Width", value=grid_rows, min_value=10, max_value=1000,
+        step=10, description="Select the width of the world"
     ),
     "num_agents": mesa.visualization.Slider(
-        name="# Agents", value=200, min_value=10, max_value=9999999, step=10
+        name="# Agents", value=800, min_value=10, max_value=99999, step=10
     ),
     "num_colors": mesa.visualization.Slider(
-        name="# Colors", value=4, min_value=2, max_value=100, step=1
+        name="# Colors", value=4, min_value=2, max_value=len(_COLORS), step=1
     ),
     # "num_regions": mesa.visualization.Slider(
     #     name="# Regions", value=4, min_value=4, max_value=500, step=1

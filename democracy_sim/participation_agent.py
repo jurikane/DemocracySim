@@ -9,12 +9,23 @@ if TYPE_CHECKING:
 class VoteAgent(Agent):
     """An agent with fixed initial wealth."""
 
-    def __init__(self, unique_id, model: mesa.Model):
+    def __init__(self, unique_id, pos, model: mesa.Model):
         # Pass the parameters to the parent class.
         super().__init__(unique_id, model)
-
+        self._row = pos[0]
+        self._col = pos[1]
         # Create the agent's variable and set the initial values.
         self.wealth = 1
+
+    @property
+    def col(self):
+        """Return the col location of this cell."""
+        return self._col
+
+    @property
+    def row(self):
+        """Return the row location of this cell."""
+        return self._row
 
     def step(self):
         # Verify agent has some wealth
@@ -40,7 +51,7 @@ class ColorCell(mesa.Agent):
     Represents a cell's color
     """
 
-    def __init__(self, pos, model, initial_color: int, num_colors: int):
+    def __init__(self, pos, model, initial_color: int):
         """
         Create a cell, in the given state, at the given row, col position.
         """
@@ -49,22 +60,35 @@ class ColorCell(mesa.Agent):
         self._col = pos[1]
         self._color = initial_color
         self._next_color = None
-        self.color_ids = list(range(num_colors))  # Colors as integers
+        self._num_agents_in_cell = 0
 
     @property
     def col(self):
-        """Return the col location of this cell."""
+        """The col location of this cell."""
         return self._col
 
     @property
     def row(self):
-        """Return the row location of this cell."""
+        """The row location of this cell."""
         return self._row
 
     @property
     def color(self):
-        """Return the current color of this cell."""
+        """The current color of this cell."""
         return self._color
+
+    @property
+    def num_agents_in_cell(self):
+        """The number of agents in this cell."""
+        return self._num_agents_in_cell
+
+    @num_agents_in_cell.setter
+    def num_agents_in_cell(self, value):
+        self._num_agents_in_cell = value
+
+    @num_agents_in_cell.deleter
+    def num_agents_in_cell(self):
+        del self._num_agents_in_cell
 
     def color_step(self):
         """

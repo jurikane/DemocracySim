@@ -1,5 +1,4 @@
 import random
-
 import mesa
 from mesa.time import StagedActivation
 from participation_agent import VoteAgent, ColorCell
@@ -31,7 +30,7 @@ class ParticipationModel(mesa.Model):
         self.height = height
         self.width = width
         # Create schedulers and assign it to the model
-        self.color_scheduler = mesa.time.RandomActivation(self)
+        self.color_cell_scheduler = mesa.time.RandomActivation(self)
         self.agent_scheduler = mesa.time.RandomActivation(self)
         # self.schedule = StagedActivation(self,
         #                                  stage_list=['color_step', 'step'])
@@ -43,18 +42,27 @@ class ParticipationModel(mesa.Model):
             model_reporters={"wealth": "wealth"},
             # Model-level count of agents' wealth
         )
-        # Create colors for the cells
+        # Create color ids for the cells
         for _, (row, col) in self.grid.coord_iter():
             color = random.choice(range(num_colors))
-            cell = ColorCell((row, col), self, color, num_colors)
+            cell = ColorCell((row, col), self, color)
             self.grid.place_agent(cell, (row, col))
             # Add the cell color to the scheduler
-            self.color_scheduler.add(cell)
+            self.color_cell_scheduler.add(cell)
         # Create agents
         for a_id in range(self.num_agents):
-            a = VoteAgent(a_id, self)
+            # Get a random position
+            x = self.random.randrange(self.width)
+            y = self.random.randrange(self.height)
+            a = VoteAgent(a_id, (x, y), self)
             # Add the agent to the scheduler
             self.agent_scheduler.add(a)
+            # Place at a random cell
+            self.grid.place_agent(a, (x, y))
+            # Count the agent at the chosen cell
+            agents = self.grid.get_cell_list_contents([(x, y)])
+            cell = [a for a in agents if isinstance(a, ColorCell)][0]
+            cell.num_agents_in_cell = cell.num_agents_in_cell + 1
 
     def step(self):
         """Advance the model by one step."""
@@ -62,5 +70,5 @@ class ParticipationModel(mesa.Model):
         # The model's step will go here for now
         # this will call the step method of each agent
         # and print the agent's unique_id
-        self.color_scheduler.step()
+        self.color_cell_scheduler.step()
         self.agent_scheduler.step()
