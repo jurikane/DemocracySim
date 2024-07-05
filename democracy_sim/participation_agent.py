@@ -92,6 +92,10 @@ class ColorCell(mesa.Agent):
         """The current color of this cell."""
         return self._color
 
+    @color.setter
+    def color(self, value):
+        self._color = value
+
     @property
     def num_agents_in_cell(self):
         """The number of agents in this cell."""

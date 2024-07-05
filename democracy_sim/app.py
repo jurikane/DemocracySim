@@ -1,9 +1,6 @@
 from mesa.experimental import JupyterViz, make_text, Slider
-from participation_model import ParticipationModel
-from participation_agent import VoteAgent
-from numpy import arange
 import solara
-from model_setup import participation_draw
+from model_setup import *
 # Data visualization tools.
 from matplotlib.figure import Figure
 
@@ -44,16 +41,21 @@ def space_drawer(model, agent_portrayal):
 
 
 model_params = {
-    "height": Slider("World Height", 200, 10, 1000, 10),
-    "width": Slider("World Width", 160, 10, 1000, 10),
+    "height": grid_rows,
+    "width": grid_cols,
     "num_agents": Slider("# Agents", 200, 10, 9999999, 10),
     "num_colors": Slider("# Colors", 4, 2, 100, 1),
+    "num_areas": Slider("# Areas", num_areas, 4, min(grid_cols, grid_rows)//2, 1),
+    "av_area_height": Slider("Av. Area Height", area_height, 2, grid_rows//2, 1),
+    "av_area_width": Slider("Av. Area Width", area_width, 2, grid_cols//2, 1),
+    "area_size_variance": Slider("Area Size Variance", area_var, 0.0, 1.0, 0.1),
+    "draw_borders": False,
 }
 
 page = JupyterViz(
     ParticipationModel,
     model_params,
-    measures=["wealth", make_text(get_agents_assets),],
+    #measures=["wealth", make_text(get_agents_assets),],
     # agent_portrayal=agent_portrayal,
     agent_portrayal=participation_draw,
     space_drawer=space_drawer,

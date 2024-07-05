@@ -2,6 +2,7 @@
 handles the definition of the canvas parameters and
 the drawing of the model representation on the canvas
 """
+from typing import TYPE_CHECKING, cast
 # import webbrowser
 import mesa
 from mesa.visualization.modules import ChartModule
@@ -15,8 +16,11 @@ grid_cols = 80  # width
 cell_size = 10
 canvas_height = grid_rows * cell_size
 canvas_width = grid_cols * cell_size
+draw_borders = True
 # Colors and agents
 num_colors = 4
+color_adj_steps = 3
+color_heterogeneity = 0.3
 num_agents = 800
 # Voting area parameters
 num_areas = 4
@@ -64,9 +68,9 @@ def participation_draw(cell: ColorCell):
     This function is registered with the visualization server to be called
     each tick to indicate how to draw the cell in its current color.
 
-    :param cell:  the cell in the simulation
+    :param cell: The cell in the simulation
 
-    :return: the portrayal dictionary.
+    :return: The portrayal dictionary.
     """
     if cell is None:
         raise AssertionError
@@ -77,6 +81,8 @@ def participation_draw(cell: ColorCell):
                  "x": cell.row, "y": cell.col,
                  "Color": color}
     # If the cell is a border cell, change its appearance
+    if TYPE_CHECKING:  # Type hint for IDEs
+        cell.model = cast(ParticipationModel, cell.model)
     if cell.is_border_cell and cell.model.draw_borders:
         portrayal["Shape"] = "circle"
         portrayal["r"] = 0.9  # Adjust the radius to fit within the cell
@@ -113,6 +119,14 @@ model_params = {
         name="# Colors", value=num_colors, min_value=2, max_value=len(_COLORS),
         step=1
     ),
+    "color_adj_steps": mesa.visualization.Slider(
+        name="# Color adjustment steps", value=color_adj_steps,
+        min_value=0, max_value=9, step=1
+    ),
+    "heterogeneity": mesa.visualization.Slider(
+        name="Color-heterogeneity factor", value=color_heterogeneity,
+        min_value=0.0, max_value=0.9, step=0.1
+    ),
     "num_areas": mesa.visualization.Slider(
         name=f"# Areas within the {grid_rows}x{grid_cols} world", step=1,
         value=num_areas, min_value=4, max_value=min(grid_cols, grid_rows)//2
@@ -120,23 +134,18 @@ model_params = {
     "av_area_height": mesa.visualization.Slider(
         name="Av. area height", value=area_height,
         min_value=2, max_value=grid_rows//2,
-        step=10, description="Select the average height of an area"
+        step=1, description="Select the average height of an area"
     ),
     "av_area_width": mesa.visualization.Slider(
         name="Av. area width", value=area_width,
         min_value=2, max_value=grid_cols//2,
-        step=10, description="Select the average width of an area"
+        step=1, description="Select the average width of an area"
     ),
     "area_size_variance": mesa.visualization.Slider(
         name="Area size variance", value=area_var, min_value=0.0, max_value=1.0,
         step=0.1, description="Select the variance of the area sizes"
     ),
-    # "area_overlap": mesa.visualization.Slider(
-    #     name="Area overlap", value=area_overlap, min_value=0,
-    #     max_value=max(area_width, area_height) // 2,
-    #     step=1, description="Select the overlap of the areas"
-    # ),
     "draw_borders": mesa.visualization.Checkbox(
-        name="Draw border cells", value=False
+        name="Draw border cells", value=draw_borders
     ),
 }

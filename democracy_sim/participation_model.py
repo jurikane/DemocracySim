@@ -1,12 +1,14 @@
+from typing import TYPE_CHECKING, cast
 import random
 from math import sqrt
 import mesa
-from mesa.time import StagedActivation
+from mesa import Agent
 from participation_agent import VoteAgent, ColorCell
 
 
-class Area:  # TODO implement this
-    def __init__(self, model, height, width, size_variance=0):
+class Area(Agent):
+    def __init__(self, unique_id, model, height, width, size_variance=0):
+        super().__init__(unique_id, model)
         if size_variance == 0:
             self._width = width
             self._height = height
@@ -20,7 +22,6 @@ class Area:  # TODO implement this
             self.width_off = abs(width - self._width)
             self._height = int(height * h_var_factor)
             self.height_off = abs(height - self._height)
-        self.model = model
         self.agents = []
         self.cells = []
         self._idx_field = None
@@ -31,6 +32,8 @@ class Area:  # TODO implement this
 
     @idx_field.setter
     def idx_field(self, value: tuple):
+        if TYPE_CHECKING:  # Type hint for IDEs
+            self.model = cast(ParticipationModel, self.model)
         try:
             x_val, y_val = value
         except ValueError:
@@ -89,7 +92,7 @@ class ParticipationModel(mesa.Model):
 
     def __init__(self, height, width, num_agents, num_colors, num_areas,
                  av_area_height, av_area_width, area_size_variance,
-                 draw_borders=False):
+                 color_adj_steps, draw_borders, heterogeneity):
         super().__init__()
         self.height = height
         self.width = width
@@ -111,6 +114,8 @@ class ParticipationModel(mesa.Model):
         # SingleGrid enforces at most one agent per cell;
         # MultiGrid allows multiple agents to be in the same cell.
         self.grid = mesa.space.MultiGrid(height=height, width=width, torus=True)
+        self.color_adj_steps = color_adj_steps
+        self.heterogeneity = heterogeneity
         self.draw_borders = draw_borders
         # Create color ids for the cells
         for _, (row, col) in self.grid.coord_iter():
@@ -134,26 +139,46 @@ class ParticipationModel(mesa.Model):
             cell = [a for a in agents if isinstance(a, ColorCell)][0]
             cell.num_agents_in_cell = cell.num_agents_in_cell + 1
         # Create areas spread approximately evenly across the grid
-        roo_apx = int(sqrt(self.num_areas))
+        roo_apx = round(sqrt(self.num_areas))
+        nr_areas_x = self.grid.width // av_area_width
+        nr_areas_y = self.grid.width // av_area_height
         area_x_dist = self.grid.width // roo_apx
         area_y_dist = self.grid.height // roo_apx
+        print(f"roo_apx: {roo_apx}, nr_areas_x: {nr_areas_x}, "
+              f"nr_areas_y: {nr_areas_y}, area_x_dist: {area_x_dist}, "
+              f"area_y_dist: {area_y_dist}")
+        # if (abs(nr_areas_x * nr_areas_y - self.num_areas) <
+        #         abs(roo_apx**2 - self.num_areas)):
+        #     area_x_dist = self.grid.width // nr_areas_x
+        #     area_y_dist = self.grid.height // nr_areas_y
+        #     print(f"## {nr_areas_x * nr_areas_y} vs {roo_apx**2}")
+        # x_coords = [(0 + i * area_x_dist) % width for i in range(nr_areas_x)]
+        # y_coords = [(0 + i * area_y_dist) % height for i in range(nr_areas_y)]
         x_coords = range(0, self.grid.width, area_x_dist)
         y_coords = range(0, self.grid.height, area_y_dist)
+        # Add additional areas if necessary (num_areas not a square number)
+        additional_x, additional_y = [], []
+        missing = self.num_areas - len(x_coords) * len(y_coords)
+        for _ in range(missing):
+            additional_x.append(self.random.randrange(self.grid.width))
+            additional_y.append(self.random.randrange(self.grid.height))
+        a_ids = iter(range(1, self.num_areas + 1))
         for x_coord in x_coords:
             for y_coord in y_coords:
-                area = Area(self, av_area_height, av_area_width,
+                a_id = next(a_ids, 0)
+                if a_id == 0:
+                    break
+                area = Area(a_id, self, av_area_height, av_area_width,
                             area_size_variance)
-                print(f"Area {id(area)} at {x_coord}, {y_coord}")
+                print(f"Area {area.unique_id} at {x_coord}, {y_coord}")
                 area.idx_field = (x_coord, y_coord)
-                # area_height = self.dist_area_height()
-                # area_width = self.dist_area_width()
-                # new_area = Area(self, area_height, area_width)
-                # # Add agents to the area
-                # for agent in self.all_agents:
-                #     if len(new_area.agents) < area_height * area_width:
-                #         new_area.add_agent(agent)
-                # Add the area to the model
                 self.area_scheduler.add(area)
+        for x_coord, y_coord in zip(additional_x, additional_y):
+            area = Area(next(a_ids), self, av_area_height, av_area_width,
+                        area_size_variance)
+            print(f"++ Area {area.unique_id} at {x_coord}, {y_coord}")
+            area.idx_field = (x_coord, y_coord)
+            self.area_scheduler.add(area)
         # Data collector
         self.datacollector = mesa.DataCollector(
             model_reporters={
@@ -165,8 +190,19 @@ class ParticipationModel(mesa.Model):
                 # "Money": get_total_money,
                 # "Loans": get_total_loans,
             },
-            agent_reporters={"Wealth": lambda x: getattr(x, "assets", None)},
+            agent_reporters={"Wealth": lambda ag: getattr(ag, "assets", None)},
         )
+        # Adjust the color pattern to make it less random (see color patches)
+        for _ in range(color_adj_steps):
+            print(f"Color adjustment step {_}")
+            for cell in self.grid.coord_iter():
+                agents = cell[0]
+                if TYPE_CHECKING:
+                    agents = cast(list, agents)
+                c = [cell for cell in agents if isinstance(cell, ColorCell)][0]
+                if isinstance(c, ColorCell):
+                    most_common_color = self.mix_colors(c, self.heterogeneity)
+                    c.color = most_common_color
         # Collect initial data
         self.datacollector.collect(self)
 
@@ -179,18 +215,28 @@ class ParticipationModel(mesa.Model):
         self.color_cell_scheduler.step()
         self.datacollector.collect(self)  # Collect data at each step
 
-    # def dist_area_height(self):
-    #     av_height = self.av_area_height
-    #     variance = self.area_size_variance
-    #     return self.random.randint(
-    #             av_height - variance * av_height,
-    #             av_height + variance * av_height
-    #         )
-    #
-    # def dist_area_width(self):
-    #     av_width = self.av_area_width
-    #     variance = self.area_size_variance
-    #     return self.random.randint(
-    #             av_width - variance * av_width,
-    #             av_width + variance * av_width
-    #         )
+    def mix_colors(self, cell, heterogeneity):
+        """
+        This method is used to create a less random initial color distribution
+        """
+        neighbor_cells = self.grid.get_neighbors((cell.row, cell.col),
+                                                 moore=True,
+                                                 include_center=False)
+        color_counts = {}
+        for neighbor in neighbor_cells:
+            if random.random() < heterogeneity:  # Create heterogeneity
+                # Introduce a bias based on coordinates
+                p = (cell.row * cell.col) / (self.grid.width * self.grid.height)
+                if random.random() < p:
+                    return random.choice(range(self.num_colors))
+            if isinstance(neighbor, ColorCell):
+                color = neighbor.color
+                color_counts[color] = color_counts.get(color, 0) + 1
+        if color_counts:
+            max_count = max(color_counts.values())
+            most_common_colors = [color for color, count in color_counts.items()
+                                  if count == max_count]
+            # if random.random() < randomness:
+            #     return random.choice(range(cell.model.num_colors))  # Add some randomness
+            return self.random.choice(most_common_colors)
+        return cell.color  # Return the cell's own color no consensus
