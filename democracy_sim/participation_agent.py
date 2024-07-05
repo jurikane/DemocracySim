@@ -7,15 +7,15 @@ if TYPE_CHECKING:
 
 
 class VoteAgent(Agent):
-    """An agent with fixed initial wealth."""
+    """An agent that has limited knowledge and resources and
+    can decide to use them to participate in elections."""
 
-    def __init__(self, unique_id, pos, model: mesa.Model):
+    def __init__(self, unique_id, pos, model: mesa.Model, assets=1):
         # Pass the parameters to the parent class.
         super().__init__(unique_id, model)
         self._row = pos[0]
         self._col = pos[1]
-        # Create the agent's variable and set the initial values.
-        self.wealth = 1
+        self._assets = assets
 
     @property
     def col(self):
@@ -27,23 +27,36 @@ class VoteAgent(Agent):
         """Return the row location of this cell."""
         return self._row
 
-    def step(self):
-        # Verify agent has some wealth
-        if self.wealth > 0:
-            other_agent = self.random.choice(self.model.agent_scheduler.agents)
-            if other_agent is not None:
-                other_agent.wealth += 1
-                self.wealth -= 1
+    @property
+    def assets(self):
+        """Return the assets of this agent."""
+        return self._assets
 
-    def move(self):
-        if TYPE_CHECKING:  # Type hint for IDEs
-            self.model = cast(ParticipationModel, self.model)
-        possible_steps = self.model.grid.get_neighborhood(
-            self.pos,
-            moore=True,  # Moore vs. von neumann
-            include_center=False)
-        new_position = self.random.choice(possible_steps)
-        self.model.grid.move_agent(self, new_position)
+    @assets.setter
+    def assets(self, value):
+        self._assets = value
+
+    @assets.deleter
+    def assets(self):
+        del self._assets
+
+    # def step(self):
+    #     # Verify agent has some wealth
+    #     if self.wealth > 0:
+    #         other_a = self.random.choice(self.model.agent_scheduler.agents)
+    #         if other_agent is not None:
+    #             other_a.wealth += 1
+    #             self.wealth -= 1
+
+    # def move(self):
+    #     if TYPE_CHECKING: # Type hint for IDEs
+    #         self.model = cast(ParticipationModel, self.model)
+    #     possible_steps = self.model.grid.get_neighborhood(
+    #         self.pos,
+    #         moore=True, # Moore vs. von neumann
+    #         include_center=False)
+    #     new_position = self.random.choice(possible_steps)
+    #     self.model.grid.move_agent(self, new_position)
 
 
 class ColorCell(mesa.Agent):
@@ -61,6 +74,8 @@ class ColorCell(mesa.Agent):
         self._color = initial_color
         self._next_color = None
         self._num_agents_in_cell = 0
+        self.areas = []
+        self.is_border_cell = False
 
     @property
     def col(self):
@@ -90,13 +105,17 @@ class ColorCell(mesa.Agent):
     def num_agents_in_cell(self):
         del self._num_agents_in_cell
 
+    def add_area(self, area):
+        self.areas.append(area)
+
     def color_step(self):
         """
         Determines the cells' color for the next step
         """
-        # _neighbor_iter = self.model.grid.iter_neighbors((self._row, self._col), True)
+        # _neighbor_iter = self.model.grid.iter_neighbors(
+        #     (self._row, self._col), True)
         # neighbors_opinion = Counter(n.get_state() for n in _neighbor_iter)
-        # # Following is a a tuple (attribute, occurrences)
+        # # Following is a tuple (attribute, occurrences)
         # polled_opinions = neighbors_opinion.most_common()
         # tied_opinions = []
         # for neighbor in polled_opinions:

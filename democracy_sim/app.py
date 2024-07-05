@@ -1,5 +1,6 @@
 from mesa.experimental import JupyterViz, make_text, Slider
 from participation_model import ParticipationModel
+from participation_agent import VoteAgent
 from numpy import arange
 import solara
 from model_setup import participation_draw
@@ -7,21 +8,21 @@ from model_setup import participation_draw
 from matplotlib.figure import Figure
 
 
-def get_agents_wealth(model: ParticipationModel):
+def get_agents_assets(model: ParticipationModel):
     """
     Display a text count of how many happy agents there are.
     """
-    all_wealth = list()
+    all_assets = list()
     # Store the results
-    for agent in model.agent_scheduler.agents:
-        all_wealth.append(agent.wealth)
-    return f"Agents wealth: {all_wealth}"
+    for agent in model.all_agents:
+        all_assets.append(agent.assets)
+    return f"Agents wealth: {all_assets}"
 
 
-def agent_portrayal(agent):
+def agent_portrayal(agent: VoteAgent):
     # Construct and return the portrayal dictionary
     portrayal = {
-        "size": agent.wealth,
+        "size": agent.assets,
         "color": "tab:orange",
     }
     return portrayal
@@ -52,7 +53,7 @@ model_params = {
 page = JupyterViz(
     ParticipationModel,
     model_params,
-    measures=["wealth", make_text(get_agents_wealth),],
+    measures=["wealth", make_text(get_agents_assets),],
     # agent_portrayal=agent_portrayal,
     agent_portrayal=participation_draw,
     space_drawer=space_drawer,

@@ -7,6 +7,22 @@ import mesa
 from mesa.visualization.modules import ChartModule
 from participation_model import ParticipationModel
 from participation_agent import ColorCell, VoteAgent
+from math import sqrt
+
+# Model grid parameters
+grid_rows = 100  # height
+grid_cols = 80  # width
+cell_size = 10
+canvas_height = grid_rows * cell_size
+canvas_width = grid_cols * cell_size
+# Colors and agents
+num_colors = 4
+num_agents = 800
+# Voting area parameters
+num_areas = 4
+area_height = grid_rows // int(sqrt(num_areas))
+area_width = grid_cols // int(sqrt(num_areas))
+area_var = 0.0
 
 _COLORS = [
     "White",
@@ -16,7 +32,7 @@ _COLORS = [
     "Yellow",
     "Aqua",
     "Fuchsia",
-    "Gray",
+    "Lavender",
     "Lime",
     "Maroon",
     "Navy",
@@ -56,59 +72,71 @@ def participation_draw(cell: ColorCell):
         raise AssertionError
     if isinstance(cell, VoteAgent):
         return None
-    # # Retrieve the agents of the cell
-    # agents = cell.model.grid.get_cell_list_contents([cell.pos])
-    # # Count the number of ParticipationAgents (subtracting the color cell)
-    # nr_agents = len(agents)
+    color = _COLORS[cell.color]
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col,
-                 "Color": _COLORS[cell.color]}
+                 "Color": color}
+    # If the cell is a border cell, change its appearance
+    if cell.is_border_cell and cell.model.draw_borders:
+        portrayal["Shape"] = "circle"
+        portrayal["r"] = 0.9  # Adjust the radius to fit within the cell
+        if color == "White":
+            portrayal["Color"] = "Grey"
     if cell.num_agents_in_cell > 0:
         portrayal["text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
     return portrayal
 
 
-grid_rows = 80
-grid_cols = 100
-cell_size = 10
-canvas_width = grid_rows * cell_size
-canvas_height = grid_cols * cell_size
-
 canvas_element = mesa.visualization.CanvasGrid(
-    participation_draw, grid_rows, grid_cols, canvas_width, canvas_height
+    participation_draw, grid_cols, grid_rows, canvas_width, canvas_height
 )
 
-happy_chart = mesa.visualization.ChartModule([{"Label": "happy",
-                                               "Color": "Black"}])
-
-
-def compute_wealth(model: ParticipationModel):
-    agents_wealth = [agent.wealth for agent in model.agent_scheduler.agents]
-    return {"wealth": agents_wealth}
+a_chart = mesa.visualization.ChartModule([{"Label": "Number of agents",
+                                           "Color": "Black"}],
+                                         data_collector_name='datacollector')
 
 
 wealth_chart = mesa.visualization.modules.ChartModule(
-    [{"Label": "wealth", "Color": "Black"}],
+    [{"Label": "Collective assets", "Color": "Black"}],
     data_collector_name='datacollector'
 )
 
 model_params = {
-    "height": mesa.visualization.Slider(
-        name="World Height", value=grid_cols, min_value=10, max_value=1000,
-        step=10, description="Select the height of the world"
-    ),
-    "width": mesa.visualization.Slider(
-        name="World Width", value=grid_rows, min_value=10, max_value=1000,
-        step=10, description="Select the width of the world"
-    ),
+    "height": grid_rows,
+    "width": grid_cols,
     "num_agents": mesa.visualization.Slider(
-        name="# Agents", value=800, min_value=10, max_value=99999, step=10
+        name="# Agents", value=num_agents, min_value=10, max_value=99999,
+        step=10
     ),
     "num_colors": mesa.visualization.Slider(
-        name="# Colors", value=4, min_value=2, max_value=len(_COLORS), step=1
+        name="# Colors", value=num_colors, min_value=2, max_value=len(_COLORS),
+        step=1
     ),
-    # "num_regions": mesa.visualization.Slider(
-    #     name="# Regions", value=4, min_value=4, max_value=500, step=1
+    "num_areas": mesa.visualization.Slider(
+        name=f"# Areas within the {grid_rows}x{grid_cols} world", step=1,
+        value=num_areas, min_value=4, max_value=min(grid_cols, grid_rows)//2
+    ),
+    "av_area_height": mesa.visualization.Slider(
+        name="Av. area height", value=area_height,
+        min_value=2, max_value=grid_rows//2,
+        step=10, description="Select the average height of an area"
+    ),
+    "av_area_width": mesa.visualization.Slider(
+        name="Av. area width", value=area_width,
+        min_value=2, max_value=grid_cols//2,
+        step=10, description="Select the average width of an area"
+    ),
+    "area_size_variance": mesa.visualization.Slider(
+        name="Area size variance", value=area_var, min_value=0.0, max_value=1.0,
+        step=0.1, description="Select the variance of the area sizes"
+    ),
+    # "area_overlap": mesa.visualization.Slider(
+    #     name="Area overlap", value=area_overlap, min_value=0,
+    #     max_value=max(area_width, area_height) // 2,
+    #     step=1, description="Select the overlap of the areas"
     # ),
+    "draw_borders": mesa.visualization.Checkbox(
+        name="Draw border cells", value=False
+    ),
 }
