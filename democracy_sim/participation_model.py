@@ -7,7 +7,9 @@ from participation_agent import VoteAgent, ColorCell
 
 
 class Area(Agent):
-    def __init__(self, unique_id, model, height, width, size_variance=0):
+    def __init__(self, unique_id, model, height, width, size_variance):
+        if TYPE_CHECKING:  # Type hint for IDEs
+            model = cast(ParticipationModel, model)
         super().__init__(unique_id, model)
         if size_variance == 0:
             self._width = width
@@ -24,7 +26,8 @@ class Area(Agent):
             self.height_off = abs(height - self._height)
         self.agents = []
         self.cells = []
-        self._idx_field = None
+        self._idx_field = None  # An indexing position of the area in the grid
+        self.color_distribution = None
 
     @property
     def idx_field(self):
@@ -64,7 +67,7 @@ class Area(Agent):
                                 or y_area == self._height - 1):
                             a.is_border_cell = True
                         self.add_cell(a)  # Add the cell to the area
-
+        self.update_color_distribution()
         self._idx_field = (adjusted_x, adjusted_y)
 
     def add_agent(self, agent):
@@ -77,6 +80,24 @@ class Area(Agent):
         # Placeholder for election logic
         pass
 
+    def update_color_distribution(self):
+        if self.color_distribution is None:
+            return None
+        color_count = {}
+        num_cells = len(self.cells)
+        for cell in self.cells:
+            color = cell.color
+            color_count[color] = color_count.get(color, 0) + 1
+        for color in range(self.model.num_colors):
+            dist_val = color_count.get(color, 0) / num_cells  # Float division
+            self.color_distribution[color] = dist_val
+        print(f"Area {self.unique_id} color "
+              f"distribution: {self.color_distribution}")
+
+    def step(self) -> None:
+        self.update_color_distribution()
+        self.conduct_election(self.model.voting_rule)
+
 
 def compute_collective_assets(model):
     sum_assets = sum(agent.assets for agent in model.all_agents)
@@ -87,12 +108,27 @@ def get_num_agents(model):
     return len(model.all_agents)
 
 
+def color_by_dst(color_distribution) -> int:
+    """
+    This method selects a color (int) of range(len(color_distribution))
+    such that, each color is selected with a probability according to the
+    given color_distribution array.
+    Example: color_distribution = [0.2, 0.3, 0.5]
+    Color 1 is selected with a probability of 0.3
+    """
+    r = random.random()
+    for color_idx, prob in enumerate(color_distribution):
+        if r < prob:
+            return color_idx
+        r -= prob
+
+
 class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_areas,
                  av_area_height, av_area_width, area_size_variance,
-                 color_adj_steps, draw_borders, heterogeneity):
+                 color_adj_steps, draw_borders, heterogeneity, voting_rule):
         super().__init__()
         self.height = height
         self.width = width
@@ -117,9 +153,13 @@ class ParticipationModel(mesa.Model):
         self.color_adj_steps = color_adj_steps
         self.heterogeneity = heterogeneity
         self.draw_borders = draw_borders
+        # Color distribution
+        self.color_dst = self.create_color_distribution(heterogeneity)
+        # Elections
+        self.voting_rule = voting_rule
         # Create color ids for the cells
         for _, (row, col) in self.grid.coord_iter():
-            color = random.choice(range(num_colors))  # TODO improve this
+            color = color_by_dst(self.color_dst)
             cell = ColorCell((row, col), self, color)
             self.grid.place_agent(cell, (row, col))
             # Add the cell color to the scheduler
@@ -209,11 +249,24 @@ class ParticipationModel(mesa.Model):
     def step(self):
         """Advance the model by one step."""
 
-        # The model's step will go here for now
-        # this will call the step method of each agent
-        # and print the agent's unique_id
+        # Conduct elections in the areas
+        self.area_scheduler.step()
+        # Mutate the color cells according to election outcomes
         self.color_cell_scheduler.step()
-        self.datacollector.collect(self)  # Collect data at each step
+        # Collect data for monitoring and data analysis
+        self.datacollector.collect(self)
+
+    def create_color_distribution(self, heterogeneity):
+        """
+        This method is used create a color distribution that has a bias
+        according to the given heterogeneity factor
+        """
+        colors = range(self.num_colors)
+        values = [abs(random.gauss(1, heterogeneity)) for _ in colors]
+        # Normalize (with float division)
+        total = sum(values)
+        dst_array = [value / total for value in values]
+        return dst_array
 
     def mix_colors(self, cell, heterogeneity):
         """
@@ -228,7 +281,7 @@ class ParticipationModel(mesa.Model):
                 # Introduce a bias based on coordinates
                 p = (cell.row * cell.col) / (self.grid.width * self.grid.height)
                 if random.random() < p:
-                    return random.choice(range(self.num_colors))
+                    return color_by_dst(self.color_dst)
             if isinstance(neighbor, ColorCell):
                 color = neighbor.color
                 color_counts[color] = color_counts.get(color, 0) + 1
@@ -236,7 +289,5 @@ class ParticipationModel(mesa.Model):
             max_count = max(color_counts.values())
             most_common_colors = [color for color, count in color_counts.items()
                                   if count == max_count]
-            # if random.random() < randomness:
-            #     return random.choice(range(cell.model.num_colors))  # Add some randomness
             return self.random.choice(most_common_colors)
         return cell.color  # Return the cell's own color no consensus

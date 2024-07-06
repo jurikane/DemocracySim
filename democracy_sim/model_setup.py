@@ -27,6 +27,10 @@ num_areas = 4
 area_height = grid_rows // int(sqrt(num_areas))
 area_width = grid_cols // int(sqrt(num_areas))
 area_var = 0.0
+# Voting rules TODO: Implement voting rules
+voting_rules = ["Majority Rule", "Approval Voting", "Kemeny"]
+rule_idx = 0
+
 
 _COLORS = [
     "White",
@@ -111,6 +115,18 @@ wealth_chart = mesa.visualization.modules.ChartModule(
 model_params = {
     "height": grid_rows,
     "width": grid_cols,
+    # "voting_rule": mesa.visualization.modules.DropDown(
+    #     name="Voting Rule",
+    #     options=voting_rules,
+    #     value=voting_rules[0],  # Default value
+    # ),
+    "voting_rule": mesa.visualization.Slider(
+        name=f"Rule index {voting_rules}", value=rule_idx,
+        min_value=0, max_value=2,
+    ),
+    "draw_borders": mesa.visualization.Checkbox(
+        name="Draw border cells", value=draw_borders
+    ),
     "num_agents": mesa.visualization.Slider(
         name="# Agents", value=num_agents, min_value=10, max_value=99999,
         step=10
@@ -144,8 +160,5 @@ model_params = {
     "area_size_variance": mesa.visualization.Slider(
         name="Area size variance", value=area_var, min_value=0.0, max_value=1.0,
         step=0.1, description="Select the variance of the area sizes"
-    ),
-    "draw_borders": mesa.visualization.Checkbox(
-        name="Draw border cells", value=draw_borders
     ),
 }

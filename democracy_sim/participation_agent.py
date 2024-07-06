@@ -1,9 +1,8 @@
-from typing import TYPE_CHECKING, cast
 import mesa
 from mesa import Agent
 
-if TYPE_CHECKING:
-    from participation_model import ParticipationModel
+# if TYPE_CHECKING:
+#     from participation_model import ParticipationModel
 
 
 class VoteAgent(Agent):
@@ -71,7 +70,7 @@ class ColorCell(mesa.Agent):
         super().__init__(pos, model)
         self._row = pos[0]
         self._col = pos[1]
-        self._color = initial_color
+        self._color = initial_color  # The cell's current color (int)
         self._next_color = None
         self._num_agents_in_cell = 0
         self.areas = []
