@@ -27,7 +27,7 @@ class Area(Agent):
         self.agents = []
         self.cells = []
         self._idx_field = None  # An indexing position of the area in the grid
-        self.color_distribution = None
+        self.color_distribution = [0] * model.num_colors  # Initialize to 0
 
     @property
     def idx_field(self):
@@ -76,13 +76,15 @@ class Area(Agent):
     def add_cell(self, cell):
         self.cells.append(cell)
 
-    def conduct_election(self, rule):
+    def conduct_election(self, voting_rule):
         # Placeholder for election logic
         pass
 
     def update_color_distribution(self):
-        if self.color_distribution is None:
-            return None
+        """
+        This method calculates the current color distribution of the area
+        and saves it in the color_distribution attribute.
+        """
         color_count = {}
         num_cells = len(self.cells)
         for cell in self.cells:
@@ -108,6 +110,11 @@ def get_num_agents(model):
     return len(model.all_agents)
 
 
+def get_area_color_distributions(model):
+    return {area.unique_id: area.color_distribution
+            for area in model.area_scheduler.agents}
+
+
 def color_by_dst(color_distribution) -> int:
     """
     This method selects a color (int) of range(len(color_distribution))
@@ -127,8 +134,8 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_areas,
-                 av_area_height, av_area_width, area_size_variance,
-                 color_adj_steps, draw_borders, heterogeneity, voting_rule):
+                 av_area_height, av_area_width, area_size_variance, patch_power,
+                 color_patches_steps, draw_borders, heterogeneity, voting_rule):
         super().__init__()
         self.height = height
         self.width = width
@@ -150,8 +157,10 @@ class ParticipationModel(mesa.Model):
         # SingleGrid enforces at most one agent per cell;
         # MultiGrid allows multiple agents to be in the same cell.
         self.grid = mesa.space.MultiGrid(height=height, width=width, torus=True)
-        self.color_adj_steps = color_adj_steps
         self.heterogeneity = heterogeneity
+        # Random bias factors that affect the initial color distribution
+        self.vertical_bias = random.uniform(0, 1)
+        self.horizontal_bias = random.uniform(0, 1)
         self.draw_borders = draw_borders
         # Color distribution
         self.color_dst = self.create_color_distribution(heterogeneity)
@@ -187,13 +196,6 @@ class ParticipationModel(mesa.Model):
         print(f"roo_apx: {roo_apx}, nr_areas_x: {nr_areas_x}, "
               f"nr_areas_y: {nr_areas_y}, area_x_dist: {area_x_dist}, "
               f"area_y_dist: {area_y_dist}")
-        # if (abs(nr_areas_x * nr_areas_y - self.num_areas) <
-        #         abs(roo_apx**2 - self.num_areas)):
-        #     area_x_dist = self.grid.width // nr_areas_x
-        #     area_y_dist = self.grid.height // nr_areas_y
-        #     print(f"## {nr_areas_x * nr_areas_y} vs {roo_apx**2}")
-        # x_coords = [(0 + i * area_x_dist) % width for i in range(nr_areas_x)]
-        # y_coords = [(0 + i * area_y_dist) % height for i in range(nr_areas_y)]
         x_coords = range(0, self.grid.width, area_x_dist)
         y_coords = range(0, self.grid.height, area_y_dist)
         # Add additional areas if necessary (num_areas not a square number)
@@ -224,25 +226,20 @@ class ParticipationModel(mesa.Model):
             model_reporters={
                 "Collective assets": compute_collective_assets,
                 "Number of agents": get_num_agents,
-                # "Middle Class": get_num_mid_agents,
-                # "Savings": get_total_savings,
-                # "Wallets": get_total_wallets,
-                # "Money": get_total_money,
-                # "Loans": get_total_loans,
+                "Area Color Distributions": get_area_color_distributions,
             },
             agent_reporters={"Wealth": lambda ag: getattr(ag, "assets", None)},
         )
         # Adjust the color pattern to make it less random (see color patches)
-        for _ in range(color_adj_steps):
+        for _ in range(color_patches_steps):
             print(f"Color adjustment step {_}")
             for cell in self.grid.coord_iter():
                 agents = cell[0]
                 if TYPE_CHECKING:
                     agents = cast(list, agents)
                 c = [cell for cell in agents if isinstance(cell, ColorCell)][0]
-                if isinstance(c, ColorCell):
-                    most_common_color = self.mix_colors(c, self.heterogeneity)
-                    c.color = most_common_color
+                most_common_color = self.color_patches(c, patch_power)
+                c.color = most_common_color
         # Collect initial data
         self.datacollector.collect(self)
 
@@ -258,30 +255,42 @@ class ParticipationModel(mesa.Model):
 
     def create_color_distribution(self, heterogeneity):
         """
-        This method is used create a color distribution that has a bias
-        according to the given heterogeneity factor
+        This method is used to create a color distribution that has a bias
+        according to the given heterogeneity factor.
         """
         colors = range(self.num_colors)
         values = [abs(random.gauss(1, heterogeneity)) for _ in colors]
         # Normalize (with float division)
         total = sum(values)
         dst_array = [value / total for value in values]
+        print(f"Color distribution: {dst_array}")
         return dst_array
 
-    def mix_colors(self, cell, heterogeneity):
+    def color_patches(self, cell, patch_power):
         """
         This method is used to create a less random initial color distribution
+        using a similar logic to the color patches model.
         """
+        # Introduce a bias based on coordinates
+        # if random.random() < heterogeneity:  # TODO: remove this dep.?
+        # Calculate the normalized position of the cell
+        normalized_x = cell.row / self.height
+        normalized_y = cell.col / self.width
+        # Calculate bias based on coordinates and models bias directions
+        bias_factor = (abs(normalized_x - self.horizontal_bias)
+                       + abs(normalized_y - self.vertical_bias))
+        #p = (cell.row * cell.col) / (self.grid.width * self.grid.height)
+        # The closer the cell to the bias-point, the less often it is
+        # to be replaced by a color chosen from the initial distribution:
+        if abs(random.gauss(0, patch_power)) < bias_factor:
+            return color_by_dst(self.color_dst)
+
+        # Otherwise, apply the color patches logic
         neighbor_cells = self.grid.get_neighbors((cell.row, cell.col),
                                                  moore=True,
                                                  include_center=False)
-        color_counts = {}
+        color_counts = {}  # Count neighbors' colors
         for neighbor in neighbor_cells:
-            if random.random() < heterogeneity:  # Create heterogeneity
-                # Introduce a bias based on coordinates
-                p = (cell.row * cell.col) / (self.grid.width * self.grid.height)
-                if random.random() < p:
-                    return color_by_dst(self.color_dst)
             if isinstance(neighbor, ColorCell):
                 color = neighbor.color
                 color_counts[color] = color_counts.get(color, 0) + 1
@@ -290,4 +299,4 @@ class ParticipationModel(mesa.Model):
             most_common_colors = [color for color, count in color_counts.items()
                                   if count == max_count]
             return self.random.choice(most_common_colors)
-        return cell.color  # Return the cell's own color no consensus
+        return cell.color  # Return the cell's own color if no consensus

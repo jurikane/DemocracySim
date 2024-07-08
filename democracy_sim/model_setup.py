@@ -8,7 +8,8 @@ import mesa
 from mesa.visualization.modules import ChartModule
 from participation_model import ParticipationModel
 from participation_agent import ColorCell, VoteAgent
-from math import sqrt
+import matplotlib.pyplot as plt
+
 
 # Model grid parameters
 grid_rows = 100  # height
@@ -23,9 +24,12 @@ color_adj_steps = 3
 color_heterogeneity = 0.3
 num_agents = 800
 # Voting area parameters
-num_areas = 4
-area_height = grid_rows // int(sqrt(num_areas))
-area_width = grid_cols // int(sqrt(num_areas))
+# num_areas = 25
+# area_height = 20  # grid_rows // int(sqrt(num_areas))
+# area_width = 16  # grid_cols // int(sqrt(num_areas))
+num_areas = 16
+area_height = 25
+area_width = 20
 area_var = 0.0
 # Voting rules TODO: Implement voting rules
 voting_rules = ["Majority Rule", "Approval Voting", "Kemeny"]
@@ -102,6 +106,21 @@ canvas_element = mesa.visualization.CanvasGrid(
     participation_draw, grid_cols, grid_rows, canvas_width, canvas_height
 )
 
+
+# Draw bars TODO: Implement to use within the mesa framework..
+def draw_color_dist_bars(color_distributions):
+    # Setup plot
+    fig, ax = plt.subplots()
+    for i, dist in enumerate(color_distributions):
+        bottom = 0
+        for j, part in enumerate(color_distributions):
+            ax.bar(i, part, bottom=bottom, color=_COLORS[j % len(_COLORS)])
+            bottom += part
+    # Set x-ticks to be distribution indices
+    plt.xticks(range(len(color_distributions)))
+    plt.show()
+
+
 a_chart = mesa.visualization.ChartModule([{"Label": "Number of agents",
                                            "Color": "Black"}],
                                          data_collector_name='datacollector')
@@ -135,13 +154,20 @@ model_params = {
         name="# Colors", value=num_colors, min_value=2, max_value=len(_COLORS),
         step=1
     ),
-    "color_adj_steps": mesa.visualization.Slider(
-        name="# Color adjustment steps", value=color_adj_steps,
-        min_value=0, max_value=9, step=1
+    "color_patches_steps": mesa.visualization.Slider(
+        name="Patches size (# steps)", value=color_adj_steps,
+        min_value=0, max_value=9, step=1,
+        description="More steps lead to bigger color patches"
+    ),
+    "patch_power": mesa.visualization.Slider(
+        name="Patches power", value=1.0, min_value=0.0, max_value=3.0,
+        step=0.2, description="Increases the power/radius of the color patches"
     ),
     "heterogeneity": mesa.visualization.Slider(
-        name="Color-heterogeneity factor", value=color_heterogeneity,
-        min_value=0.0, max_value=0.9, step=0.1
+        name="Global color distribution heterogeneity",
+        value=color_heterogeneity, min_value=0.0, max_value=0.9, step=0.1,
+        description="The higher the heterogeneity factor the greater the" +
+                    "difference in how often some colors appear overall"
     ),
     "num_areas": mesa.visualization.Slider(
         name=f"# Areas within the {grid_rows}x{grid_cols} world", step=1,
