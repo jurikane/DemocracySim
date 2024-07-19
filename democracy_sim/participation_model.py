@@ -4,6 +4,10 @@ from math import sqrt
 import mesa
 from mesa import Agent
 from participation_agent import VoteAgent, ColorCell
+import numpy as np
+from itertools import permutations, product, combinations
+
+election_cost = 5  # TODO: integrate properly
 
 
 class Area(Agent):
@@ -28,6 +32,7 @@ class Area(Agent):
         self.cells = []
         self._idx_field = None  # An indexing position of the area in the grid
         self.color_distribution = [0] * model.num_colors  # Initialize to 0
+        self.voted_distribution = [0] * model.num_colors
 
     @property
     def idx_field(self):
@@ -76,9 +81,34 @@ class Area(Agent):
     def add_cell(self, cell):
         self.cells.append(cell)
 
-    def conduct_election(self, voting_rule):
-        # Placeholder for election logic
-        pass
+    def conduct_election(self, voting_rule, distance_func):
+        """
+        This method holds the primary logic of the simulation by simulating
+        the election in the area as well as handling the payments and rewards.
+        """
+        # Ask agents to participate
+        participating_agents = []
+        preference_profile = []
+        for agent in self.agents:
+            if agent.ask_for_participation(area=self):
+                participating_agents.append(agent)
+                # collect the participation fee from the agents
+                agent.assets = agent.assets - election_cost
+                # Ask participating agents for their prefs
+                preference_profile.append(agent.vote(area=self))  # TODO use np!
+        # TODO: WHERE to discretize if needed?
+        # accumulate the prefs using the voting rule
+        aggreg_prefs = voting_rule(preference_profile)
+        # save the "elected" distribution in self.voted_distribution
+        winning_option = aggreg_prefs[0]
+        self.voted_distribution = self.model.options[winning_option]
+        # calculate the distance to the real distribution using distance_func
+        distance_factor = distance_func(self.voted_distribution,
+                                        self.color_distribution)
+        # calculate the rewards for the agents
+        # TODO
+        # distribute the rewards
+        # TODO
 
     def update_color_distribution(self):
         """
@@ -130,6 +160,25 @@ def color_by_dst(color_distribution) -> int:
         r -= prob
 
 
+def create_all_options(n, include_ties=False):
+    """
+    Creates and returns the list of all possible ranking vectors,
+    if specified including ties.
+    Rank values start from 0.
+    :param n: The number of items to rank (number of colors in our case)
+    :param include_ties: If True, rankings include ties.
+    :return r: A NumPy matrix containing all possible rankings of n items
+    """
+    if include_ties:
+        # Create all possible combinations and sort out invalid rankings
+        # i.e. [1, 1, 1] or [1, 2, 2] aren't valid as no option is ranked first.
+        r = np.array([np.array(comb) for comb in product(range(n), repeat=n)
+                      if set(range(max(comb))).issubset(comb)])
+    else:
+        r = np.array([np.array(p) for p in permutations(range(n))])
+    return r
+
+
 class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
@@ -166,6 +215,10 @@ class ParticipationModel(mesa.Model):
         self.color_dst = self.create_color_distribution(heterogeneity)
         # Elections
         self.voting_rule = voting_rule
+        self.options = create_all_options(num_colors)
+        # Create search pairs once for faster iterations when comparing rankings
+        self.search_pairs = combinations(range(0, num_colors), 2)
+        self.color_vec = np.arange(num_colors)  # Also for faster algorithms
         # Create color ids for the cells
         for _, (row, col) in self.grid.coord_iter():
             color = color_by_dst(self.color_dst)
@@ -270,21 +323,21 @@ class ParticipationModel(mesa.Model):
         """
         This method is used to create a less random initial color distribution
         using a similar logic to the color patches model.
+        It uses a (normalized) bias coordinate to center the impact of the
+        color patches structures impact around.
+        :param cell: The cell that may change its color accordingly
+        :param patch_power: Like a radius of impact around the bias point.
         """
-        # Introduce a bias based on coordinates
-        # if random.random() < heterogeneity:  # TODO: remove this dep.?
         # Calculate the normalized position of the cell
         normalized_x = cell.row / self.height
         normalized_y = cell.col / self.width
-        # Calculate bias based on coordinates and models bias directions
+        # Calculate the distance of the cell to the bias point
         bias_factor = (abs(normalized_x - self.horizontal_bias)
                        + abs(normalized_y - self.vertical_bias))
-        #p = (cell.row * cell.col) / (self.grid.width * self.grid.height)
         # The closer the cell to the bias-point, the less often it is
         # to be replaced by a color chosen from the initial distribution:
         if abs(random.gauss(0, patch_power)) < bias_factor:
             return color_by_dst(self.color_dst)
-
         # Otherwise, apply the color patches logic
         neighbor_cells = self.grid.get_neighbors((cell.row, cell.col),
                                                  moore=True,

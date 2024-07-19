@@ -88,6 +88,8 @@ def participation_draw(cell: ColorCell):
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col,
                  "Color": color}
+    # TODO: add the areas the cell belongs to to the hover-text (the text that is shown when one hovers over the cell in the grid)
+    #       + maybe: draw the agent number in the opposing color, + maybe draw borders nicer
     # If the cell is a border cell, change its appearance
     if TYPE_CHECKING:  # Type hint for IDEs
         cell.model = cast(ParticipationModel, cell.model)
