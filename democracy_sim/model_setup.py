@@ -3,37 +3,53 @@ handles the definition of the canvas parameters and
 the drawing of the model representation on the canvas
 """
 from typing import TYPE_CHECKING, cast
-# import webbrowser
+from math import comb
 import mesa
 from mesa.visualization.modules import ChartModule
-from participation_model import ParticipationModel
-from participation_agent import ColorCell, VoteAgent
+from democracy_sim.participation_model import ParticipationModel
+from democracy_sim.participation_agent import ColorCell, VoteAgent
 import matplotlib.pyplot as plt
+from democracy_sim.distance_functions import *
+from democracy_sim.social_welfare_functions import *
 
+# Parameters
 
-# Model grid parameters
+#############
+# Elections #
+#############
+election_costs = 5
+# Voting rules (see social_welfare_functions.py)
+voting_rules = [majority_rule, approval_voting]
+rule_idx = 0
+# Distance functions (see distance_functions.py)
+distance_functions = [spearman_distance, kendall_tau]
+distance_idx = 0
+####################
+# Model parameters #
+####################
+num_agents = 800
+# Colors
+num_colors = 4
+color_patches_steps = 3
+patch_power = 1.0
+color_heterogeneity = 0.3
+# Voting Agents
+num_personality_colors = 2
+num_personalities = comb(num_colors, num_personality_colors)
+# Grid
 grid_rows = 100  # height
 grid_cols = 80  # width
 cell_size = 10
 canvas_height = grid_rows * cell_size
 canvas_width = grid_cols * cell_size
 draw_borders = True
-# Colors and agents
-num_colors = 4
-color_adj_steps = 3
-color_heterogeneity = 0.3
-num_agents = 800
-# Voting area parameters
-# num_areas = 25
-# area_height = 20  # grid_rows // int(sqrt(num_areas))
-# area_width = 16  # grid_cols // int(sqrt(num_areas))
+# Voting Areas
 num_areas = 16
-area_height = 25
-area_width = 20
-area_var = 0.0
-# Voting rules TODO: Implement voting rules
-voting_rules = ["Majority Rule", "Approval Voting", "Kemeny"]
-rule_idx = 0
+av_area_height = 25
+# area_height = grid_rows // int(sqrt(num_areas))
+av_area_width = 20
+# area_width = grid_cols // int(sqrt(num_areas))
+area_size_variance = 0.0
 
 
 _COLORS = [
@@ -97,7 +113,7 @@ def participation_draw(cell: ColorCell):
         portrayal["Shape"] = "circle"
         portrayal["r"] = 0.9  # Adjust the radius to fit within the cell
         if color == "White":
-            portrayal["Color"] = "Grey"
+            portrayal["Color"] = "LightGrey"
     if cell.num_agents_in_cell > 0:
         portrayal["text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
@@ -136,17 +152,20 @@ wealth_chart = mesa.visualization.modules.ChartModule(
 model_params = {
     "height": grid_rows,
     "width": grid_cols,
-    # "voting_rule": mesa.visualization.modules.DropDown(
-    #     name="Voting Rule",
-    #     options=voting_rules,
-    #     value=voting_rules[0],  # Default value
-    # ),
-    "voting_rule": mesa.visualization.Slider(
-        name=f"Rule index {voting_rules}", value=rule_idx,
-        min_value=0, max_value=2,
-    ),
     "draw_borders": mesa.visualization.Checkbox(
         name="Draw border cells", value=draw_borders
+    ),
+    "voting_rule": mesa.visualization.Slider(
+        name=f"Rule index {[r.__name__ for r in voting_rules]}", value=rule_idx,
+        min_value=0, max_value=len(voting_rules)-1,
+    ),
+    "distance_func": mesa.visualization.Slider(
+        name=f"Rule index {[f.__name__ for f in distance_functions]}",
+        value=distance_idx, min_value=0, max_value=len(distance_functions)-1,
+    ),
+    "election_costs": mesa.visualization.Slider(
+        name="Election costs", value=election_costs, min_value=0, max_value=100,
+        step=1, description="The costs for participating in an election"
     ),
     "num_agents": mesa.visualization.Slider(
         name="# Agents", value=num_agents, min_value=10, max_value=99999,
@@ -156,13 +175,22 @@ model_params = {
         name="# Colors", value=num_colors, min_value=2, max_value=len(_COLORS),
         step=1
     ),
+    "num_personalities": mesa.visualization.Slider(
+        name="# of different personalities", value=num_personalities,
+        min_value=1, max_value=comb(num_colors, num_personality_colors), step=1
+    ),
+    "num_personality_colors": mesa.visualization.Slider(
+        name="# colors determining the personality",
+        value=num_personality_colors,
+        min_value=1, max_value=num_colors-1, step=1
+    ),
     "color_patches_steps": mesa.visualization.Slider(
-        name="Patches size (# steps)", value=color_adj_steps,
+        name="Patches size (# steps)", value=color_patches_steps,
         min_value=0, max_value=9, step=1,
         description="More steps lead to bigger color patches"
     ),
     "patch_power": mesa.visualization.Slider(
-        name="Patches power", value=1.0, min_value=0.0, max_value=3.0,
+        name="Patches power", value=patch_power, min_value=0.0, max_value=3.0,
         step=0.2, description="Increases the power/radius of the color patches"
     ),
     "heterogeneity": mesa.visualization.Slider(
@@ -176,17 +204,19 @@ model_params = {
         value=num_areas, min_value=4, max_value=min(grid_cols, grid_rows)//2
     ),
     "av_area_height": mesa.visualization.Slider(
-        name="Av. area height", value=area_height,
+        name="Av. area height", value=av_area_height,
         min_value=2, max_value=grid_rows//2,
         step=1, description="Select the average height of an area"
     ),
     "av_area_width": mesa.visualization.Slider(
-        name="Av. area width", value=area_width,
+        name="Av. area width", value=av_area_width,
         min_value=2, max_value=grid_cols//2,
         step=1, description="Select the average width of an area"
     ),
     "area_size_variance": mesa.visualization.Slider(
-        name="Area size variance", value=area_var, min_value=0.0, max_value=1.0,
-        step=0.1, description="Select the variance of the area sizes"
+        name="Area size variance", value=area_size_variance,
+        # TODO there is a division by zero error for value=1.0 - check this
+        min_value=0.0, max_value=0.99, step=0.1,
+        description="Select the variance of the area sizes"
     ),
 }

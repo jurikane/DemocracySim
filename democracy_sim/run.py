@@ -1,7 +1,7 @@
 # import webbrowser
 import mesa
-from participation_model import ParticipationModel
-from model_setup import model_params, canvas_element, a_chart, wealth_chart
+from democracy_sim.participation_model import ParticipationModel
+from democracy_sim.model_setup import model_params, canvas_element, a_chart, wealth_chart
 
 server = mesa.visualization.ModularServer(
     model_cls=ParticipationModel,

@@ -11,7 +11,7 @@ def get_agents_assets(model: ParticipationModel):
     """
     all_assets = list()
     # Store the results
-    for agent in model.all_agents:
+    for agent in model.voting_agents:
         all_assets.append(agent.assets)
     return f"Agents wealth: {all_assets}"
 
