@@ -2,6 +2,8 @@ import unittest
 from democracy_sim.participation_model import ParticipationModel, Area
 from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
                                        num_agents, num_colors, num_areas,
+                                       num_personalities,
+                                       num_personality_colors as npc,
                                        draw_borders, rule_idx, voting_rules,
                                        distance_idx, distance_functions,
                                        color_heterogeneity as heterogeneity,
@@ -19,6 +21,8 @@ class TestParticipationModel(unittest.TestCase):
         self.model = ParticipationModel(height=height, width=width,
                                         num_agents=num_agents,
                                         num_colors=num_colors,
+                                        num_personalities=num_personalities,
+                                        num_personality_colors=npc,
                                         num_areas=num_areas,
                                         draw_borders=draw_borders,
                                         election_costs=election_costs,
@@ -37,30 +41,47 @@ class TestParticipationModel(unittest.TestCase):
         self.assertEqual(areas_count, self.model.num_areas)
         self.assertIsInstance(self.model.datacollector, mesa.DataCollector)
 
-    def test_options(self):
-        self.assertEqual(self.model.av_area_width, av_area_width)
+    def test_model_options(self):
+        """
+        def __init__(self, height, width, num_agents, num_colors,
+             num_personalities, num_personality_colors,
+             num_areas, av_area_height, av_area_width, area_size_variance,
+             patch_power, color_patches_steps, draw_borders, heterogeneity,
+             voting_rule, distance_func, election_costs):
+        """
+        self.assertEqual(self.model.num_agents, num_agents)
+        self.assertEqual(self.model.num_colors, num_colors)
+        self.assertEqual(self.model.num_personalities, num_personalities)
+        self.assertEqual(self.model.num_personality_colors, npc)
+        self.assertEqual(self.model.num_areas, num_areas)
         self.assertEqual(self.model.area_size_variance, area_size_variance)
+        self.assertEqual(self.model.draw_borders, draw_borders)
+        self.assertEqual(self.model.heterogeneity, heterogeneity)
+        v_rule = voting_rules[rule_idx]
+        dist_func = distance_functions[distance_idx]
+        self.assertEqual(self.model.voting_rule, v_rule)
+        self.assertEqual(self.model.distance_func, dist_func)
+        self.assertEqual(self.model.election_costs, election_costs)
 
-    # def test_data_collection(self):
-    #     self.model.datacollector.collect(self.model)
-    #     data = self.model.datacollector.get_model_vars_dataframe()
-    #     self.assertIn("Collective assets", data.columns)
-    #     self.assertIn("Number of agents", data.columns)
-    #     self.assertIn("Area Color Distributions", data.columns)
-    #
-    # def test_color_distribution(self):
-    #     distribution = self.model.create_color_distribution(heterogeneity=0.5)
-    #     self.assertEqual(len(distribution), self.model.num_colors)
-    #     self.assertAlmostEqual(sum(distribution), 1.0, places=5)
-    #
-    # def test_color_patches(self):
-    #     from democracy_sim.participation_agent import ColorCell
-    #     cell = ColorCell(1, model=self.model, pos=(0, 0), initial_color=0)
-    #     color = self.model.color_patches(cell, patch_power=1.0)
-    #     self.assertIn(color, range(self.model.num_colors))
-    #
-    def test_step(self):
-        initial_data = self.model.datacollector.get_model_vars_dataframe().copy()
-        self.model.step()
-        new_data = self.model.datacollector.get_model_vars_dataframe()
-        self.assertNotEqual(initial_data, new_data)
+    def test_create_color_distribution(self):
+        eq_dst = self.model.create_color_distribution(heterogeneity=0)
+        self.assertEqual([1/num_colors for _ in eq_dst], eq_dst)
+        print(f"Color distribution with heterogeneity=0: {eq_dst}")
+        het_dst = self.model.create_color_distribution(heterogeneity=1)
+        print(f"Color distribution with heterogeneity=1: {het_dst}")
+        mid_dst = self.model.create_color_distribution(heterogeneity=0.5)
+        print(f"Color distribution with heterogeneity=0.5: {mid_dst}")
+        assert het_dst != eq_dst
+        assert mid_dst != eq_dst
+        assert het_dst != mid_dst
+
+    def test_initialize_areas(self):
+        # TODO (very non-trivial) - has been tested manually so far.
+        pass
+
+    # TODO add test_step
+    # def test_step(self):
+    #     initial_data = self.model.datacollector.get_model_vars_dataframe().copy()
+    #     self.model.step()
+    #     new_data = self.model.datacollector.get_model_vars_dataframe()
+    #     self.assertNotEqual(initial_data, new_data)

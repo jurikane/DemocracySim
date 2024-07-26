@@ -20,7 +20,7 @@ class Area(Agent):
         """
         if TYPE_CHECKING:  # Type hint for IDEs
             model = cast(ParticipationModel, model)
-        super().__init__(unique_id, model)
+        super().__init__(unique_id=unique_id,  model=model)
         if size_variance == 0:
             self._width = width
             self._height = height
@@ -58,6 +58,7 @@ class Area(Agent):
             x_val, y_val = pos
         except ValueError:
             raise ValueError("The idx_field must be a tuple")
+        # Check if the values are within the grid
         if x_val < 0 or x_val >= self.model.width:
             raise ValueError(f"The x={x_val} value must be within the grid")
         if y_val < 0 or y_val >= self.model.height:
@@ -111,7 +112,7 @@ class Area(Agent):
                 preference_profile.append(agent.vote(area=self))
         preference_profile = np.array(preference_profile)
         # Aggregate the prefs using the voting rule
-        # TODO: How to deal with ties?? (Have to be fulfill neutrality!!)
+        # TODO: How to deal with ties (Have to fulfill neutrality!!)??
         aggregated_prefs = voting_rule(preference_profile)
         # Save the "elected" distribution in self.voted_distribution
         winning_option = aggregated_prefs[0]
@@ -137,8 +138,16 @@ class Area(Agent):
         for color in range(self.model.num_colors):
             dist_val = color_count.get(color, 0) / num_cells  # Float division
             self.color_distribution[color] = dist_val
-        print(f"Area {self.unique_id} color "
-              f"distribution: {self.color_distribution}")
+
+    def filter_cells(self, cell_list):
+        """
+        This method is used to filter a given list of cells to return only
+        those which are within the area.
+        :param cell_list: A list of ColorCell cells to be filtered.
+        :return: A list of ColorCell cells that are within the area.
+        """
+        cell_set = set(self.cells)
+        return [c for c in cell_list if c in cell_set]
 
     def step(self) -> None:
         self.update_color_distribution()
@@ -263,6 +272,7 @@ class ParticipationModel(mesa.Model):
         # Create search pairs once for faster iterations when comparing rankings
         self.search_pairs = combinations(range(0, self.options.size), 2)  # TODO check if correct!
         self.option_vec = np.arange(self.options.size)  # Also to speed up
+        # Create color cells
         self.initialize_color_cells()
         # Create agents
         self.num_personalities = num_personalities
@@ -290,11 +300,11 @@ class ParticipationModel(mesa.Model):
 
     def initialize_color_cells(self):
         # Create a color cell for each cell in the grid
-        for _, (row, col) in self.grid.coord_iter():
+        for unique_id, (_, (row, col)) in enumerate(self.grid.coord_iter()):
             # The colors are chosen by a predefined color distribution
             color = color_by_dst(self.color_dst)
             # Create the cell
-            cell = ColorCell((row, col), self, color)
+            cell = ColorCell(unique_id, self, (row, col), color)
             # Add it to the grid
             self.grid.place_agent(cell, (row, col))
             # Add the color cell to the scheduler
@@ -306,18 +316,22 @@ class ParticipationModel(mesa.Model):
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
             personality = random.choice(self.personalities)
-            a = VoteAgent(a_id, (x, y), self, personality)
-            # Add the agent to the models' agent list
-            self.voting_agents.append(a)
-            # Place the agent on the grid
-            self.grid.place_agent(a, (x, y))
-            # Count +1 at the cell the agent is placed at TODO improve?
+            VoteAgent(a_id, self, (x, y), personality)
+            # Count +1 at the color cell the agent is placed at TODO improve?
             agents = self.grid.get_cell_list_contents([(x, y)])
-            cell = [a for a in agents if isinstance(a, ColorCell)][0]
+            color_cells = [a for a in agents if isinstance(a, ColorCell)]
+            if len(color_cells) > 1:
+                raise ValueError(f"There are several color cells at {(x, y)}!")
+            cell = color_cells[0]
             cell.num_agents_in_cell = cell.num_agents_in_cell + 1
 
     def initialize_areas(self):
-        # Create areas spread approximately evenly across the grid
+        """
+        This method initializes the areas in the models' grid in such a way
+        that the areas are spread approximately evenly across the grid.
+        Depending on grid size, the number of areas and their (average) sizes.
+        TODO create unit tests for this method (Tested manually so far)
+        """
         roo_apx = round(sqrt(self.num_areas))
         nr_areas_x = self.grid.width // self.av_area_width
         nr_areas_y = self.grid.width // self.av_area_height
@@ -343,13 +357,13 @@ class ParticipationModel(mesa.Model):
                 area = Area(a_id, self, self.av_area_height,
                             self.av_area_width, self.area_size_variance)
                 print(f"Area {area.unique_id} at {x_coord}, {y_coord}")
-                area.idx_field = (x_coord, y_coord)
+                area.idx_field = (x_coord, y_coord)  # TODO integrate this step into the areas __init__ method
                 self.area_scheduler.add(area)
         for x_coord, y_coord in zip(additional_x, additional_y):
             area = Area(next(a_ids), self, self.av_area_height,
                         self.av_area_width, self.area_size_variance)
             print(f"++ Area {area.unique_id} at {x_coord}, {y_coord}")
-            area.idx_field = (x_coord, y_coord)
+            area.idx_field = (x_coord, y_coord)  # TODO integrate this step into the areas __init__ method
             self.area_scheduler.add(area)
 
     def create_personalities(self, n=None):
@@ -399,7 +413,6 @@ class ParticipationModel(mesa.Model):
         # Normalize (with float division)
         total = sum(values)
         dst_array = [value / total for value in values]
-        print(f"Color distribution: {dst_array}")  # TODO rm print
         return dst_array
 
     def color_patches(self, cell, patch_power):

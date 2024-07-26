@@ -24,25 +24,32 @@ class VoteAgent(Agent):
     """An agent that has limited knowledge and resources and
     can decide to use them to participate in elections."""
 
-    def __init__(self, unique_id, pos, model, personality, assets=1):
-        """
-        Create a new agent.
+    def __init__(self, unique_id, model, pos, personality, assets=1):
+        """ Create a new agent.
         :param unique_id: The unique identifier of the agent.
-        :param pos: The position of the agent in the models' grid.
-        :type pos: tuple
         :param model: The simulation model of which the agent is part of.
         :type model: ParticipationModel
+        :param pos: The position of the agent in the models' grid.
+        :type pos: tuple
         :param personality: Represents the agent's preferences among colors.
         :type personality: np.ndarray
         :param assets: The wealth/assets/motivation of the agent.
         """
         # Pass the parameters to the parent class.
-        super().__init__(unique_id, model)
-        self._row = pos[0]
-        self._col = pos[1]
+        super().__init__(unique_id=unique_id, model=model)
+        try:
+            row, col = pos
+        except ValueError:
+            raise ValueError("Position must be a tuple of two integers.")
+        self._row = row
+        self._col = col
         self._assets = assets
         self.personality = personality
         self.known_cells = []  # ColorCell objects the agent knows (knowledge)
+        # Add the agent to the models' agent list
+        model.voting_agents.append(self)
+        # Place the agent on the grid
+        model.grid.place_agent(self, pos)
 
     @property
     def col(self):
@@ -103,7 +110,7 @@ class VoteAgent(Agent):
         ass_opt = combine_and_normalize(self.personality, est_dist, a_factor)
         return ass_opt
 
-    def vote(self, area, voting_rule):
+    def vote(self, area):
         """
         The agent votes in the election of a given area,
         i.e., she returns a preference ranking vector over all options.
@@ -151,16 +158,17 @@ class VoteAgent(Agent):
         distribution[unique] = counts / known_colors.size
         return distribution
 
+
 class ColorCell(Agent):
     """
     Represents a cell's color
     """
 
-    def __init__(self, pos, model, initial_color: int):
+    def __init__(self, unique_id, model, pos, initial_color: int):
         """
         Create a cell, in the given state, at the given row, col position.
         """
-        super().__init__(pos, model)
+        super().__init__(unique_id, model)
         self._row = pos[0]
         self._col = pos[1]
         self._color = initial_color  # The cell's current color (int)
