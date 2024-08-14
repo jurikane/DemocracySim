@@ -7,17 +7,25 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from democracy_sim.participation_model import ParticipationModel
 
 
-def combine_and_normalize(arr_1, arr_2, factor):
+def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
+    """
+    Combine two arrays weighted by a factor favoring arr_1.
+    The first array is to be the estimated real distribution.
+    And the other is to be the personality vector of the agent.
+    :param arr_1: The first array to be combined (real distribution).
+    :param arr_2: The second array to be combined (personality vector).
+    :param factor: The factor to weigh the two arrays.
+    :return: The normalized result of the weighted linear combination.
+    """
     # Ensure f is between 0 and 1 TODO: remove this on simulations to speed up
     if not (0 <= factor <= 1):
         raise ValueError("Factor f must be between 0 and 1")
-
     # Linear combination
     res = factor * arr_1 + (1 - factor) * arr_2
-    print(f"un-normalized result: {res}")  # TODO rm
-    # Normalize the result
-    res_min = res.min()
-    return (res - res_min) / (res.max() - res_min + 1e-8)
+    # Normalize/scale result s. t. it resembles a distribution vector (sum=1)
+    total = sum(res)
+    # assert total == 1.0, f"Sum of result is {total} and not 1.0"
+    return res / total
 
 
 class VoteAgent(Agent):
@@ -93,7 +101,7 @@ class VoteAgent(Agent):
         # TODO Implement this (is to be decided upon a learned decision tree)
         # This part is important - also for monitoring - save/plot a_factors
         a_factor = random.uniform(0.0, 1.0)
-        print(f"{area}:", "Agent", self.unique_id, "altruism factor:", a_factor)
+        print(f"Agent {self.unique_id} has altruism factor: {a_factor}")
         return a_factor
 
     def compute_assumed_opt_dist(self, area):
@@ -101,9 +109,12 @@ class VoteAgent(Agent):
         Computes a color distribution that the agent assumes to be an optimal
         choice in any election (regardless of whether it exists as a real option
         to vote for or not). It takes "altruistic" concepts into consideration.
+        :param area: The area in which the election takes place.
+        :return: The assumed optimal color distribution (normalized).
+        TODO add unit test for this method
         """
         # Compute the "altruism_factor" via a decision tree
-        a_factor = self.decide_altruism_factor(area)
+        a_factor = self.decide_altruism_factor(area)  # TODO: Implement this
         # compute the preference ranking vector as a mix between the agent's
         # own preferences/personality traits and the estimated real distribution
         est_dist = self.estimate_real_distribution(area)
@@ -120,7 +131,7 @@ class VoteAgent(Agent):
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
         est_best_dist = self.compute_assumed_opt_dist(area)
-        # make sure that r is normalized!
+        # Make sure that r= is normalized!
         # (r.min()=0.0 and r.max()=1.0 and all vals x are within [0.0, 1.0]!)
         ##############
         if TYPE_CHECKING:  # Type hint for IDEs

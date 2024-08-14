@@ -275,6 +275,7 @@ class ParticipationModel(mesa.Model):
         # Create color cells
         self.initialize_color_cells()
         # Create agents
+        # TODO: Where do the agents get there known cells from and how!?
         self.num_personalities = num_personalities
         self.num_personality_colors = num_personality_colors
         self.personalities = self.create_personalities()
@@ -299,6 +300,9 @@ class ParticipationModel(mesa.Model):
         self.datacollector.collect(self)
 
     def initialize_color_cells(self):
+        """
+        This method initializes a color cells for each cell in the model's grid.
+        """
         # Create a color cell for each cell in the grid
         for unique_id, (_, (row, col)) in enumerate(self.grid.coord_iter()):
             # The colors are chosen by a predefined color distribution
@@ -311,6 +315,12 @@ class ParticipationModel(mesa.Model):
             self.color_cell_scheduler.add(cell)
 
     def initialize_voting_agents(self):
+        """
+        This method initializes as many voting agents as set in the model with
+        a randomly chosen personality. It places them randomly on the grid.
+        It also ensures that each agent is assigned to the color cell it is
+        standing on.
+        """
         for a_id in range(self.num_agents):
             # Get a random position
             x = self.random.randrange(self.width)

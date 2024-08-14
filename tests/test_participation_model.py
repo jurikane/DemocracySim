@@ -40,15 +40,9 @@ class TestParticipationModel(unittest.TestCase):
                            if isinstance(area, Area)])
         self.assertEqual(areas_count, self.model.num_areas)
         self.assertIsInstance(self.model.datacollector, mesa.DataCollector)
+        # TODO ... more tests
 
     def test_model_options(self):
-        """
-        def __init__(self, height, width, num_agents, num_colors,
-             num_personalities, num_personality_colors,
-             num_areas, av_area_height, av_area_width, area_size_variance,
-             patch_power, color_patches_steps, draw_borders, heterogeneity,
-             voting_rule, distance_func, election_costs):
-        """
         self.assertEqual(self.model.num_agents, num_agents)
         self.assertEqual(self.model.num_colors, num_colors)
         self.assertEqual(self.model.num_personalities, num_personalities)
@@ -79,6 +73,8 @@ class TestParticipationModel(unittest.TestCase):
         # TODO (very non-trivial) - has been tested manually so far.
         pass
 
+    def test_step(self):
+        pass
     # TODO add test_step
     # def test_step(self):
     #     initial_data = self.model.datacollector.get_model_vars_dataframe().copy()
