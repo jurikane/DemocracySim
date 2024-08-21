@@ -335,6 +335,16 @@ class ParticipationModel(mesa.Model):
             cell = color_cells[0]
             cell.num_agents_in_cell = cell.num_agents_in_cell + 1
 
+    def initialize_area(self, a_id, x_coord, y_coord):
+        """
+        This method initializes one area in the models' grid.
+        """
+        area = Area(a_id, self, self.av_area_height, self.av_area_width,
+                    self.area_size_variance)
+        # Place the area in the grid using its indexing field
+        area.idx_field = (x_coord, y_coord)
+        self.area_scheduler.add(area)
+
     def initialize_areas(self):
         """
         This method initializes the areas in the models' grid in such a way
@@ -342,14 +352,16 @@ class ParticipationModel(mesa.Model):
         Depending on grid size, the number of areas and their (average) sizes.
         TODO create unit tests for this method (Tested manually so far)
         """
+        # Calculate the number of areas in each direction
         roo_apx = round(sqrt(self.num_areas))
         nr_areas_x = self.grid.width // self.av_area_width
         nr_areas_y = self.grid.width // self.av_area_height
+        # Calculate the distance between the areas
         area_x_dist = self.grid.width // roo_apx
         area_y_dist = self.grid.height // roo_apx
         print(f"roo_apx: {roo_apx}, nr_areas_x: {nr_areas_x}, "
               f"nr_areas_y: {nr_areas_y}, area_x_dist: {area_x_dist}, "
-              f"area_y_dist: {area_y_dist}")
+              f"area_y_dist: {area_y_dist}")  # TODO rm print
         x_coords = range(0, self.grid.width, area_x_dist)
         y_coords = range(0, self.grid.height, area_y_dist)
         # Add additional areas if necessary (num_areas not a square number)
@@ -358,23 +370,17 @@ class ParticipationModel(mesa.Model):
         for _ in range(missing):
             additional_x.append(self.random.randrange(self.grid.width))
             additional_y.append(self.random.randrange(self.grid.height))
+        # Create the area's ids
         a_ids = iter(range(1, self.num_areas + 1))
+        # Initialize all areas
         for x_coord in x_coords:
             for y_coord in y_coords:
                 a_id = next(a_ids, 0)
                 if a_id == 0:
                     break
-                area = Area(a_id, self, self.av_area_height,
-                            self.av_area_width, self.area_size_variance)
-                print(f"Area {area.unique_id} at {x_coord}, {y_coord}")
-                area.idx_field = (x_coord, y_coord)  # TODO integrate this step into the areas __init__ method
-                self.area_scheduler.add(area)
+                self.initialize_area(a_id, x_coord, y_coord)
         for x_coord, y_coord in zip(additional_x, additional_y):
-            area = Area(next(a_ids), self, self.av_area_height,
-                        self.av_area_width, self.area_size_variance)
-            print(f"++ Area {area.unique_id} at {x_coord}, {y_coord}")
-            area.idx_field = (x_coord, y_coord)  # TODO integrate this step into the areas __init__ method
-            self.area_scheduler.add(area)
+            self.initialize_area(next(a_ids), x_coord, y_coord)
 
     def create_personalities(self, n=None):
         """
@@ -401,7 +407,7 @@ class ParticipationModel(mesa.Model):
         self.datacollector.collect(self)
 
     def adjust_color_pattern(self, color_patches_steps, patch_power):
-        """Adjusting the color pattern to make it less random/predictable."""
+        """Adjusting the color pattern to make it less predictable."""
         for _ in range(color_patches_steps):
             print(f"Color adjustment step {_}")
             for cell in self.grid.coord_iter():
