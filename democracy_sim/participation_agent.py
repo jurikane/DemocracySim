@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
-from mesa import Agent, Model
+from mesa import Agent
 from numpy import random
 if TYPE_CHECKING:  # Type hint for IDEs
     from democracy_sim.participation_model import ParticipationModel
@@ -225,7 +225,8 @@ class ColorCell(Agent):
 
     def color_step(self):
         """
-        Determines the cells' color for the next step
+        Determines the cells' color for the next step.
+        TODO
         """
         # _neighbor_iter = self.model.grid.iter_neighbors(
         #     (self._row, self._col), True)
@@ -242,7 +243,8 @@ class ColorCell(Agent):
 
     def advance(self):
         """
-        Set the state of the agent to the next state
+        Set the state of the agent to the next state.
+        TODO
         """
         # self._color = self._next_color
         pass

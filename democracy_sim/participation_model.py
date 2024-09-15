@@ -117,10 +117,11 @@ class Area(Agent):
         # Save the "elected" distribution in self.voted_distribution
         winning_option = aggregated_prefs[0]
         self.voted_distribution = self.model.options[winning_option]
-        # calculate the distance to the real distribution using distance_func
+        # Calculate the distance to the real distribution using distance_func
         distance_factor = distance_func(self.voted_distribution,
                                         self.color_distribution)
         # calculate the rewards for the agents
+        pass
         # TODO
         # distribute the rewards
         # TODO

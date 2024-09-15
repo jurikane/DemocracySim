@@ -93,22 +93,38 @@ def majority_rule(pref_table):
         ranking = complete_ranking(ranking, m)
     return ranking
 
+def preprocessing_for_approval(pref_table, threshold=None):
+    """
+    This function prepares the preference table for approval voting
+    by interpreting evey value above the threshold as an approval.
+    The standard threshold is 1/m (m = number of options).
+    The reasoning is that if the preferences are normalized,
+    1/m ensures the threshold to be proportionate to the number of options.
+    It also ensures that, on average, half of the options will be approved.
+    The actual number of approved options, however,
+    can still vary depending on the specific values in the preference table.
+    :param pref_table: The agent's preferences.
+    :param threshold: The threshold for approval.
+    :return: The preference table with the options approved or not.
+    """
+    if threshold is None:
+        threshold = 1 / pref_table.shape[1]
+    return (pref_table >= threshold).astype(int)
+
 
 def approval_voting(pref_table):
-    # TODO !!!!!!!!!!!!!!!!!
-    # => How should pref_tables be like / how do they need to be like (options=colors or options=combinations)???
-    # !!!!!!!!!!!!!!!
-    # ANSWER:
-    # they have to span the options - not the colors
     """
     This function implements the approval voting social welfare function.
     :param pref_table: The agent's preferences as a NumPy matrix
             containing the normalized ranking vectors of all agents.
-    :return: The resulting preference ranking
+    :return: The resulting preference ranking (beware: not a pref. relation).
     """
-    # # Count how often each option is approved
-    # approval_counts = np.sum(pref_table, axis=0)
-    # option_count_pairs = list(enumerate(approval_counts))
-    # option_count_pairs.sort(key=lambda x: x[1], reverse=True)
-    # return [pair[0] for pair in option_count_pairs]
-    pass
+    pref_table = preprocessing_for_approval(pref_table)
+    # Count how often each option is approved
+    approval_counts = np.sum(pref_table, axis=0)
+    # Add noise to break ties TODO check for bias
+    noise = np.random.uniform(-0.3, 0.3, len(approval_counts))
+    #option_count_pairs = list(enumerate(approval_counts + noise))
+    #option_count_pairs.sort(key=lambda x: x[1], reverse=True)
+    #return [pair[0] for pair in option_count_pairs]
+    return np.argsort(-(approval_counts + noise))
