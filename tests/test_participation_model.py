@@ -4,20 +4,17 @@ from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
                                        num_agents, num_colors, num_areas,
                                        num_personalities,
                                        num_personality_colors as npc,
-                                       draw_borders, rule_idx, voting_rules,
-                                       distance_idx, distance_functions,
+                                       draw_borders, rule_idx, distance_idx,
                                        color_heterogeneity as heterogeneity,
                                        color_patches_steps, av_area_height,
                                        av_area_width, area_size_variance,
-                                       patch_power, election_costs)
+                                       patch_power, election_costs, max_reward)
 import mesa
 
 
 class TestParticipationModel(unittest.TestCase):
 
     def setUp(self):
-        voting_rule = voting_rules[rule_idx]
-        distance_func = distance_functions[distance_idx]
         self.model = ParticipationModel(height=height, width=width,
                                         num_agents=num_agents,
                                         num_colors=num_colors,
@@ -26,14 +23,15 @@ class TestParticipationModel(unittest.TestCase):
                                         num_areas=num_areas,
                                         draw_borders=draw_borders,
                                         election_costs=election_costs,
-                                        voting_rule=voting_rule,
-                                        distance_func=distance_func,
+                                        rule_idx=rule_idx,
+                                        distance_idx=distance_idx,
                                         heterogeneity=heterogeneity,
                                         color_patches_steps=color_patches_steps,
                                         av_area_height=av_area_height,
                                         av_area_width=av_area_width,
                                         area_size_variance=area_size_variance,
-                                        patch_power=patch_power)
+                                        patch_power=patch_power,
+                                        max_reward=max_reward)
 
     def test_initialization(self):
         areas_count = len([area for area in self.model.area_scheduler.agents
@@ -51,7 +49,7 @@ class TestParticipationModel(unittest.TestCase):
         self.assertEqual(self.model.area_size_variance, area_size_variance)
         self.assertEqual(self.model.draw_borders, draw_borders)
         self.assertEqual(self.model.heterogeneity, heterogeneity)
-        v_rule = voting_rules[rule_idx]
+        v_rule = social_welfare_functions[rule_idx]
         dist_func = distance_functions[distance_idx]
         self.assertEqual(self.model.voting_rule, v_rule)
         self.assertEqual(self.model.distance_func, dist_func)

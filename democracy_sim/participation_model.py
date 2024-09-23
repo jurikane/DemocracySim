@@ -6,6 +6,13 @@ from mesa import Agent
 from democracy_sim.participation_agent import VoteAgent, ColorCell
 import numpy as np
 from itertools import permutations, product, combinations
+from democracy_sim.social_welfare_functions import majority_rule, approval_voting
+from democracy_sim.distance_functions import spearman, kendall_tau
+
+# Voting rules to be accessible by index
+social_welfare_functions = [majority_rule, approval_voting]
+# Distance functions
+distance_functions = [spearman, kendall_tau]
 
 
 class Area(Agent):
@@ -37,8 +44,14 @@ class Area(Agent):
         self.agents = []
         self.cells = []
         self._idx_field = None  # An indexing position of the area in the grid
-        self.color_distribution = [0] * model.num_colors  # Initialize to 0
-        self.voted_distribution = [0] * model.num_colors
+        self.color_distribution = np.zeros(model.num_colors) # Initialize to 0
+        self.voted_distribution = np.zeros(model.num_colors)
+        self.voter_turnout = 0  # In percent
+
+    def __str__(self):
+        return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
+                f"num_agents={len(self.agents)}, num_cells={len(self.cells)}, "
+                f"color_distribution={self.color_distribution})")
 
     @property
     def idx_field(self):
@@ -94,7 +107,18 @@ class Area(Agent):
     def add_cell(self, cell):
         self.cells.append(cell)
 
-    def conduct_election(self, voting_rule, distance_func):
+    def curr_norm_dist(self):
+        """
+        This method calculates the current distance of the area's real color
+        distribution (as ordering)
+        to the latest voted distribution ordering.
+        It uses the models distance function.
+        """
+        real_color_ord = np.argsort(self.color_distribution)
+        voted_ord = self.voted_distribution
+        return self.model.distance_func(real_color_ord, voted_ord, self.model)
+
+    def conduct_election(self):
         """
         This method holds the primary logic of the simulation by simulating
         the election in the area as well as handling the payments and rewards.
@@ -105,26 +129,37 @@ class Area(Agent):
         preference_profile = []
         for agent in self.agents:
             if agent.ask_for_participation(area=self):
+                # TODO: if agent cant afford she cant participate
                 participating_agents.append(agent)
                 # collect the participation fee from the agents
                 agent.assets = agent.assets - self.model.election_costs
                 # Ask participating agents for their prefs
                 preference_profile.append(agent.vote(area=self))
         preference_profile = np.array(preference_profile)
-        # Aggregate the prefs using the voting rule
+        # Aggregate the prefs using the v-rule => returns an option ordering
         # TODO: How to deal with ties (Have to fulfill neutrality!!)??
-        aggregated_prefs = voting_rule(preference_profile)
+        aggregated = self.model.voting_rule(preference_profile)
         # Save the "elected" distribution in self.voted_distribution
-        winning_option = aggregated_prefs[0]
+        winning_option = aggregated[0]
         self.voted_distribution = self.model.options[winning_option]
         # Calculate the distance to the real distribution using distance_func
-        distance_factor = distance_func(self.voted_distribution,
-                                        self.color_distribution)
-        # calculate the rewards for the agents
-        pass
-        # TODO
-        # distribute the rewards
-        # TODO
+        normalized_dist = self.curr_norm_dist()
+        # Calculate the rewards per agent
+        reward_pa = (1 - normalized_dist) * self.model.max_reward
+        # Distribute the two types of rewards
+        for agent in self.agents:
+            # Personality-based reward
+            # TODO: Calculate value p\in(0,1) based on how well the consensus fits the personality of the agent (should better be fast)
+            p = random.uniform(0, 1)
+            # + Common reward (reward_pa) for all agents
+            agent.assets = agent.assets + p * reward_pa + reward_pa
+        # TODO check whether the current color dist and the mutation of the colors is calculated and applied correctly and does not interfere in any way with the election process
+        # Statistics
+        self.voter_turnout = int((len(participating_agents) /
+                                  len(self.agents)) * 100) # In percent
+
+
+
 
     def update_color_distribution(self):
         """
@@ -152,7 +187,16 @@ class Area(Agent):
 
     def step(self) -> None:
         self.update_color_distribution()
-        self.conduct_election(self.model.voting_rule, self.model.distance_func)
+        self.conduct_election()
+        self.model.datacollector.add_table_row(
+            "AreaData",
+            {
+                "Step": self.model.schedule.time,
+                "AreaID": self.unique_id,
+                "ColorDistribution": self.color_distribution.tolist(),
+                "VoterTurnout": self.voter_turnout
+            }
+        )
 
 
 def compute_collective_assets(model):
@@ -160,13 +204,13 @@ def compute_collective_assets(model):
     return sum_assets
 
 
-def get_num_agents(model):
-    return len(model.voting_agents)
+def get_voter_turnout(model):
+    return model.area_scheduler.agents[0].voter_turnout  # Assuming one area
 
 
 def get_area_color_distributions(model):
-    return {area.unique_id: area.color_distribution
-            for area in model.area_scheduler.agents}
+    data = {f"Share of color {i}": model.area_scheduler.agents[0].color_distribution[i] for i in range(model.num_colors)}
+    return data
 
 
 def color_by_dst(color_distribution) -> int:
@@ -236,7 +280,7 @@ class ParticipationModel(mesa.Model):
                  num_personality_colors,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
-                 voting_rule, distance_func, election_costs):
+                 rule_idx, distance_idx, election_costs, max_reward):
         super().__init__()
         self.height = height
         self.width = width
@@ -267,8 +311,9 @@ class ParticipationModel(mesa.Model):
         self.color_dst = self.create_color_distribution(heterogeneity)
         # Elections
         self.election_costs = election_costs
-        self.voting_rule = voting_rule
-        self.distance_func = distance_func
+        self.max_reward = max_reward
+        self.voting_rule = social_welfare_functions[rule_idx]
+        self.distance_func = distance_functions[distance_idx]
         self.options = create_all_options(num_colors)
         # Create search pairs once for faster iterations when comparing rankings
         self.search_pairs = combinations(range(0, self.options.size), 2)  # TODO check if correct!
@@ -290,10 +335,17 @@ class ParticipationModel(mesa.Model):
         self.datacollector = mesa.DataCollector(
             model_reporters={
                 "Collective assets": compute_collective_assets,
-                "Number of agents": get_num_agents,
+                "Voter turnout (first area)": get_voter_turnout,
                 "Area Color Distributions": get_area_color_distributions,
             },
-            agent_reporters={"Wealth": lambda ag: getattr(ag, "assets", None)},
+            agent_reporters={
+                "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
+                "Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
+            },
+            tables={
+                "AreaData": ["Step", "AreaID", "ColorDistribution",
+                             "VoterTurnout"]
+            }
         )
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)

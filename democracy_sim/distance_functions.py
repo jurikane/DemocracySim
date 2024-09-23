@@ -1,8 +1,13 @@
+from math import comb
+
 import numpy as np
 
 
-def kendall_tau(rank_arr_1, rank_arr_2, search_pairs, color_vec):
+def kendall_tau_on_ranks(rank_arr_1, rank_arr_2, search_pairs, color_vec):
     """
+    DON'T USE
+    (don't use for orderings!)
+
     This function calculates the kendal tau distance between two rank vektors.
     (The Kendall tau rank distance is a metric that counts the number
     of pairwise disagreements between two ranking lists.
@@ -38,13 +43,13 @@ def kendall_tau(rank_arr_1, rank_arr_2, search_pairs, color_vec):
     return kendall_distance
 
 
-def kendall_tau_on_orderings(ordering_1, ordering_2, search_pais):
+def unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs):
     """
     This function calculates the kendal tau distance on two orderings.
     An ordering holds the option names in the order of their rank (rank=index).
     :param ordering_1: First (NumPy) array containing ranked options
     :param ordering_2: The second ordering array
-    :param search_pais: The pairs of indices (for efficiency)
+    :param search_pairs: The pairs of indices (for efficiency)
     :return: The kendall tau distance
     """
     # Rename the elements to reduce the problem to counting inversions
@@ -52,14 +57,48 @@ def kendall_tau_on_orderings(ordering_1, ordering_2, search_pais):
     renamed_arr_2 = np.array([mapping[option] for option in ordering_2])
     # Count inversions using precomputed pairs
     kendall_distance = 0
-    for i, j in search_pais:
+    for i, j in search_pairs:
         if renamed_arr_2[i] > renamed_arr_2[j]:
             kendall_distance += 1
     return kendall_distance
 
 
+def kendall_tau(ordering_1, ordering_2, model):
+    """
+    This calculates the normalized Kendall tau distance of two orderings.
+    The Kendall tau rank distance is a metric that counts the number
+    of pairwise disagreements between two ranking lists.
+    The larger the distance, the more dissimilar the two lists are.
+    Kendall tau distance is also called bubble-sort distance.
+    An ordering holds the option names in the order of their rank (rank=index).
+    :param ordering_1: First (NumPy) array containing ranked options
+    :param ordering_2: The second ordering array
+    :param model: Containing the pairs of indices (for efficiency)
+    :return: The kendall tau distance
+    """
+    # TODO: remove these tests (comment out) on actual simulations to speed up
+    n = ordering_1.size
+    if n > 0:
+        expected_arr = np.arange(n)
+        assert (np.array_equal(np.sort(ordering_1), expected_arr)
+                and np.array_equal(np.sort(ordering_2), expected_arr)) , \
+            f"Error: Sequences {ordering_1}, {ordering_2} aren't comparable."
+
+    # Get the unnormalized Kendall tau distance
+    search_pairs = model.search_pairs
+    dist = unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs)
+    # Maximum possible Kendall tau distance
+    max_distance = comb(n, 2)  # This is n choose 2, or n(n-1)/2
+    # Normalize the distance
+    normalized_distance = dist / max_distance
+
+    return normalized_distance
+
+
 def spearman_distance(rank_arr_1, rank_arr_2):
     """
+    Beware: don't use for orderings!
+
     This function calculates the Spearman distance between two rank vektors.
     Spearman's foot rule is a measure of the distance between ranked lists.
     It is given as the sum of the absolute differences between the ranks
@@ -78,3 +117,30 @@ def spearman_distance(rank_arr_1, rank_arr_2):
                 and rank_arr_1.max() == rank_arr_2.max()), \
             f"Error: Sequences {rank_arr_1}, {rank_arr_2} aren't comparable."
     return np.sum(np.abs(rank_arr_1 - rank_arr_2))
+
+
+def spearman(ordering_1, ordering_2, model):
+    """
+    This calculates the normalized Spearman distance between two orderings.
+    Spearman's foot rule is a measure of the distance between ranked lists.
+    It is given as the sum of the absolute differences between the ranks
+    of the two orderings (values from 0 to n-1 in any order).
+    :param ordering_1: First (NumPy) array containing the ranks of each option
+    :param ordering_2: The second rank array
+    :param model: The mesa model
+    :return: The Spearman distance
+    """
+    # TODO: remove these tests (comment out) on actual simulations to speed up
+    n = ordering_1.size
+    if n > 0:
+        expected_arr = np.arange(n)
+        assert (np.array_equal(np.sort(ordering_1), expected_arr)
+                and np.array_equal(np.sort(ordering_2), expected_arr)) , \
+            f"Error: Sequences {ordering_1}, {ordering_2} aren't comparable."
+    distance = np.sum(np.abs(ordering_1 - ordering_2))
+    # Normalize
+    if n % 2 == 0:  # Even number of elements
+        max_dist = n**2 / 2
+    else: # Odd number of elements
+        max_dist = n * (n - 1) / 2
+    return distance / max_dist

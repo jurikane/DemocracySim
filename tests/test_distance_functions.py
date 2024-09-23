@@ -6,9 +6,11 @@ from itertools import combinations
 
 class TestKendallTauDistance(unittest.TestCase):
 
-    def test_kendall_tau(self):
+    #TODO test normalized version
 
-        print("TEST kendall_tau function")
+    def test_kendall_tau_on_ranks(self):
+
+        print("TEST kendall_tau_on_ranks function")
 
         # Test cases kendall tau (rank-vektors)
         sequences = [
@@ -80,13 +82,14 @@ class TestKendallTauDistance(unittest.TestCase):
             item_vec = np.arange(n)
             # assert set(np.unique(seq1)) == set(np.unique(seq2)), \
             #     "Test failed: sequences must have the same elements"
-            d = kendall_tau(np.array(seq1), np.array(seq2), pairs, item_vec)
+            d = kendall_tau_on_ranks(np.array(seq1), np.array(seq2),
+                                     pairs, item_vec)
             print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
             assert d == expected, f"Test failed for input {seq1}, {seq2}"
 
     def test_kendall_tau_on_orderings(self):
 
-        print("\nTEST kendall_tau_on_orderings function\n")
+        print("\nTEST kendall_tau_on_orderings (not normalized) function\n")
 
         # Test cases kendall tau (on orderings)
         ordering_seqs = [
@@ -119,12 +122,14 @@ class TestKendallTauDistance(unittest.TestCase):
                 "Test failed: sequences must have the same length"
             pairs = combinations(range(0, n), 2)
             # Test the ordering version
-            d = kendall_tau_on_orderings(np.array(seq1), np.array(seq2), pairs)
+            d = unnormalized_kendall_tau(np.array(seq1), np.array(seq2), pairs)
             print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
             assert d == expected, f"Test failed for input {seq1}, {seq2}"
 
 
 class TestSpearmanDistance(unittest.TestCase):
+
+    #TODO test normalized version
 
     def test_spearman_distance(self):
 

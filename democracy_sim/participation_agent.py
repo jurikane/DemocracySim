@@ -59,6 +59,10 @@ class VoteAgent(Agent):
         # Place the agent on the grid
         model.grid.place_agent(self, pos)
 
+    def __str__(self):
+        return (f"Agent(id={self.unique_id}, pos={self.pos}, "
+                f"personality={self.personality}, assets={self.assets})")
+
     @property
     def col(self):
         """Return the col location of this cell."""
@@ -89,8 +93,8 @@ class VoteAgent(Agent):
         :param area: The area in which the election takes place.
         :return: True if the agent decides to participate, False otherwise
         """
-        print("Agent", self.unique_id, "decides whether to participate",
-              "in election of area", area.unique_id)
+        #print("Agent", self.unique_id, "decides whether to participate",
+        #      "in election of area", area.unique_id)
         # TODO Implement this (is to be decided upon a learned decision tree)
         return random.choice([True, False])
 
@@ -101,7 +105,7 @@ class VoteAgent(Agent):
         # TODO Implement this (is to be decided upon a learned decision tree)
         # This part is important - also for monitoring - save/plot a_factors
         a_factor = random.uniform(0.0, 1.0)
-        print(f"Agent {self.unique_id} has altruism factor: {a_factor}")
+        #print(f"Agent {self.unique_id} has altruism factor: {a_factor}")
         return a_factor
 
     def compute_assumed_opt_dist(self, area):
@@ -125,19 +129,27 @@ class VoteAgent(Agent):
         """
         The agent votes in the election of a given area,
         i.e., she returns a preference ranking vector over all options.
+        (Options are indexes, values are preference values defining the order).
         The available options are set in the model.
         :param area: The area in which the election takes place.
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
-        est_best_dist = self.compute_assumed_opt_dist(area)
+        # TODO est_best_dist = self.compute_assumed_opt_dist(area)
         # Make sure that r= is normalized!
         # (r.min()=0.0 and r.max()=1.0 and all vals x are within [0.0, 1.0]!)
         ##############
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
-        r = self.model.options[random.choice(self.model.options.shape[0])]
-        print("Agent", self.unique_id, "voted:", r)
+        # For TESTING we just shuffle the option vector (ints) then normalize
+        # and interpret the result as a preference vector (values=prefs)
+        # (makes no sense, but it'll work for testing)
+        r = np.arange(self.model.options.shape[0])
+        # Shuffle the array in place
+        np.random.shuffle(r)
+        r = np.array(r, dtype=float)
+        r /= r.sum()
+        #print("Agent", self.unique_id, "voted:", r)
         return r
 
     # def step(self):

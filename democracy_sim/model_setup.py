@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, cast
 from math import comb
 import mesa
 from mesa.visualization.modules import ChartModule
-from democracy_sim.participation_model import ParticipationModel
+from democracy_sim.participation_model import (ParticipationModel,
+                                               distance_functions,
+                                               social_welfare_functions)
 from democracy_sim.participation_agent import ColorCell, VoteAgent
 import matplotlib.pyplot as plt
-from democracy_sim.distance_functions import *
-from democracy_sim.social_welfare_functions import *
 
 # Parameters
 
@@ -18,11 +18,10 @@ from democracy_sim.social_welfare_functions import *
 # Elections #
 #############
 election_costs = 5
+max_reward = 50
 # Voting rules (see social_welfare_functions.py)
-voting_rules = [majority_rule, approval_voting]
 rule_idx = 0
 # Distance functions (see distance_functions.py)
-distance_functions = [spearman_distance, kendall_tau]
 distance_idx = 0
 ####################
 # Model parameters #
@@ -139,13 +138,26 @@ def draw_color_dist_bars(color_distributions):
     plt.show()
 
 
-a_chart = mesa.visualization.ChartModule([{"Label": "Number of agents",
-                                           "Color": "Black"}],
-                                         data_collector_name='datacollector')
+voter_turnout_example = mesa.visualization.ChartModule(
+    [{"Label": "Voter turnout in % (first area)",
+      "Color": "Black"}],
+    data_collector_name='datacollector')
 
 
 wealth_chart = mesa.visualization.modules.ChartModule(
     [{"Label": "Collective assets", "Color": "Black"}],
+    data_collector_name='datacollector'
+)
+
+color_distribution_chart = mesa.visualization.modules.ChartModule(
+    [{"Label": str(i), "Color": _COLORS[i]} for i in range(num_colors)],
+    data_collector_name='datacollector'
+)
+
+# Agent charts
+
+voter_turnout_chart = mesa.visualization.ChartModule(
+    [{"Label": "Voter Turnout", "Color": "Black"}],
     data_collector_name='datacollector'
 )
 
@@ -155,16 +167,21 @@ model_params = {
     "draw_borders": mesa.visualization.Checkbox(
         name="Draw border cells", value=draw_borders
     ),
-    "voting_rule": mesa.visualization.Slider(
-        name=f"Rule index {[r.__name__ for r in voting_rules]}", value=rule_idx,
-        min_value=0, max_value=len(voting_rules)-1,
+    "rule_idx": mesa.visualization.Slider(
+        name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
+        value=rule_idx, min_value=0, max_value=len(social_welfare_functions)-1,
     ),
-    "distance_func": mesa.visualization.Slider(
+    "distance_idx": mesa.visualization.Slider(
         name=f"Rule index {[f.__name__ for f in distance_functions]}",
         value=distance_idx, min_value=0, max_value=len(distance_functions)-1,
     ),
     "election_costs": mesa.visualization.Slider(
         name="Election costs", value=election_costs, min_value=0, max_value=100,
+        step=1, description="The costs for participating in an election"
+    ),
+    "max_reward": mesa.visualization.Slider(
+        name="Maximal reward", value=max_reward, min_value=0,
+        max_value=election_costs*100,
         step=1, description="The costs for participating in an election"
     ),
     "num_agents": mesa.visualization.Slider(

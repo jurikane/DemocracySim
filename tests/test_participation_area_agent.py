@@ -4,6 +4,9 @@ import numpy as np
 from democracy_sim.participation_model import Area
 from democracy_sim.participation_agent import VoteAgent
 from .test_participation_model import TestParticipationModel, num_agents
+from democracy_sim.social_welfare_functions import majority_rule, approval_voting
+from democracy_sim.distance_functions import kendall_tau, spearman
+
 
 class TestArea(unittest.TestCase):
 
@@ -43,6 +46,14 @@ class TestArea(unittest.TestCase):
             print(f"Additional cells: {[c.unique_id for c in add_cells]}")
             area_cell_sample += add_cells
         self.assertEqual(area_cell_sample, filtered_cells)
+
+    def test_conduct_election(self):
+        area = random.sample(self.model.area_scheduler.agents, 1)[0]
+        area.conduct_election(majority_rule, spearman)
+        area.conduct_election(approval_voting, spearman)
+        area.conduct_election(majority_rule, kendall_tau)
+        area.conduct_election(approval_voting, kendall_tau)
+        # TODO
 
     def test_estimate_real_distribution(self):
         # Get any existing area

@@ -64,6 +64,8 @@ def run_tie_breaking_preparation_for_majority(pref_table, noise_factor=100):
 def majority_rule(pref_table):
     """
     This function implements the majority rule social welfare function.
+    Beware: Input is a preference table (values define a ranking, index=option),
+            but the output is a ranking/an ordering (values represent options).
     :param pref_table: The agent's preferences as a NumPy matrix
             containing the normalized ranking vectors of all agents.
     :return: The resulting preference ranking (beware: its not a pref. relation)
@@ -115,6 +117,8 @@ def preprocessing_for_approval(pref_table, threshold=None):
 def approval_voting(pref_table):
     """
     This function implements the approval voting social welfare function.
+    Beware: Input is a preference table (values define a ranking, index=option),
+            but the output is a ranking/an ordering (values represent options).
     :param pref_table: The agent's preferences as a NumPy matrix
             containing the normalized ranking vectors of all agents.
     :return: The resulting preference ranking (beware: not a pref. relation).
@@ -128,3 +132,4 @@ def approval_voting(pref_table):
     #option_count_pairs.sort(key=lambda x: x[1], reverse=True)
     #return [pair[0] for pair in option_count_pairs]
     return np.argsort(-(approval_counts + noise))
+
