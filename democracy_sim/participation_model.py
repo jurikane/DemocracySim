@@ -201,6 +201,21 @@ def compute_collective_assets(model):
     return sum_assets
 
 
+def compute_gini_index(model):
+    # TODO: seperate to be able to calculate it zone-wise as well as globally
+    # TODO: Unit-test this function
+    # Extract the list of assets for all agents
+    assets = [agent.assets for agent in model.voting_agents]
+    n = len(assets)
+    # Sort the assets
+    sorted_assets = sorted(assets)
+    # Calculate the Gini Index
+    cumulative_sum = sum((i + 1) * sorted_assets[i] for i in range(n))
+    total_sum = sum(sorted_assets)
+    gini_index = (2 * cumulative_sum) / (n * total_sum) - (n + 1) / n
+    return gini_index * 100  # Return in "percent" (0-100)
+
+
 def get_voter_turnout(model):
     voter_turnout_sum = 0
     for area in model.area_scheduler.agents:
@@ -453,7 +468,8 @@ class ParticipationModel(mesa.Model):
         return mesa.DataCollector(
             model_reporters={
                 "Collective assets": compute_collective_assets,
-                "Voter turnout  in percent": get_voter_turnout,
+                "Gini Index": compute_gini_index,
+                "Voter turnout globally (in percent)": get_voter_turnout,
                 **color_data
             },
             agent_reporters={

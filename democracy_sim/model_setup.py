@@ -153,8 +153,8 @@ color_distribution_chart = mesa.visualization.modules.ChartModule(
     )
 
 voter_turnout = mesa.visualization.ChartModule(
-    [{"Label": "Voter turnout  in percent",
-      "Color": "Black"}],
+    [{"Label": "Voter turnout globally (in percent)", "Color": "Black"},
+     {"Label": "Gini Index", "Color": "Red"}],
     data_collector_name='datacollector')
 
 
