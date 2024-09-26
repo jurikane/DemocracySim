@@ -114,8 +114,10 @@ def participation_draw(cell: ColorCell):
         if color == "White":
             portrayal["Color"] = "LightGrey"
     if cell.num_agents_in_cell > 0:
-        portrayal["text"] = str(cell.num_agents_in_cell)
+        portrayal[f"text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
+    for area in cell.areas:
+        portrayal[f"Area {area.unique_id}"] = f"color dist: {area.color_distribution}"
     return portrayal
 
 
@@ -137,29 +139,29 @@ def draw_color_dist_bars(color_distributions):
     plt.xticks(range(len(color_distributions)))
     plt.show()
 
-
-voter_turnout_example = mesa.visualization.ChartModule(
-    [{"Label": "Voter turnout in % (first area)",
-      "Color": "Black"}],
-    data_collector_name='datacollector')
-
+color_distribution_chart = mesa.visualization.modules.ChartModule(
+    [{"Label": f"Color {i}",
+      "Color": "LightGrey" if _COLORS[i] == "White" else _COLORS[i]} for i in
+     range(num_colors)],    data_collector_name='datacollector'
+)
 
 wealth_chart = mesa.visualization.modules.ChartModule(
     [{"Label": "Collective assets", "Color": "Black"}],
     data_collector_name='datacollector'
 )
 
-color_distribution_chart = mesa.visualization.modules.ChartModule(
-    [{"Label": str(i), "Color": _COLORS[i]} for i in range(num_colors)],
-    data_collector_name='datacollector'
-)
+voter_turnout = mesa.visualization.ChartModule(
+    [{"Label": "Voter turnout  in percent",
+      "Color": "Black"}],
+    data_collector_name='datacollector')
+
 
 # Agent charts
 
-voter_turnout_chart = mesa.visualization.ChartModule(
-    [{"Label": "Voter Turnout", "Color": "Black"}],
-    data_collector_name='datacollector'
-)
+# voter_turnout_chart = mesa.visualization.ChartModule(
+#     [{"Label": "Voter Turnout", "Color": "Black"}],
+#     data_collector_name='datacollector'
+# )
 
 model_params = {
     "height": grid_rows,

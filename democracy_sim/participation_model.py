@@ -136,8 +136,7 @@ class Area(Agent):
                 # Ask participating agents for their prefs
                 preference_profile.append(agent.vote(area=self))
         preference_profile = np.array(preference_profile)
-        # Aggregate the prefs using the v-rule => returns an option ordering
-        # TODO: How to deal with ties (Have to fulfill neutrality!!)??
+        # Aggregate the prefs using the v-rule ⇒ returns an option ordering
         aggregated = self.model.voting_rule(preference_profile)
         # Save the "elected" distribution in self.voted_distribution
         winning_option = aggregated[0]
@@ -188,29 +187,36 @@ class Area(Agent):
     def step(self) -> None:
         self.update_color_distribution()
         self.conduct_election()
-        self.model.datacollector.add_table_row(
-            "AreaData",
-            {
-                "Step": self.model.schedule.time,
-                "AreaID": self.unique_id,
-                "ColorDistribution": self.color_distribution.tolist(),
-                "VoterTurnout": self.voter_turnout
-            }
-        )
+        # self.model.datacollector.add_table_row(
+        #     "AreaData",
+        #     {
+        #         "Step": self.model.schedule.time,
+        #         "AreaID": self.unique_id,
+        #         "ColorDistribution": self.color_distribution.tolist(),
+        #         "VoterTurnout": self.voter_turnout
+        #     }
+        # )
 
 
 def compute_collective_assets(model):
     sum_assets = sum(agent.assets for agent in model.voting_agents)
     return sum_assets
 
+def get_area_by_id(model, agent_id):
+    """TODO: rm (only for testing)"""
+    return next(area for area in model.area_scheduler.agents
+                if area.unique_id == agent_id)
 
 def get_voter_turnout(model):
-    return model.area_scheduler.agents[0].voter_turnout  # Assuming one area
-
+    area = get_area_by_id(model, 1)  # For testing..
+    return area.voter_turnout # Assuming one area
 
 def get_area_color_distributions(model):
-    data = {f"Share of color {i}": model.area_scheduler.agents[0].color_distribution[i] for i in range(model.num_colors)}
-    return data
+    area = get_area_by_id(model, 1)  # For testing..
+    # d = {f"Color {i}": area.color_distribution[i] for i in range(model.num_colors)}
+    # print(f"Area {area} has color distribution:\n{d}")
+    d = area.color_distribution
+    return d
 
 
 def color_by_dst(color_distribution) -> int:
@@ -309,6 +315,7 @@ class ParticipationModel(mesa.Model):
         self.draw_borders = draw_borders
         # Color distribution (global)
         self.color_dst = self.create_color_distribution(heterogeneity)
+        self._av_area_color_dst = self.color_dst
         # Elections
         self.election_costs = election_costs
         self.max_reward = max_reward
@@ -332,25 +339,36 @@ class ParticipationModel(mesa.Model):
         self.area_size_variance = area_size_variance
         self.initialize_areas()
         # Data collector
+        color_data = {
+            f"Color {i}": (lambda i=i: lambda m: m.av_area_color_dst[i])() for i
+            in range(self.num_colors)}
         self.datacollector = mesa.DataCollector(
             model_reporters={
                 "Collective assets": compute_collective_assets,
-                "Voter turnout (first area)": get_voter_turnout,
-                "Area Color Distributions": get_area_color_distributions,
+                "Voter turnout  in percent": get_voter_turnout,
+                **color_data
             },
             agent_reporters={
-                "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
-                "Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
+                #"Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
+                #"Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
             },
-            tables={
-                "AreaData": ["Step", "AreaID", "ColorDistribution",
-                             "VoterTurnout"]
-            }
+            #tables={
+            #    "AreaData": ["Step", "AreaID", "ColorDistribution",
+            #                 "VoterTurnout"]
+            #}
         )
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)
         # Collect initial data
         self.datacollector.collect(self)
+
+    @property
+    def av_area_color_dst(self):
+        return self._av_area_color_dst
+
+    @av_area_color_dst.setter
+    def av_area_color_dst(self, value):
+        self._av_area_color_dst = value
 
     def initialize_color_cells(self):
         """
@@ -456,6 +474,8 @@ class ParticipationModel(mesa.Model):
         self.area_scheduler.step()
         # Mutate the color cells according to election outcomes
         self.color_cell_scheduler.step()
+        # Update the global color distribution
+        self.update_av_area_color_dst()
         # Collect data for monitoring and data analysis
         self.datacollector.collect(self)
 
@@ -518,3 +538,16 @@ class ParticipationModel(mesa.Model):
                                   if count == max_count]
             return self.random.choice(most_common_colors)
         return cell.color  # Return the cell's own color if no consensus
+
+    def update_av_area_color_dst(self):
+        """
+        This method updates the av_area_color_dst attribute of the model.
+        Beware: On overlapping areas, cells are counted several times.
+        """
+        sums = np.zeros(self.num_colors)
+        for area in self.area_scheduler.agents:
+            if TYPE_CHECKING:
+                area = cast(Area, area)
+            sums += area.color_distribution
+        # Return the average color distributions
+        self.av_area_color_dst = sums / len(self.area_scheduler.agents)
