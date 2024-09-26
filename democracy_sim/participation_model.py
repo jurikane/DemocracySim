@@ -339,24 +339,7 @@ class ParticipationModel(mesa.Model):
         self.area_size_variance = area_size_variance
         self.initialize_areas()
         # Data collector
-        color_data = {
-            f"Color {i}": (lambda i=i: lambda m: m.av_area_color_dst[i])() for i
-            in range(self.num_colors)}
-        self.datacollector = mesa.DataCollector(
-            model_reporters={
-                "Collective assets": compute_collective_assets,
-                "Voter turnout  in percent": get_voter_turnout,
-                **color_data
-            },
-            agent_reporters={
-                #"Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
-                #"Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
-            },
-            #tables={
-            #    "AreaData": ["Step", "AreaID", "ColorDistribution",
-            #                 "VoterTurnout"]
-            #}
-        )
+        self.datacollector = self.initialize_datacollector()
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)
         # Collect initial data
@@ -466,6 +449,26 @@ class ParticipationModel(mesa.Model):
                                              self.num_personality_colors)
             personalities.append(personality)  # TODO may not be unique rankings..
         return personalities
+
+    def initialize_datacollector(self):
+        color_data = {
+            f"Color {i}": (lambda i=i: lambda m: m.av_area_color_dst[i])()
+            for i in range(self.num_colors)}
+        return mesa.DataCollector(
+            model_reporters={
+                "Collective assets": compute_collective_assets,
+                "Voter turnout  in percent": get_voter_turnout,
+                **color_data
+            },
+            agent_reporters={
+                # "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
+                # "Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
+            },
+            # tables={
+            #    "AreaData": ["Step", "AreaID", "ColorDistribution",
+            #                 "VoterTurnout"]
+            # }
+        )
 
     def step(self):
         """Advance the model by one step."""

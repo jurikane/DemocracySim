@@ -59,15 +59,15 @@ _COLORS = [
     "Yellow",
     "Aqua",
     "Fuchsia",
-    "Lavender",
+    #"Lavender",
     "Lime",
     "Maroon",
-    "Navy",
-    "Olive",
+    #"Navy",
+    #"Olive",
     "Orange",
-    "Purple",
-    "Silver",
-    "Teal",
+    #"Purple",
+    #"Silver",
+    #"Teal",
     # "Pink",
     # "Brown",
     # "Gold",
@@ -83,7 +83,7 @@ _COLORS = [
     # "DarkTurquoise",
     # "DarkViolet",
     # "DeepPink",
-]  # 16 colors
+]  # 10 colors
 
 
 def participation_draw(cell: ColorCell):
@@ -139,16 +139,19 @@ def draw_color_dist_bars(color_distributions):
     plt.xticks(range(len(color_distributions)))
     plt.show()
 
-color_distribution_chart = mesa.visualization.modules.ChartModule(
-    [{"Label": f"Color {i}",
-      "Color": "LightGrey" if _COLORS[i] == "White" else _COLORS[i]} for i in
-     range(num_colors)],    data_collector_name='datacollector'
-)
 
 wealth_chart = mesa.visualization.modules.ChartModule(
     [{"Label": "Collective assets", "Color": "Black"}],
     data_collector_name='datacollector'
 )
+
+
+color_distribution_chart = mesa.visualization.modules.ChartModule(
+        [{"Label": f"Color {i}",
+          "Color": "LightGrey" if _COLORS[i] == "White" else _COLORS[i]}
+         for i in range(len(_COLORS))],
+        data_collector_name='datacollector'
+    )
 
 voter_turnout = mesa.visualization.ChartModule(
     [{"Label": "Voter turnout  in percent",
