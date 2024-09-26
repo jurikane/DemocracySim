@@ -1,12 +1,11 @@
 from math import comb
-
 import numpy as np
 
 
 def kendall_tau_on_ranks(rank_arr_1, rank_arr_2, search_pairs, color_vec):
     """
     DON'T USE
-    (don't use for orderings!)
+    (don't use this for orderings!)
 
     This function calculates the kendal tau distance between two rank vektors.
     (The Kendall tau rank distance is a metric that counts the number
@@ -97,7 +96,7 @@ def kendall_tau(ordering_1, ordering_2, model):
 
 def spearman_distance(rank_arr_1, rank_arr_2):
     """
-    Beware: don't use for orderings!
+    Beware: don't use this for orderings!
 
     This function calculates the Spearman distance between two rank vektors.
     Spearman's foot rule is a measure of the distance between ranked lists.
@@ -119,15 +118,15 @@ def spearman_distance(rank_arr_1, rank_arr_2):
     return np.sum(np.abs(rank_arr_1 - rank_arr_2))
 
 
-def spearman(ordering_1, ordering_2, model):
+def spearman(ordering_1, ordering_2, _model=None):
     """
     This calculates the normalized Spearman distance between two orderings.
     Spearman's foot rule is a measure of the distance between ranked lists.
     It is given as the sum of the absolute differences between the ranks
     of the two orderings (values from 0 to n-1 in any order).
-    :param ordering_1: First (NumPy) array containing the ranks of each option
-    :param ordering_2: The second rank array
-    :param model: The mesa model
+    :param ordering_1: The first (NumPy) array containing the option's ranks.
+    :param ordering_2: The second rank array.
+    :param _model: This parameter (mesa model) is intentionally unused.
     :return: The Spearman distance
     """
     # TODO: remove these tests (comment out) on actual simulations to speed up

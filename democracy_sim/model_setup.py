@@ -1,16 +1,15 @@
 """
-handles the definition of the canvas parameters and
-the drawing of the model representation on the canvas
+This file handles the definition of the canvas and model parameters.
 """
 from typing import TYPE_CHECKING, cast
-from math import comb
-import mesa
 from mesa.visualization.modules import ChartModule
+from democracy_sim.participation_agent import ColorCell, VoteAgent
 from democracy_sim.participation_model import (ParticipationModel,
                                                distance_functions,
                                                social_welfare_functions)
-from democracy_sim.participation_agent import ColorCell, VoteAgent
 import matplotlib.pyplot as plt
+from math import comb
+import mesa
 
 # Parameters
 

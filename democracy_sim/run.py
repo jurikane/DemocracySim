@@ -1,4 +1,3 @@
-# import webbrowser
 import mesa
 from democracy_sim.participation_model import ParticipationModel
 from democracy_sim.model_setup import (model_params, canvas_element,

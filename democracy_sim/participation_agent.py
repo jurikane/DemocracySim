@@ -1,8 +1,6 @@
 from typing import TYPE_CHECKING, cast
-
 import numpy as np
 from mesa import Agent
-from numpy import random
 if TYPE_CHECKING:  # Type hint for IDEs
     from democracy_sim.participation_model import ParticipationModel
 
@@ -38,9 +36,9 @@ class VoteAgent(Agent):
         :param model: The simulation model of which the agent is part of.
         :type model: ParticipationModel
         :param pos: The position of the agent in the models' grid.
-        :type pos: tuple
+        :type pos: Tuple
         :param personality: Represents the agent's preferences among colors.
-        :type personality: np.ndarray
+        :type personality: Numpy.ndarray
         :param assets: The wealth/assets/motivation of the agent.
         """
         # Pass the parameters to the parent class.
@@ -96,7 +94,7 @@ class VoteAgent(Agent):
         #print("Agent", self.unique_id, "decides whether to participate",
         #      "in election of area", area.unique_id)
         # TODO Implement this (is to be decided upon a learned decision tree)
-        return random.choice([True, False])
+        return np.random.choice([True, False])
 
     def decide_altruism_factor(self, area):
         """
@@ -104,8 +102,8 @@ class VoteAgent(Agent):
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # This part is important - also for monitoring - save/plot a_factors
-        a_factor = random.uniform(0.0, 1.0)
-        #print(f"Agent {self.unique_id} has altruism factor: {a_factor}")
+        a_factor = np.random.uniform(0.0, 1.0)
+        #print(f"Agent {self.unique_id} has an altruism factor of: {a_factor}")
         return a_factor
 
     def compute_assumed_opt_dist(self, area):
@@ -141,7 +139,7 @@ class VoteAgent(Agent):
         ##############
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
-        # For TESTING we just shuffle the option vector (ints) then normalize
+        # For TESTING, we just shuffle the option vector (ints) then normalize
         # and interpret the result as a preference vector (values=prefs)
         # (makes no sense, but it'll work for testing)
         r = np.arange(self.model.options.shape[0])

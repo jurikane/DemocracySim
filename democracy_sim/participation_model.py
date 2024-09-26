@@ -1,13 +1,11 @@
 from typing import TYPE_CHECKING, cast
-import random
-from math import sqrt
 import mesa
-from mesa import Agent
 from democracy_sim.participation_agent import VoteAgent, ColorCell
-import numpy as np
-from itertools import permutations, product, combinations
 from democracy_sim.social_welfare_functions import majority_rule, approval_voting
 from democracy_sim.distance_functions import spearman, kendall_tau
+from itertools import permutations, product, combinations
+from math import sqrt
+import numpy as np
 
 # Voting rules to be accessible by index
 social_welfare_functions = [majority_rule, approval_voting]
@@ -15,7 +13,7 @@ social_welfare_functions = [majority_rule, approval_voting]
 distance_functions = [spearman, kendall_tau]
 
 
-class Area(Agent):
+class Area(mesa.Agent):
     def __init__(self, unique_id, model, height, width, size_variance):
         """
         Create a new area.
@@ -35,8 +33,8 @@ class Area(Agent):
         elif size_variance > 1 or size_variance < 0:
             raise ValueError("Size variance must be between 0 and 1")
         else:  # Apply variance
-            w_var_factor = random.uniform(1 - size_variance, 1 + size_variance)
-            h_var_factor = random.uniform(1 - size_variance, 1 + size_variance)
+            w_var_factor = self.random.uniform(1 - size_variance, 1 + size_variance)
+            h_var_factor = self.random.uniform(1 - size_variance, 1 + size_variance)
             self._width = int(width * w_var_factor)
             self.width_off = abs(width - self._width)
             self._height = int(height * h_var_factor)
@@ -149,7 +147,7 @@ class Area(Agent):
         for agent in self.agents:
             # Personality-based reward
             # TODO: Calculate value p\in(0,1) based on how well the consensus fits the personality of the agent (should better be fast)
-            p = random.uniform(0, 1)
+            p = self.random.uniform(0, 1)
             # + Common reward (reward_pa) for all agents
             agent.assets = agent.assets + p * reward_pa + reward_pa
         # TODO check whether the current color dist and the mutation of the colors is calculated and applied correctly and does not interfere in any way with the election process
@@ -202,21 +200,12 @@ def compute_collective_assets(model):
     sum_assets = sum(agent.assets for agent in model.voting_agents)
     return sum_assets
 
-def get_area_by_id(model, agent_id):
-    """TODO: rm (only for testing)"""
-    return next(area for area in model.area_scheduler.agents
-                if area.unique_id == agent_id)
 
 def get_voter_turnout(model):
-    area = get_area_by_id(model, 1)  # For testing..
-    return area.voter_turnout # Assuming one area
-
-def get_area_color_distributions(model):
-    area = get_area_by_id(model, 1)  # For testing..
-    # d = {f"Color {i}": area.color_distribution[i] for i in range(model.num_colors)}
-    # print(f"Area {area} has color distribution:\n{d}")
-    d = area.color_distribution
-    return d
+    voter_turnout_sum = 0
+    for area in model.area_scheduler.agents:
+        voter_turnout_sum += area.voter_turnout
+    return voter_turnout_sum / len(model.area_scheduler.agents)
 
 
 def color_by_dst(color_distribution) -> int:
@@ -227,7 +216,7 @@ def color_by_dst(color_distribution) -> int:
     Example: color_distribution = [0.2, 0.3, 0.5]
     Color 1 is selected with a probability of 0.3
     """
-    r = random.random()
+    r = np.random.random()
     for color_idx, prob in enumerate(color_distribution):
         if r < prob:
             return color_idx
@@ -279,6 +268,14 @@ def create_personality(num_colors, num_personality_colors):
     return personality
 
 
+def get_color_distribution_function(color):
+    """
+    This method returns a lambda function for the color distribution chart.
+    :param color: The color number (used as index).
+    """
+    return lambda m: m.av_area_color_dst[color]
+
+
 class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
@@ -310,8 +307,8 @@ class ParticipationModel(mesa.Model):
         self.grid = mesa.space.MultiGrid(height=height, width=width, torus=True)
         self.heterogeneity = heterogeneity
         # Random bias factors that affect the initial color distribution
-        self.vertical_bias = random.uniform(0, 1)
-        self.horizontal_bias = random.uniform(0, 1)
+        self.vertical_bias = self.random.uniform(0, 1)
+        self.horizontal_bias = self.random.uniform(0, 1)
         self.draw_borders = draw_borders
         # Color distribution (global)
         self.color_dst = self.create_color_distribution(heterogeneity)
@@ -379,7 +376,7 @@ class ParticipationModel(mesa.Model):
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
-            personality = random.choice(self.personalities)
+            personality = self.random.choice(self.personalities)
             VoteAgent(a_id, self, (x, y), personality)
             # Count +1 at the color cell the agent is placed at TODO improve?
             agents = self.grid.get_cell_list_contents([(x, y)])
@@ -451,9 +448,8 @@ class ParticipationModel(mesa.Model):
         return personalities
 
     def initialize_datacollector(self):
-        color_data = {
-            f"Color {i}": (lambda i=i: lambda m: m.av_area_color_dst[i])()
-            for i in range(self.num_colors)}
+        color_data = {f"Color {i}": get_color_distribution_function(i) for i in
+                      range(self.num_colors)}
         return mesa.DataCollector(
             model_reporters={
                 "Collective assets": compute_collective_assets,
@@ -501,7 +497,7 @@ class ParticipationModel(mesa.Model):
         :param heterogeneity: Factor used as sigma in 'random.gauss'.
         """
         colors = range(self.num_colors)
-        values = [abs(random.gauss(1, heterogeneity)) for _ in colors]
+        values = [abs(self.random.gauss(1, heterogeneity)) for _ in colors]
         # Normalize (with float division)
         total = sum(values)
         dst_array = [value / total for value in values]
@@ -524,7 +520,7 @@ class ParticipationModel(mesa.Model):
                        + abs(normalized_y - self.vertical_bias))
         # The closer the cell to the bias-point, the less often it is
         # to be replaced by a color chosen from the initial distribution:
-        if abs(random.gauss(0, patch_power)) < bias_factor:
+        if abs(self.random.gauss(0, patch_power)) < bias_factor:
             return color_by_dst(self.color_dst)
         # Otherwise, apply the color patches logic
         neighbor_cells = self.grid.get_neighbors((cell.row, cell.col),
