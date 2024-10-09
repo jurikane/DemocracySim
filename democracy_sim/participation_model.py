@@ -45,6 +45,7 @@ class Area(mesa.Agent):
         self.color_distribution = np.zeros(model.num_colors) # Initialize to 0
         self.voted_distribution = np.zeros(model.num_colors)
         self.voter_turnout = 0  # In percent
+        self.dist_to_reality = None  # Elected vs. actual color distribution
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -140,9 +141,9 @@ class Area(mesa.Agent):
         winning_option = aggregated[0]
         self.voted_distribution = self.model.options[winning_option]
         # Calculate the distance to the real distribution using distance_func
-        normalized_dist = self.curr_norm_dist()
+        self.dist_to_reality = self.curr_norm_dist()
         # Calculate the rewards per agent
-        reward_pa = (1 - normalized_dist) * self.model.max_reward
+        reward_pa = (1 - self.dist_to_reality) * self.model.max_reward
         # Distribute the two types of rewards
         for agent in self.agents:
             # Personality-based reward
@@ -202,7 +203,7 @@ def compute_collective_assets(model):
 
 
 def compute_gini_index(model):
-    # TODO: seperate to be able to calculate it zone-wise as well as globally
+    # TODO: separate to be able to calculate it zone-wise as well as globally
     # TODO: Unit-test this function
     # Extract the list of assets for all agents
     assets = [agent.assets for agent in model.voting_agents]
@@ -213,7 +214,7 @@ def compute_gini_index(model):
     cumulative_sum = sum((i + 1) * sorted_assets[i] for i in range(n))
     total_sum = sum(sorted_assets)
     gini_index = (2 * cumulative_sum) / (n * total_sum) - (n + 1) / n
-    return gini_index * 100  # Return in "percent" (0-100)
+    return int(gini_index * 100)  # Return in "percent" (0-100)
 
 
 def get_voter_turnout(model):
@@ -291,6 +292,30 @@ def get_color_distribution_function(color):
     return lambda m: m.av_area_color_dst[color]
 
 
+def get_area_voter_turnout(area):
+    if isinstance(area, Area):
+        return area.voter_turnout
+    return None
+
+def get_area_closeness_to_reality(area):
+    if isinstance(area, Area):
+        return area.dist_to_reality
+    return None
+
+def get_area_color_distribution(area):
+    if isinstance(area, Area):
+        return area.color_distribution.tolist()
+    return None
+
+# def get_area_personality_based_reward(area):
+#     # Assuming you have a method to calculate this in the Area class
+#     return area.calculate_personality_reward()
+#
+# def get_area_gini_index(area):
+#     # Assuming you have a method to calculate this in the Area class
+#     return area.calculate_gini_index()
+
+
 class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
@@ -298,7 +323,8 @@ class ParticipationModel(mesa.Model):
                  num_personality_colors,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
-                 rule_idx, distance_idx, election_costs, max_reward):
+                 rule_idx, distance_idx, election_costs, max_reward,
+                 show_area_stats):
         super().__init__()
         self.height = height
         self.width = width
@@ -350,12 +376,14 @@ class ParticipationModel(mesa.Model):
         self.av_area_height = av_area_height
         self.area_size_variance = area_size_variance
         self.initialize_areas()
-        # Data collector
-        self.datacollector = self.initialize_datacollector()
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)
+        # Data collector
+        self.datacollector = self.initialize_datacollector()
         # Collect initial data
-        self.datacollector.collect(self)
+        #self.datacollector.collect(self)
+        # Statistics
+        self.show_area_stats = show_area_stats
 
     @property
     def av_area_color_dst(self):
@@ -468,13 +496,20 @@ class ParticipationModel(mesa.Model):
         return mesa.DataCollector(
             model_reporters={
                 "Collective assets": compute_collective_assets,
-                "Gini Index": compute_gini_index,
+                "Gini Index (0-100)": compute_gini_index,
                 "Voter turnout globally (in percent)": get_voter_turnout,
                 **color_data
             },
             agent_reporters={
                 # "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
                 # "Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
+                #
+                #"VoterTurnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
+                "VoterTurnout": get_area_voter_turnout,
+                "Closeness to Reality": get_area_closeness_to_reality,
+                "ColorDistribution": get_area_color_distribution,
+                # "Personality-Based Reward": get_area_personality_based_reward,
+                # "Gini Index": get_area_gini_index
             },
             # tables={
             #    "AreaData": ["Step", "AreaID", "ColorDistribution",

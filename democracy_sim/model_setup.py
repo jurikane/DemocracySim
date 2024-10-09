@@ -8,7 +8,9 @@ from democracy_sim.participation_model import (ParticipationModel,
                                                distance_functions,
                                                social_welfare_functions)
 import matplotlib.pyplot as plt
+import seaborn as sns
 from math import comb
+import numpy as np
 import mesa
 
 # Parameters
@@ -48,6 +50,10 @@ av_area_height = 25
 av_area_width = 20
 # area_width = grid_cols // int(sqrt(num_areas))
 area_size_variance = 0.0
+########################
+# Statistics and Views #
+########################
+show_area_stats = False
 
 
 _COLORS = [
@@ -125,18 +131,25 @@ canvas_element = mesa.visualization.CanvasGrid(
 )
 
 
-# Draw bars TODO: Implement to use within the mesa framework..
-def draw_color_dist_bars(color_distributions):
-    # Setup plot
-    fig, ax = plt.subplots()
-    for i, dist in enumerate(color_distributions):
-        bottom = 0
-        for j, part in enumerate(color_distributions):
-            ax.bar(i, part, bottom=bottom, color=_COLORS[j % len(_COLORS)])
-            bottom += part
-    # Set x-ticks to be distribution indices
-    plt.xticks(range(len(color_distributions)))
-    plt.show()
+# # Draw bars (Test)
+# def draw_color_dist_bars(color_distributions):
+#     # Setup plot
+#     fig, ax = plt.subplots()
+#     for i, dist in enumerate(color_distributions):
+#         bottom = 0
+#         for j, part in enumerate(color_distributions):
+#             ax.bar(i, part, bottom=bottom, color=_COLORS[j % len(_COLORS)])
+#             bottom += part
+#     # Set x-ticks to be distribution indices
+#     plt.xticks(range(len(color_distributions)))
+#     plt.show()
+#
+#
+# def plot_color_distribution(model, ax):
+#     agent_df = model.datacollector.get_agent_vars_dataframe()
+#     color_distributions = agent_df.groupby('Step')['Color Distribution'].apply(list).tolist()
+#     sns.barplot(data=color_distributions, ax=ax)
+#     ax.set_title('Color Distribution Over Time')
 
 
 wealth_chart = mesa.visualization.modules.ChartModule(
@@ -154,7 +167,7 @@ color_distribution_chart = mesa.visualization.modules.ChartModule(
 
 voter_turnout = mesa.visualization.ChartModule(
     [{"Label": "Voter turnout globally (in percent)", "Color": "Black"},
-     {"Label": "Gini Index", "Color": "Red"}],
+     {"Label": "Gini Index (0-100)", "Color": "Red"}],
     data_collector_name='datacollector')
 
 
@@ -240,4 +253,7 @@ model_params = {
         min_value=0.0, max_value=0.99, step=0.1,
         description="Select the variance of the area sizes"
     ),
+    "show_area_stats": mesa.visualization.Checkbox(
+            name="Show all statistics", value=show_area_stats
+        ),
 }
