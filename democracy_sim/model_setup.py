@@ -7,10 +7,7 @@ from democracy_sim.participation_agent import ColorCell, VoteAgent
 from democracy_sim.participation_model import (ParticipationModel,
                                                distance_functions,
                                                social_welfare_functions)
-import matplotlib.pyplot as plt
-import seaborn as sns
 from math import comb
-import numpy as np
 import mesa
 
 # Parameters
@@ -121,8 +118,9 @@ def participation_draw(cell: ColorCell):
     if cell.num_agents_in_cell > 0:
         portrayal[f"text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
-    for area in cell.areas:
-        portrayal[f"Area {area.unique_id}"] = f"color dist: {area.color_distribution}"
+    for a in cell.areas:
+        text = f"{a.num_agents} agents and color dist: {a.color_distribution}"
+        portrayal[f"Area {a.unique_id}"] = text
     return portrayal
 
 

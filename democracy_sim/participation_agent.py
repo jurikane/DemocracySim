@@ -30,46 +30,52 @@ class VoteAgent(Agent):
     """An agent that has limited knowledge and resources and
     can decide to use them to participate in elections."""
 
-    def __init__(self, unique_id, model, pos, personality, assets=1):
+    def __init__(self, unique_id, model, pos, personality, assets=1,
+                 append_to_list=True):
         """ Create a new agent.
         :param unique_id: The unique identifier of the agent.
         :param model: The simulation model of which the agent is part of.
         :type model: ParticipationModel
-        :param pos: The position of the agent in the models' grid.
+        :param pos: The position of the agent in the grid.
         :type pos: Tuple
         :param personality: Represents the agent's preferences among colors.
         :type personality: Numpy.ndarray
         :param assets: The wealth/assets/motivation of the agent.
+        :append_to_list: Whether to add the agent to the model's agent list.
         """
         # Pass the parameters to the parent class.
         super().__init__(unique_id=unique_id, model=model)
+        # The "pos" variable in mesa is special, so I avoid it here
         try:
             row, col = pos
         except ValueError:
             raise ValueError("Position must be a tuple of two integers.")
-        self._row = row
-        self._col = col
+        self._position = row, col
         self._assets = assets
         self.personality = personality
         self.known_cells = []  # ColorCell objects the agent knows (knowledge)
         # Add the agent to the models' agent list
-        model.voting_agents.append(self)
-        # Place the agent on the grid
-        model.grid.place_agent(self, pos)
+        if append_to_list:
+            model.voting_agents.append(self)
 
     def __str__(self):
-        return (f"Agent(id={self.unique_id}, pos={self.pos}, "
+        return (f"Agent(id={self.unique_id}, pos={self.position}, "
                 f"personality={self.personality}, assets={self.assets})")
 
     @property
-    def col(self):
-        """Return the col location of this cell."""
-        return self._col
+    def position(self):
+        """Return the location of the agent."""
+        return self._position
 
     @property
     def row(self):
-        """Return the row location of this cell."""
-        return self._row
+        """Return the row location of the agent."""
+        return self._position[0]
+
+    @property
+    def col(self):
+        """Return the col location of the agent."""
+        return self._position[1]
 
     @property
     def assets(self):
@@ -150,23 +156,6 @@ class VoteAgent(Agent):
         #print("Agent", self.unique_id, "voted:", r)
         return r
 
-    # def step(self):
-    #     # Verify agent has some wealth
-    #     if self.wealth > 0:
-    #         other_a = self.random.choice(self.model.agent_scheduler.agents)
-    #         if other_agent is not None:
-    #             other_a.wealth += 1
-    #             self.wealth -= 1
-
-    # def move(self):
-    #     if TYPE_CHECKING: # Type hint for IDEs
-    #         self.model = cast(ParticipationModel, self.model)
-    #     possible_steps = self.model.grid.get_neighborhood(
-    #         self.pos,
-    #         moore=True, # Moore vs. von neumann
-    #         include_center=False)
-    #     new_position = self.random.choice(possible_steps)
-    #     self.model.grid.move_agent(self, new_position)
     def estimate_real_distribution(self, area):
         """
         The agent estimates the real color distribution in the area based on
@@ -190,13 +179,18 @@ class ColorCell(Agent):
         Create a cell, in the given state, at the given row, col position.
         """
         super().__init__(unique_id, model)
+        # The "pos" variable in mesa is special, so I avoid it here
         self._row = pos[0]
         self._col = pos[1]
         self._color = initial_color  # The cell's current color (int)
         self._next_color = None
-        self._num_agents_in_cell = 0
+        self.agents = []
         self.areas = []
         self.is_border_cell = False
+
+    def __str__(self):
+        return (f"Cell ({self.unique_id}, pos={self.position}, "
+                f"color={self.color}, num_agents={self.num_agents_in_cell})")
 
     @property
     def col(self):
@@ -207,6 +201,11 @@ class ColorCell(Agent):
     def row(self):
         """The row location of this cell."""
         return self._row
+
+    @property
+    def position(self):  # The variable pos is special in mesa!
+        """The location of this cell."""
+        return self._row, self._col
 
     @property
     def color(self):
@@ -220,15 +219,13 @@ class ColorCell(Agent):
     @property
     def num_agents_in_cell(self):
         """The number of agents in this cell."""
-        return self._num_agents_in_cell
+        return len(self.agents)
 
-    @num_agents_in_cell.setter
-    def num_agents_in_cell(self, value):
-        self._num_agents_in_cell = value
+    def add_agent(self, agent):
+        self.agents.append(agent)
 
-    @num_agents_in_cell.deleter
-    def num_agents_in_cell(self):
-        del self._num_agents_in_cell
+    def remove_agent(self, agent):
+        self.agents.remove(agent)
 
     def add_area(self, area):
         self.areas.append(area)

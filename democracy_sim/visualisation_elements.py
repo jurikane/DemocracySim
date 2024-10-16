@@ -20,7 +20,7 @@ def save_plot_to_base64(fig):
 class ColorDistributionElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
-        step = model.color_cell_scheduler.steps
+        step = model.scheduler.steps
         if not model.show_area_stats or step == 0 or step % 10 != 0:
             return ""
 
@@ -57,7 +57,7 @@ class ColorDistributionElement(TextElement):
 # class VoterTurnoutElement(TextElement):
 #     def render(self, model):
 #         # Only render if show_area_stats is enabled
-#         step = model.color_cell_scheduler.steps
+#         step = model.scheduler.steps
 #         if not model.show_area_stats or step == 0 or step % 10 != 0:
 #             return ""
 #         # Fetch data from the datacollector
@@ -85,7 +85,7 @@ class ColorDistributionElement(TextElement):
 class VoterTurnoutElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
-        step = model.color_cell_scheduler.steps
+        step = model.scheduler.steps
         if not model.show_area_stats or step == 0 or step % 10 != 0:
             return ""
         # Fetch data from the datacollector
@@ -113,7 +113,7 @@ class VoterTurnoutElement(TextElement):
 class MatplotlibElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
-        step = model.color_cell_scheduler
+        step = model.scheduler.steps
         if not model.show_area_stats or step == 0 or step % 10 != 0:
             return ""
         # Fetch data from the datacollector
@@ -132,6 +132,10 @@ class MatplotlibElement(TextElement):
 
 class StepsTextElement(TextElement):
     def render(self, model):
-        color_cell_step = model.color_cell_scheduler.steps
-        area_step = model.area_scheduler.steps
-        return f"Steps: {color_cell_step} (Color Cell), {area_step} (Area)"
+        step = model.scheduler.steps
+        # TODO clean up
+        first_agents = [str(a) for a in model.voting_agents[:5]]
+        text = (f"Step: {step} | cells: {len(model.color_cells)} | "
+                f"areas: {len(model.areas)} | First 5 voters of "
+                f"{len(model.voting_agents)}: {first_agents}")
+        return text
