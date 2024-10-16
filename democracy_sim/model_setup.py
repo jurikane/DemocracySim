@@ -119,7 +119,7 @@ def participation_draw(cell: ColorCell):
         portrayal[f"text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
     for a in cell.areas:
-        text = f"{a.num_agents} agents and color dist: {a.color_distribution}"
+        text = f"{a.num_agents} agents, color dist: {a.color_distribution}"
         portrayal[f"Area {a.unique_id}"] = text
     return portrayal
 

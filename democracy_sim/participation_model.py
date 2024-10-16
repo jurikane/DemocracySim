@@ -105,18 +105,19 @@ class Area(mesa.Agent):
             for y_area in range(self._height):
                 x = (adjusted_x + x_area) % self.model.width
                 y = (adjusted_y + y_area) % self.model.height
-                local_agents = self.model.grid.get_cell_list_contents([(x, y)])
-                for a in local_agents:
-                    if isinstance(a, VoteAgent):
-                        self.add_agent(a)  # Add the agent to the area
-                    elif isinstance(a, ColorCell):
-                        a.add_area(self)  # Add the area to the cell
-                        # Mark as a border cell if true
-                        if (x_area == 0 or y_area == 0
-                                or x_area == self._width - 1
-                                or y_area == self._height - 1):
-                            a.is_border_cell = True
-                        self.add_cell(a)  # Add the cell to the area
+                cell = self.model.grid.get_cell_list_contents([(x, y)])[0]
+                if TYPE_CHECKING:
+                    cell = cast(ColorCell, cell)
+                self.add_cell(cell)  # Add the cell to the area
+                # Add all voting agents to the area
+                for agent in cell.agents:
+                    self.add_agent(agent)
+                cell.add_area(self)  # Add the area to the color-cell
+                # Mark as a border cell if true
+                if (x_area == 0 or y_area == 0
+                        or x_area == self._width - 1
+                        or y_area == self._height - 1):
+                    cell.is_border_cell = True
         self.update_color_distribution()
         self._idx_field = (adjusted_x, adjusted_y)
 
@@ -579,13 +580,12 @@ class ParticipationModel(mesa.Model):
         """Adjusting the color pattern to make it less predictable."""
         for _ in range(color_patches_steps):
             print(f"Color adjustment step {_}")
-            for cell in self.grid.coord_iter():
-                agents = cell[0]
+            for grid_cell in self.grid.coord_iter():
+                cell = grid_cell[0][0]  # Get the color-cell
                 if TYPE_CHECKING:
-                    agents = cast(list, agents)
-                c = [cell for cell in agents if isinstance(cell, ColorCell)][0]
-                most_common_color = self.color_patches(c, patch_power)
-                c.color = most_common_color
+                    cell = cast(ColorCell, cell)
+                most_common_color = self.color_patches(cell, patch_power)
+                cell.color = most_common_color
 
     def create_color_distribution(self, heterogeneity):
         """
@@ -642,7 +642,6 @@ class ParticipationModel(mesa.Model):
         """
         sums = np.zeros(self.num_colors)
         for area in self.areas:
-            # TODO: check this! There might be a problem with identifying the areas because of shuffling!!! (see scheduler)
             sums += area.color_distribution
         # Return the average color distributions
         self.av_area_color_dst = sums / self.num_areas
