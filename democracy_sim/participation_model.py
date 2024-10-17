@@ -118,8 +118,8 @@ class Area(mesa.Agent):
                         or x_area == self._width - 1
                         or y_area == self._height - 1):
                     cell.is_border_cell = True
-        self.update_color_distribution()
         self._idx_field = (adjusted_x, adjusted_y)
+        self.update_color_distribution()
 
     def add_agent(self, agent):
         self.agents.append(agent)
@@ -147,9 +147,10 @@ class Area(mesa.Agent):
         # TODO: WHERE to discretize if needed?
         participating_agents = []
         preference_profile = []
+        # TODO: change the color pattern to an even less guessable form(?)
         for agent in self.agents:
-            if agent.ask_for_participation(area=self):
-                # TODO: if agent cant afford she cant participate
+            if (agent.assets >= self.model.election_costs
+                    and agent.ask_for_participation(area=self)):
                 participating_agents.append(agent)
                 # collect the participation fee from the agents
                 agent.assets = agent.assets - self.model.election_costs
@@ -204,15 +205,6 @@ class Area(mesa.Agent):
     def step(self) -> None:
         self.update_color_distribution()
         self.conduct_election()
-        # self.model.datacollector.add_table_row(
-        #     "AreaData",
-        #     {
-        #         "Step": self.model.schedule.time,
-        #         "AreaID": self.unique_id,
-        #         "ColorDistribution": self.color_distribution.tolist(),
-        #         "VoterTurnout": self.voter_turnout
-        #     }
-        # )
 
 
 def compute_collective_assets(model):
@@ -337,15 +329,17 @@ class CustomScheduler(mesa.time.BaseScheduler):
     def step(self):
         """Execute the step function for all area- and cell-agents by type,
         first for Areas then for ColorCells."""
+        model = self.model
         if TYPE_CHECKING:
-            self.model = cast(ParticipationModel, self.model)
+            model = cast(ParticipationModel, model)
         # Step through Area agents first (and in "random" order)
-        self.model.random.shuffle(self.model.areas)
-        for area in self.model.areas:
+        # TODO think about using a different way of randomization that keeps the order of the two arrays stable
+        model.random.shuffle(model.areas)
+        for area in model.areas:
             area.step()
         # Step through ColorCell agents next
-        self.model.random.shuffle(self.model.color_cells)
-        for cell in self.model.color_cells:
+        model.random.shuffle(model.color_cells)
+        for cell in model.color_cells:
             cell.step()
 
         self.steps += 1
@@ -365,24 +359,18 @@ class ParticipationModel(mesa.Model):
         self.height = height
         self.width = width
         self.num_colors = num_colors
-        # Area variables
-        self.areas: List[Optional[Area]] = [None] * num_areas
-        self.av_area_height = av_area_height
-        self.av_area_width = av_area_width
-        self.area_size_variance = area_size_variance
         # Create a scheduler that goes through areas first then color cells
         self.scheduler = CustomScheduler(self)
         # The grid
         # SingleGrid enforces at most one agent per cell;
         # MultiGrid allows multiple agents to be in the same cell.
-        # TODO: use SingleGrid (speed) and use pos for color-cells
-        self.grid = mesa.space.MultiGrid(height=height, width=width, torus=True)
-        self.heterogeneity = heterogeneity
+        self.grid = mesa.space.SingleGrid(height=height, width=width, torus=True)
         # Random bias factors that affect the initial color distribution
         self.vertical_bias = self.random.uniform(0, 1)
         self.horizontal_bias = self.random.uniform(0, 1)
         self.draw_borders = draw_borders
         # Color distribution (global)
+        #self.heterogeneity = heterogeneity
         self.color_dst = self.create_color_distribution(heterogeneity)
         self._av_area_color_dst = self.color_dst
         # Elections
@@ -404,13 +392,15 @@ class ParticipationModel(mesa.Model):
         self.num_personality_colors = num_personality_colors
         self.personalities = self.create_personalities()
         self.initialize_voting_agents()
-        # Create areas
-        self.av_area_width = av_area_width
+        # Area variables
+        self.areas: List[Optional[Area]] = [None] * num_areas
         self.av_area_height = av_area_height
+        self.av_area_width = av_area_width
         self.area_size_variance = area_size_variance
-        self.initialize_areas()
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)
+        # Create areas
+        self.initialize_all_areas()
         # Data collector
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
@@ -447,7 +437,7 @@ class ParticipationModel(mesa.Model):
             # Add it to the grid
             self.grid.place_agent(cell, (row, col))
             # Add the color cell to the scheduler
-            #self.scheduler.add(cell) # TODO: check (was commented out to use list)
+            #self.scheduler.add(cell) # TODO: check speed diffs using this..
             # And to the 'model.color_cells' list (for faster access)
             self.color_cells[unique_id] = cell  # TODO: check if its not better to simply use the grid when finally changing the grid type to SingleGrid
 
@@ -465,7 +455,7 @@ class ParticipationModel(mesa.Model):
             personality = self.random.choice(self.personalities)
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(a_id, self, (x, y), personality,
-                              assets=1, append_to_list=False)
+                              assets=5, append_to_list=False)  # TODO: initial assets?!
             self.voting_agents[a_id] = agent  # Add using the index (faster)
             # Add the agent to the grid by placing it on a cell
             cell = self.grid.get_cell_list_contents([(x, y)])[0]
@@ -483,11 +473,11 @@ class ParticipationModel(mesa.Model):
         # Place the area in the grid using its indexing field
         # this adds the corresponding color cells and voting agents to the area
         area.idx_field = (x_coord, y_coord)
-        # Safe in the models' areas-list
+        # Save in the models' areas-list
         self.areas[a_id] = area
 
 
-    def initialize_areas(self):
+    def initialize_all_areas(self):
         """
         This method initializes the areas in the models' grid in such a way
         that the areas are spread approximately evenly across the grid.
@@ -578,12 +568,11 @@ class ParticipationModel(mesa.Model):
 
     def adjust_color_pattern(self, color_patches_steps, patch_power):
         """Adjusting the color pattern to make it less predictable."""
+        cells = self.color_cells
         for _ in range(color_patches_steps):
             print(f"Color adjustment step {_}")
-            for grid_cell in self.grid.coord_iter():
-                cell = grid_cell[0][0]  # Get the color-cell
-                if TYPE_CHECKING:
-                    cell = cast(ColorCell, cell)
+            self.random.shuffle(cells)
+            for cell in cells:
                 most_common_color = self.color_patches(cell, patch_power)
                 cell.color = most_common_color
 

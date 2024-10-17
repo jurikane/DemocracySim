@@ -3,7 +3,7 @@ This file handles the definition of the canvas and model parameters.
 """
 from typing import TYPE_CHECKING, cast
 from mesa.visualization.modules import ChartModule
-from democracy_sim.participation_agent import ColorCell, VoteAgent
+from democracy_sim.participation_agent import ColorCell
 from democracy_sim.participation_model import (ParticipationModel,
                                                distance_functions,
                                                social_welfare_functions)
@@ -99,14 +99,11 @@ def participation_draw(cell: ColorCell):
     """
     if cell is None:
         raise AssertionError
-    if isinstance(cell, VoteAgent):
-        return None
     color = _COLORS[cell.color]
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col,
                  "Color": color}
-    # TODO: add the areas the cell belongs to to the hover-text (the text that is shown when one hovers over the cell in the grid)
-    #       + maybe: draw the agent number in the opposing color, + maybe draw borders nicer
+    # TODO: maybe: draw the agent number in the opposing color, + maybe draw borders nicer
     # If the cell is a border cell, change its appearance
     if TYPE_CHECKING:  # Type hint for IDEs
         cell.model = cast(ParticipationModel, cell.model)
@@ -115,6 +112,9 @@ def participation_draw(cell: ColorCell):
         portrayal["r"] = 0.9  # Adjust the radius to fit within the cell
         if color == "White":
             portrayal["Color"] = "LightGrey"
+    # Add position (x, y) to the hover-text
+    portrayal["Position"] = f"{cell.position}"
+    portrayal["Color - text"] = _COLORS[cell.color]
     if cell.num_agents_in_cell > 0:
         portrayal[f"text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
