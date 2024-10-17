@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/mesa_docs/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/mesa_docs/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/mesa_docs/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/teaser/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/teaser/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/teaser/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/approval_voting/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/approval_voting/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/approval_voting/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/preference_relations/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/preference_relations/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/preference_relations/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/mesa_docs/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/mesa_docs/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/mesa_docs/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/teaser/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/teaser/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/teaser/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/approval_voting/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/approval_voting/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/approval_voting/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/preference_relations/</loc>
+        <lastmod>2024-10-17</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/preference_relations/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/preference_relations/"/>
+    </url>
+</urlset>
