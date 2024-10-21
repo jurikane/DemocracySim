@@ -52,6 +52,7 @@ class VoteAgent(Agent):
             raise ValueError("Position must be a tuple of two integers.")
         self._position = row, col
         self._assets = assets
+        self._num_elections_participated = 0
         self.personality = personality
         self.known_cells = []  # ColorCell objects the agent knows (knowledge)
         # Add the agent to the models' agent list
@@ -89,6 +90,14 @@ class VoteAgent(Agent):
     @assets.deleter
     def assets(self):
         del self._assets
+
+    @property
+    def num_elections_participated(self):
+        return self._num_elections_participated
+
+    @num_elections_participated.setter
+    def num_elections_participated(self, value):
+        self._num_elections_participated = value
 
     def ask_for_participation(self, area):
         """

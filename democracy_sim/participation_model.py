@@ -145,14 +145,13 @@ class Area(mesa.Agent):
         """
         # Ask agents to participate
         # TODO: WHERE to discretize if needed?
-        participating_agents = []
         preference_profile = []
         # TODO: change the color pattern to an even less guessable form(?)
         for agent in self.agents:
             if (agent.assets >= self.model.election_costs
                     and agent.ask_for_participation(area=self)):
-                participating_agents.append(agent)
-                # collect the participation fee from the agents
+                agent.num_elections_participated += 1
+                # Collect the participation fee from the agents
                 agent.assets = agent.assets - self.model.election_costs
                 # Ask participating agents for their prefs
                 preference_profile.append(agent.vote(area=self))
@@ -175,8 +174,8 @@ class Area(mesa.Agent):
             agent.assets = agent.assets + p * reward_pa + reward_pa
         # TODO check whether the current color dist and the mutation of the colors is calculated and applied correctly and does not interfere in any way with the election process
         # Statistics
-        self.voter_turnout = int((len(participating_agents) /
-                                  self.num_agents) * 100) # In percent
+        n = preference_profile.shape[0]  # Number agents participated
+        self.voter_turnout = int((n / self.num_agents) * 100) # In percent
 
 
     def update_color_distribution(self):
@@ -203,8 +202,32 @@ class Area(mesa.Agent):
         return [c for c in cell_list if c in cell_set]
 
     def step(self) -> None:
-        self.update_color_distribution()
+        """
+        Conduct an election in the area,
+        mutate the cells' colors according to the election outcome
+        and update the color distribution of the area.
+        """
         self.conduct_election()
+        # TODO: STRATEGY - decide:
+        #  should the cells mutate on area-level and right after elections?
+        #  Or globally - and then when?
+        # Mutate colors in cells
+        # Take some number of cells to mutate (i.e. 5 %)
+        n_to_mutate = int(0.05 * self.num_cells)  # TODO create a self.model.mu variable as mutation rate
+        # randomly select x cells
+        cells_to_mutate = self.random.sample(self.cells, n_to_mutate)
+        # Use the normalized voted distribution as probabilities for the colors
+        probs = self.voted_distribution / self.voted_distribution.sum()
+        # Pre-select colors for all cells to mutate
+        # TODO: Think about this: should we take local color-structure
+        #  into account - like in color patches - to avoid colors mutating into
+        #  very random structures?
+        colors = np.random.choice(self.model.colors, size=n_to_mutate, p=probs)
+        # Assign the newly selected colors to the cells
+        for cell, color in zip(cells_to_mutate, colors):
+            cell.color = color
+        # Important: Update the color distribution (because colors changed)
+        self.update_color_distribution()
 
 
 def compute_collective_assets(model):
@@ -333,15 +356,11 @@ class CustomScheduler(mesa.time.BaseScheduler):
         if TYPE_CHECKING:
             model = cast(ParticipationModel, model)
         # Step through Area agents first (and in "random" order)
-        # TODO think about using a different way of randomization that keeps the order of the two arrays stable
+        # TODO think about randomization process
         model.random.shuffle(model.areas)
         for area in model.areas:
             area.step()
-        # Step through ColorCell agents next
-        model.random.shuffle(model.color_cells)
-        for cell in model.color_cells:
-            cell.step()
-
+        # TODO: add global election?
         self.steps += 1
         self.time += 1
 
@@ -358,7 +377,7 @@ class ParticipationModel(mesa.Model):
         super().__init__()
         self.height = height
         self.width = width
-        self.num_colors = num_colors
+        self.colors = np.arange(num_colors)
         # Create a scheduler that goes through areas first then color cells
         self.scheduler = CustomScheduler(self)
         # The grid
@@ -404,9 +423,13 @@ class ParticipationModel(mesa.Model):
         # Data collector
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
-        #self.datacollector.collect(self)
+        self.datacollector.collect(self)
         # Statistics
         self.show_area_stats = show_area_stats
+
+    @property
+    def num_colors(self):
+        return len(self.colors)
 
     @property
     def av_area_color_dst(self):
