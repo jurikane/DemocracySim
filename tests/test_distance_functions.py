@@ -3,6 +3,8 @@ from democracy_sim.distance_functions import *
 import numpy as np
 from itertools import combinations
 
+from democracy_sim.participation_model import ParticipationModel
+
 
 class TestKendallTauDistance(unittest.TestCase):
 
@@ -120,7 +122,7 @@ class TestKendallTauDistance(unittest.TestCase):
             n = len(seq1)
             assert n == len(seq2), \
                 "Test failed: sequences must have the same length"
-            pairs = combinations(range(0, n), 2)
+            pairs = list(combinations(range(0, n), 2))
             # Test the ordering version
             d = unnormalized_kendall_tau(np.array(seq1), np.array(seq2), pairs)
             print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")

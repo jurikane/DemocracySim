@@ -1,5 +1,7 @@
 import unittest
-from democracy_sim.participation_model import ParticipationModel, Area
+from democracy_sim.participation_model import (ParticipationModel, Area,
+                                               distance_functions,
+                                               social_welfare_functions)
 from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
                                        num_agents, num_colors, num_areas,
                                        num_personalities,
@@ -31,10 +33,16 @@ class TestParticipationModel(unittest.TestCase):
                                         av_area_width=av_area_width,
                                         area_size_variance=area_size_variance,
                                         patch_power=patch_power,
-                                        max_reward=max_reward)
+                                        max_reward=max_reward,
+                                        show_area_stats=False)
+
+    # def test_empty_model(self):
+    #     # TODO: Test empty model
+    #     model = ParticipationModel(10, 10, 0, 1, 0, 1, 0, 1, 1, 0.1, 1, 0, False, 1, 1, 1, 1, 1, False)
+    #     self.assertEqual(model.num_agents, 0)
 
     def test_initialization(self):
-        areas_count = len([area for area in self.model.area_scheduler.agents
+        areas_count = len([area for area in self.model.areas
                            if isinstance(area, Area)])
         self.assertEqual(areas_count, self.model.num_areas)
         self.assertIsInstance(self.model.datacollector, mesa.DataCollector)
@@ -43,12 +51,10 @@ class TestParticipationModel(unittest.TestCase):
     def test_model_options(self):
         self.assertEqual(self.model.num_agents, num_agents)
         self.assertEqual(self.model.num_colors, num_colors)
-        self.assertEqual(self.model.num_personalities, num_personalities)
         self.assertEqual(self.model.num_personality_colors, npc)
         self.assertEqual(self.model.num_areas, num_areas)
         self.assertEqual(self.model.area_size_variance, area_size_variance)
         self.assertEqual(self.model.draw_borders, draw_borders)
-        self.assertEqual(self.model.heterogeneity, heterogeneity)
         v_rule = social_welfare_functions[rule_idx]
         dist_func = distance_functions[distance_idx]
         self.assertEqual(self.model.voting_rule, v_rule)

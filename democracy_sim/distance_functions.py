@@ -48,7 +48,7 @@ def unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs):
     An ordering holds the option names in the order of their rank (rank=index).
     :param ordering_1: First (NumPy) array containing ranked options
     :param ordering_2: The second ordering array
-    :param search_pairs: The pairs of indices (for efficiency)
+    :param search_pairs: Containing search pairs of indices (for efficiency)
     :return: The kendall tau distance
     """
     # Rename the elements to reduce the problem to counting inversions
@@ -62,7 +62,7 @@ def unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs):
     return kendall_distance
 
 
-def kendall_tau(ordering_1, ordering_2, model):
+def kendall_tau(ordering_1, ordering_2, search_pairs):
     """
     This calculates the normalized Kendall tau distance of two orderings.
     The Kendall tau rank distance is a metric that counts the number
@@ -72,7 +72,7 @@ def kendall_tau(ordering_1, ordering_2, model):
     An ordering holds the option names in the order of their rank (rank=index).
     :param ordering_1: First (NumPy) array containing ranked options
     :param ordering_2: The second ordering array
-    :param model: Containing the pairs of indices (for efficiency)
+    :param search_pairs: Containing the pairs of indices (for efficiency)
     :return: The kendall tau distance
     """
     # TODO: remove these tests (comment out) on actual simulations to speed up
@@ -84,7 +84,6 @@ def kendall_tau(ordering_1, ordering_2, model):
             f"Error: Sequences {ordering_1}, {ordering_2} aren't comparable."
 
     # Get the unnormalized Kendall tau distance
-    search_pairs = model.search_pairs
     dist = unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs)
     # Maximum possible Kendall tau distance
     max_distance = comb(n, 2)  # This is n choose 2, or n(n-1)/2
@@ -118,7 +117,7 @@ def spearman_distance(rank_arr_1, rank_arr_2):
     return np.sum(np.abs(rank_arr_1 - rank_arr_2))
 
 
-def spearman(ordering_1, ordering_2, _model=None):
+def spearman(ordering_1, ordering_2, _search_pairs=None):
     """
     This calculates the normalized Spearman distance between two orderings.
     Spearman's foot rule is a measure of the distance between ranked lists.
@@ -126,7 +125,7 @@ def spearman(ordering_1, ordering_2, _model=None):
     of the two orderings (values from 0 to n-1 in any order).
     :param ordering_1: The first (NumPy) array containing the option's ranks.
     :param ordering_2: The second rank array.
-    :param _model: This parameter (mesa model) is intentionally unused.
+    :param _search_pairs: This parameter is intentionally unused.
     :return: The Spearman distance
     """
     # TODO: remove these tests (comment out) on actual simulations to speed up

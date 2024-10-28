@@ -21,7 +21,7 @@ class ColorDistributionElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0 or step % 10 != 0:
+        if not model.show_area_stats or step == 0:
             return ""
 
         # Fetch data from the datacollector
@@ -86,7 +86,7 @@ class VoterTurnoutElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0 or step % 10 != 0:
+        if not model.show_area_stats or step == 0:
             return ""
         # Fetch data from the datacollector
         data = model.datacollector.get_agent_vars_dataframe()
@@ -114,7 +114,7 @@ class MatplotlibElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0 or step % 10 != 0:
+        if not model.show_area_stats or step == 0:
             return ""
         # Fetch data from the datacollector
         data = model.datacollector.get_model_vars_dataframe()

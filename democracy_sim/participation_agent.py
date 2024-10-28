@@ -30,8 +30,7 @@ class VoteAgent(Agent):
     """An agent that has limited knowledge and resources and
     can decide to use them to participate in elections."""
 
-    def __init__(self, unique_id, model, pos, personality, assets=1,
-                 append_to_list=True):
+    def __init__(self, unique_id, model, pos, personality, assets=1, add=True):
         """ Create a new agent.
         :param unique_id: The unique identifier of the agent.
         :param model: The simulation model of which the agent is part of.
@@ -41,7 +40,8 @@ class VoteAgent(Agent):
         :param personality: Represents the agent's preferences among colors.
         :type personality: Numpy.ndarray
         :param assets: The wealth/assets/motivation of the agent.
-        :append_to_list: Whether to add the agent to the model's agent list.
+        :add: Whether to add the agent to the model's agent list and color cell.
+          The 'add' variable is set to false on initialization of the model.
         """
         # Pass the parameters to the parent class.
         super().__init__(unique_id=unique_id, model=model)
@@ -55,9 +55,11 @@ class VoteAgent(Agent):
         self._num_elections_participated = 0
         self.personality = personality
         self.known_cells = []  # ColorCell objects the agent knows (knowledge)
-        # Add the agent to the models' agent list
-        if append_to_list:
+        # Add the agent to the models' agent list and the cell
+        if add:
             model.voting_agents.append(self)
+            cell = model.grid.get_cell_list_contents([(row, col)])[0]
+            cell.add_agent(self)
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -142,9 +144,10 @@ class VoteAgent(Agent):
         """
         The agent votes in the election of a given area,
         i.e., she returns a preference ranking vector over all options.
-        (Options are indexes, values are preference values defining the order).
+        (Ranking: `index = option`, `value proportional to rank`)
         The available options are set in the model.
         :param area: The area in which the election takes place.
+        :return ranking: A normalized preference-ranking (sum-normalization)
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
@@ -154,16 +157,27 @@ class VoteAgent(Agent):
         ##############
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
-        # For TESTING, we just shuffle the option vector (ints) then normalize
-        # and interpret the result as a preference vector (values=prefs)
-        # (makes no sense, but it'll work for testing)
-        r = np.arange(self.model.options.shape[0])
-        # Shuffle the array in place
-        np.random.shuffle(r)
-        r = np.array(r, dtype=float)
-        r /= r.sum()
-        #print("Agent", self.unique_id, "voted:", r)
-        return r
+        # # For TESTING
+        # # we just shuffle the option vector (ints) then normalize
+        # # and interpret the result as a preference vector (values=prefs)
+        # # (makes no sense, but it'll work for testing)
+        # r = np.arange(self.model.options.shape[0])
+        # # Shuffle the array in place
+        # np.random.shuffle(r)
+        # r = np.array(r, dtype=float)
+        # r /= r.sum()
+        # return r
+        ##############
+        options = self.model.options
+        dist_func = self.model.distance_func
+        ranking = np.zeros(options.shape[0])
+        color_search_pairs = self.model.color_search_pairs
+        print(color_search_pairs, "dist_func", dist_func, "voting_rule", self.model.voting_rule)
+        for i, option in enumerate(options):
+            # TODO: is it possible to leave out white?
+            ranking[i] = dist_func(self.personality, option, color_search_pairs)
+        ranking /= ranking.sum()  # Normalize the preference vector
+        return ranking
 
     def estimate_real_distribution(self, area):
         """
