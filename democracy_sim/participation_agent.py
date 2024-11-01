@@ -172,7 +172,6 @@ class VoteAgent(Agent):
         dist_func = self.model.distance_func
         ranking = np.zeros(options.shape[0])
         color_search_pairs = self.model.color_search_pairs
-        print(color_search_pairs, "dist_func", dist_func, "voting_rule", self.model.voting_rule)
         for i, option in enumerate(options):
             # TODO: is it possible to leave out white?
             ranking[i] = dist_func(self.personality, option, color_search_pairs)

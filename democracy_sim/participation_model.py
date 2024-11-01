@@ -30,7 +30,6 @@ class Area(mesa.Agent):
         self._set_dimensions(width, height, size_variance)
         self.agents = []
         self.cells = []
-        self.color_probs = model.color_probs  # For efficiency
         self._idx_field = None  # An indexing position of the area in the grid
         self.color_distribution = np.zeros(model.num_colors) # Initialize to 0
         self.voted_ordering = np.zeros(model.num_colors)
@@ -212,7 +211,7 @@ class Area(mesa.Agent):
             return  # TODO: What to do if no agent participated..?
         # Mutate colors in cells
         # Take some number of cells to mutate (i.e. 5 %)
-        n_to_mutate = int(0.05 * self.num_cells)  # TODO create a self.model.mu variable as mutation rate
+        n_to_mutate = int(self.model.mu * self.num_cells)
         # TODO/Idea: What if the voter_turnout determines the mutation rate?
         # randomly select x cells
         cells_to_mutate = self.random.sample(self.cells, n_to_mutate)
@@ -222,7 +221,7 @@ class Area(mesa.Agent):
         #  into account - like in color patches - to avoid colors mutating into
         #  very random structures? # Middendorf
         colors = np.random.choice(self.voted_ordering, size=n_to_mutate,
-                                  p=self.color_probs)
+                                  p=self.model.color_probs)
         # Assign the newly selected colors to the cells
         for cell, color in zip(cells_to_mutate, colors):
             cell.color = color
@@ -378,7 +377,7 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 num_personality_colors, election_impact_on_mutation,
+                 num_personality_colors, mu, election_impact_on_mutation,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -407,7 +406,7 @@ class ParticipationModel(mesa.Model):
         self.distance_func = distance_functions[distance_idx]
         self.options = create_all_options(num_colors)
         # Simulation variables
-        # TODO self.mu  # Mutation rate for the color cells
+        self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing rankings

@@ -18,6 +18,7 @@ import mesa
 election_costs = 5
 max_reward = 50
 election_impact_on_mutation = 1.0  # 0.1-5.0
+mu = 0.01  # 0.001-0.5
 # Voting rules (see social_welfare_functions.py)
 rule_idx = 0
 # Distance functions (see distance_functions.py)
@@ -205,6 +206,10 @@ model_params = {
         name="Maximal reward", value=max_reward, min_value=0,
         max_value=election_costs*100,
         step=1, description="The costs for participating in an election"
+    ),
+    "mu": mesa.visualization.Slider(
+        name="Mutation rate", value=mu, min_value=0.001, max_value=0.5,
+        step=0.001, description="Probability of a color cell to mutate"
     ),
     "election_impact_on_mutation": mesa.visualization.Slider(
         name="Election impact on mutation", value=election_impact_on_mutation,
