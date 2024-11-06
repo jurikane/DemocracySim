@@ -377,7 +377,8 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 num_personality_colors, mu, election_impact_on_mutation,
+                 num_personality_colors, pers_mean, pers_std_dev,
+                 mu, election_impact_on_mutation,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -421,6 +422,7 @@ class ParticipationModel(mesa.Model):
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
         self.num_personality_colors = num_personality_colors
         self.personalities = self.create_personalities(num_personalities)
+        self.personality_distribution = self.pers_dist(pers_mean, pers_std_dev)
         self.initialize_voting_agents()
         # Area variables
         self.global_area = self.initialize_global_area()  # TODO create bool variable to make this optional
@@ -483,11 +485,12 @@ class ParticipationModel(mesa.Model):
         It also ensures that each agent is assigned to the color cell it is
         standing on.
         """
+        dist = self.personality_distribution
         for a_id in range(self.num_agents):
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
-            personality = self.random.choice(self.personalities)
+            personality = self.random.choice(self.personalities, p=dist)
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(a_id, self, (x, y), personality,
                               assets=5, add=False)  # TODO: initial assets?!
@@ -579,7 +582,9 @@ class ParticipationModel(mesa.Model):
         """
         #p_colors = range(1, self.num_colors)  # Personalities exclude white
         # TODO is it possible to leave out white (--> dist-func)?
-        p_colors = range(self.num_colors)
+        p_colors = list(range(self.num_colors))
+        # Make sure the personalities aren't always in the same order
+        self.random.shuffle(p_colors)  # Not actually needed but just in case
         personality_options = np.array(list(itertools.permutations(p_colors)))
 
         if len(personality_options) < n:
@@ -588,6 +593,20 @@ class ParticipationModel(mesa.Model):
         indices = np.random.choice(len(personality_options), n, replace=False)
         selected_personalities = personality_options[indices]
         return selected_personalities
+
+    def pers_dist(self, mean, std_dev):
+        """
+        This method creates a normalized normal distribution array for picking
+        and depicting the distribution of personalities in the model.
+        :param mean: The mean value of the normal distribution.
+        :param std_dev: The standard deviation of the normal distribution.
+        :return: A normalized normal distribution array.
+        """
+        # Generate a normal distribution
+        dist = np.random.normal(mean, std_dev, len(self.personalities))
+        dist = np.abs(dist)  # Ensure non-negative values
+        dist /= dist.sum()  # Normalize
+        return dist
 
 
     def initialize_datacollector(self):

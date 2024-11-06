@@ -233,6 +233,15 @@ model_params = {
         value=num_personality_colors,
         min_value=1, max_value=num_colors-1, step=1
     ),
+    "pers_mean": mesa.visualization.Slider(
+        name="Personality mean", value=0.5, min_value=0.0, max_value=1.0,
+        step=0.1, description="The mean of the personality distribution"
+    ),
+    "pers_std_dev": mesa.visualization.Slider(
+        name="Personality standard deviation", value=0.1, min_value=0.0,
+        max_value=1.0, step=0.1,
+        description="The standard deviation of the personality distribution"
+    ),
     "color_patches_steps": mesa.visualization.Slider(
         name="Patches size (# steps)", value=color_patches_steps,
         min_value=0, max_value=9, step=1,
