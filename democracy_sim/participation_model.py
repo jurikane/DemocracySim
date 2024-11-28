@@ -138,7 +138,7 @@ class Area(mesa.Agent):
         model = self.model
         el_costs = model.election_costs
         dist_func = model.distance_func
-        # Ask agents to participate
+        # Ask agents for participation
         preference_profile = []
         for agent in self.agents:
             if (agent.assets >= el_costs
@@ -148,6 +148,8 @@ class Area(mesa.Agent):
                 agent.assets = agent.assets - el_costs
                 # Ask participating agents for their prefs
                 preference_profile.append(agent.vote(area=self))
+                # agent.vote returns an array containing dissatisfaction values
+                # between 0 and 1 for each option, interpretable as rank values.
         preference_profile = np.array(preference_profile)
         # Check for the case that no agent participated
         if preference_profile.ndim != 2:
@@ -159,7 +161,7 @@ class Area(mesa.Agent):
         winning_option = aggregated[0]
         self.voted_ordering = model.options[winning_option]
         # Calculate the distance to the real distribution using distance_func
-        real_color_ord = np.argsort(self.color_distribution)
+        real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
         self.dist_to_reality = dist_func(real_color_ord, self.voted_ordering,
                                          model.color_search_pairs)
         # Calculate the rewards per agent
@@ -206,9 +208,10 @@ class Area(mesa.Agent):
         mutate the cells' colors according to the election outcome
         and update the color distribution of the area.
         """
-        self.voter_turnout = self.conduct_election()
+        self.voter_turnout = self.conduct_election()  # The main election logic!
         if self.voter_turnout == 0:
             return  # TODO: What to do if no agent participated..?
+
         # Mutate colors in cells
         # Take some number of cells to mutate (i.e. 5 %)
         n_to_mutate = int(self.model.mu * self.num_cells)
@@ -247,6 +250,8 @@ def compute_gini_index(model):
     # Calculate the Gini Index
     cumulative_sum = sum((i + 1) * sorted_assets[i] for i in range(n))
     total_sum = sum(sorted_assets)
+    if total_sum == 0:
+        return 0  # No agent has any assets => view as total equality
     gini_index = (2 * cumulative_sum) / (n * total_sum) - (n + 1) / n
     return int(gini_index * 100)  # Return in "percent" (0-100)
 
@@ -300,7 +305,7 @@ def create_all_options(n, include_ties=False):
 
 
 def create_personality(num_colors, num_personality_colors):
-    """
+    """ NOT USED
     Creates and returns a list of 'personalities' that are to be assigned
     to agents. Each personality is a NumPy array of length 'num_colors'
     but it is not a full ranking vector since the number of colors influencing
@@ -338,7 +343,7 @@ def get_area_voter_turnout(area):
         return area.voter_turnout
     return None
 
-def get_area_closeness_to_reality(area):
+def get_area_dist_to_reality(area):
     if isinstance(area, Area):
         return area.dist_to_reality
     return None
@@ -346,6 +351,11 @@ def get_area_closeness_to_reality(area):
 def get_area_color_distribution(area):
     if isinstance(area, Area):
         return area.color_distribution.tolist()
+    return None
+
+def get_election_results(area):
+    if isinstance(area, Area):
+        return area.voted_ordering.tolist()
     return None
 
 # def get_area_personality_based_reward(area):
@@ -377,8 +387,7 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 num_personality_colors, pers_mean, pers_std_dev,
-                 mu, election_impact_on_mutation,
+                 num_personality_colors, mu, election_impact_on_mutation,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -422,7 +431,7 @@ class ParticipationModel(mesa.Model):
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
         self.num_personality_colors = num_personality_colors
         self.personalities = self.create_personalities(num_personalities)
-        self.personality_distribution = self.pers_dist(pers_mean, pers_std_dev)
+        self.personality_distribution = self.pers_dist(num_personalities)
         self.initialize_voting_agents()
         # Area variables
         self.global_area = self.initialize_global_area()  # TODO create bool variable to make this optional
@@ -486,11 +495,12 @@ class ParticipationModel(mesa.Model):
         standing on.
         """
         dist = self.personality_distribution
+        rng = np.random.default_rng()
         for a_id in range(self.num_agents):
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
-            personality = self.random.choice(self.personalities, p=dist)
+            personality = rng.choice(self.personalities, p=dist)
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(a_id, self, (x, y), personality,
                               assets=5, add=False)  # TODO: initial assets?!
@@ -591,21 +601,25 @@ class ParticipationModel(mesa.Model):
             raise ValueError("Not enough unique personality options available.")
 
         indices = np.random.choice(len(personality_options), n, replace=False)
-        selected_personalities = personality_options[indices]
+        selected_personalities = personality_options[indices].copy()
+
+        del personality_options  # Free up memory (variable may be very large)
         return selected_personalities
 
-    def pers_dist(self, mean, std_dev):
+    def pers_dist(self, size):
         """
         This method creates a normalized normal distribution array for picking
         and depicting the distribution of personalities in the model.
-        :param mean: The mean value of the normal distribution.
-        :param std_dev: The standard deviation of the normal distribution.
-        :return: A normalized normal distribution array.
+        :param size: The mean value of the normal distribution.
+        :return: A normalized (sum is one) array mimicking a gaussian curve.
         """
         # Generate a normal distribution
-        dist = np.random.normal(mean, std_dev, len(self.personalities))
-        dist = np.abs(dist)  # Ensure non-negative values
-        dist /= dist.sum()  # Normalize
+        rng = np.random.default_rng()
+        dist = rng.normal(0, 1, size)
+        dist.sort()  # To create a gaussian curve like array
+        dist = np.abs(dist)  # Flip negative values "up"
+        # Normalize the distribution to sum to one
+        dist /= dist.sum()
         return dist
 
 
@@ -625,8 +639,9 @@ class ParticipationModel(mesa.Model):
                 #
                 #"VoterTurnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
                 "VoterTurnout": get_area_voter_turnout,
-                "Closeness to Reality": get_area_closeness_to_reality,
+                "DistToReality": get_area_dist_to_reality,
                 "ColorDistribution": get_area_color_distribution,
+                "ElectionResults": get_election_results,
                 # "Personality-Based Reward": get_area_personality_based_reward,
                 # "Gini Index": get_area_gini_index
             },

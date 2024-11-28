@@ -7,7 +7,7 @@ from democracy_sim.participation_agent import ColorCell
 from democracy_sim.participation_model import (ParticipationModel,
                                                distance_functions,
                                                social_welfare_functions)
-from math import comb
+from math import factorial
 import mesa
 
 # Parameters
@@ -22,7 +22,7 @@ mu = 0.01  # 0.001-0.5
 # Voting rules (see social_welfare_functions.py)
 rule_idx = 0
 # Distance functions (see distance_functions.py)
-distance_idx = 0
+distance_idx = 1
 ####################
 # Model parameters #
 ####################
@@ -33,8 +33,8 @@ color_patches_steps = 3
 patch_power = 1.0
 color_heterogeneity = 0.3
 # Voting Agents
-num_personality_colors = 2
-num_personalities = comb(num_colors, num_personality_colors)
+num_personality_colors = 4  # TODO: does this make sense when we have to use orderings anyways?
+num_personalities = 10
 # Grid
 grid_rows = 100  # height
 grid_cols = 80  # width
@@ -43,16 +43,19 @@ canvas_height = grid_rows * cell_size
 canvas_width = grid_cols * cell_size
 draw_borders = True
 # Voting Areas
-num_areas = 16
-av_area_height = 25
-# area_height = grid_rows // int(sqrt(num_areas))
-av_area_width = 20
-# area_width = grid_cols // int(sqrt(num_areas))
+# num_areas = 16
+# av_area_height = 25
+# # area_height = grid_rows // int(sqrt(num_areas))
+# av_area_width = 20
+# # area_width = grid_cols // int(sqrt(num_areas))
+num_areas = 4
+av_area_height = 50
+av_area_width = 40
 area_size_variance = 0.0
 ########################
 # Statistics and Views #
 ########################
-show_area_stats = False
+show_area_stats = True
 
 
 _COLORS = [
@@ -137,27 +140,6 @@ canvas_element = mesa.visualization.CanvasGrid(
 )
 
 
-# # Draw bars (Test)
-# def draw_color_dist_bars(color_distributions):
-#     # Setup plot
-#     fig, ax = plt.subplots()
-#     for i, dist in enumerate(color_distributions):
-#         bottom = 0
-#         for j, part in enumerate(color_distributions):
-#             ax.bar(i, part, bottom=bottom, color=_COLORS[j % len(_COLORS)])
-#             bottom += part
-#     # Set x-ticks to be distribution indices
-#     plt.xticks(range(len(color_distributions)))
-#     plt.show()
-#
-#
-# def plot_color_distribution(model, ax):
-#     agent_df = model.datacollector.get_agent_vars_dataframe()
-#     color_distributions = agent_df.groupby('Step')['Color Distribution'].apply(list).tolist()
-#     sns.barplot(data=color_distributions, ax=ax)
-#     ax.set_title('Color Distribution Over Time')
-
-
 wealth_chart = mesa.visualization.modules.ChartModule(
     [{"Label": "Collective assets", "Color": "Black"}],
     data_collector_name='datacollector'
@@ -195,7 +177,7 @@ model_params = {
         value=rule_idx, min_value=0, max_value=len(social_welfare_functions)-1,
     ),
     "distance_idx": mesa.visualization.Slider(
-        name=f"Rule index {[f.__name__ for f in distance_functions]}",
+        name=f"Dist-Function index {[f.__name__ for f in distance_functions]}",
         value=distance_idx, min_value=0, max_value=len(distance_functions)-1,
     ),
     "election_costs": mesa.visualization.Slider(
@@ -226,21 +208,12 @@ model_params = {
     ),
     "num_personalities": mesa.visualization.Slider(
         name="# of different personalities", value=num_personalities,
-        min_value=1, max_value=comb(num_colors, num_personality_colors), step=1
+        min_value=1, max_value=factorial(num_personality_colors), step=1
     ),
     "num_personality_colors": mesa.visualization.Slider(
         name="# colors determining the personality",
         value=num_personality_colors,
         min_value=1, max_value=num_colors-1, step=1
-    ),
-    "pers_mean": mesa.visualization.Slider(
-        name="Personality mean", value=0.5, min_value=0.0, max_value=1.0,
-        step=0.1, description="The mean of the personality distribution"
-    ),
-    "pers_std_dev": mesa.visualization.Slider(
-        name="Personality standard deviation", value=0.1, min_value=0.0,
-        max_value=1.0, step=0.1,
-        description="The standard deviation of the personality distribution"
     ),
     "color_patches_steps": mesa.visualization.Slider(
         name="Patches size (# steps)", value=color_patches_steps,

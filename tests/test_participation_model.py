@@ -75,6 +75,28 @@ class TestParticipationModel(unittest.TestCase):
         assert mid_dst != eq_dst
         assert het_dst != mid_dst
 
+    def test_distribution_of_personalities(self):
+        p_dist = self.model.personality_distribution
+        self.assertAlmostEqual(sum(p_dist), 1.0)
+        self.assertEqual(len(p_dist), num_personalities)
+        voting_agents = self.model.voting_agents
+        num_agnts = self.model.num_agents
+        personalities = list(self.model.personalities)
+        p_counts = {str(i): 0 for i in personalities}
+        # Count the occurrence of each personality
+        for agent in voting_agents:
+            p_counts[str(agent.personality)] += 1
+        # Normalize the counts to get the real personality distribution
+        real_dist = [p_counts[str(p)] / num_agnts for p in personalities]
+        # Simple tests
+        self.assertEqual(len(real_dist), len(p_dist))
+        self.assertAlmostEqual(float(sum(real_dist)), 1.0)
+        # Compare each value
+        my_delta = 0.4 / num_personalities  # The more personalities, the smaller the delta
+        for p_dist_val, real_p_dist_val in zip(p_dist, real_dist):
+            self.assertAlmostEqual(p_dist_val, real_p_dist_val, delta=my_delta)
+
+
     def test_initialize_areas(self):
         # TODO (very non-trivial) - has been tested manually so far.
         pass
