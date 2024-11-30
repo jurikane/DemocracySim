@@ -32,7 +32,7 @@ class Area(mesa.Agent):
         self.cells = []
         self._idx_field = None  # An indexing position of the area in the grid
         self.color_distribution = np.zeros(model.num_colors) # Initialize to 0
-        self.voted_ordering = np.zeros(model.num_colors)
+        self.voted_ordering = None
         self.voter_turnout = 0  # In percent
         self.dist_to_reality = None  # Elected vs. actual color distribution
 
@@ -354,7 +354,12 @@ def get_area_color_distribution(area):
     return None
 
 def get_election_results(area):
-    if isinstance(area, Area):
+    """
+    Returns the voted ordering as a list or None if not available.
+
+    :return: List of voted ordering or None.
+    """
+    if isinstance(area, Area) and area.voted_ordering is not None:
         return area.voted_ordering.tolist()
     return None
 

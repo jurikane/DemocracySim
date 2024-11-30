@@ -108,7 +108,7 @@ def participation_draw(cell: ColorCell):
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col,
                  "Color": color}
-    # TODO: maybe: draw the agent number in the opposing color, + maybe draw borders nicer
+    # TODO: maybe: draw the agent number in the opposing color
     # If the cell is a border cell, change its appearance
     if TYPE_CHECKING:  # Type hint for IDEs
         cell.model = cast(ParticipationModel, cell.model)
@@ -158,13 +158,6 @@ voter_turnout = mesa.visualization.ChartModule(
      {"Label": "Gini Index (0-100)", "Color": "Red"}],
     data_collector_name='datacollector')
 
-
-# Agent charts
-
-# voter_turnout_chart = mesa.visualization.ChartModule(
-#     [{"Label": "Voter Turnout", "Color": "Black"}],
-#     data_collector_name='datacollector'
-# )
 
 model_params = {
     "height": grid_rows,

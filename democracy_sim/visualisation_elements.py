@@ -19,7 +19,7 @@ def save_plot_to_base64(fig):
     return f'<img src="data:image/png;base64,{image_base64}" />'
 
 
-class ColorDistributionElement(TextElement):
+class AreaStats(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
@@ -30,71 +30,58 @@ class ColorDistributionElement(TextElement):
         data = model.datacollector.get_agent_vars_dataframe()
         color_distribution = data['ColorDistribution'].dropna()
         dist_to_reality = data['DistToReality'].dropna()
+        election_results = data['ElectionResults'].dropna()
 
         # Extract unique area IDs (excluding the global area)
         area_ids = color_distribution.index.get_level_values(1).unique()[1:]
         num_colors = len(color_distribution.iloc[0])
 
-        # Create subplots within a single figure
-        num_areas = len(area_ids) - 1  # Exclude the global area
+        # Create subplots within a single figure for color distribution
+        num_areas = len(area_ids)
         num_cols = math.ceil(math.sqrt(num_areas))
         num_rows = math.ceil(num_areas / num_cols)
-        fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols,
-                                 figsize=(8, 8), sharex=True)
-
-        for ax, area_id in zip(axes.flatten(), area_ids):
+        fig1, axes1 = plt.subplots(nrows=num_rows, ncols=num_cols,
+                                   figsize=(8, 8), sharex=True)
+        handles, labels = [], []
+        for ax, area_id in zip(axes1.flatten(), area_ids):
             area_data = color_distribution.xs(area_id, level=1)
             for color_idx in range(num_colors):
                 color_data = area_data.apply(lambda x: x[color_idx])
                 ax.plot(color_data.index, color_data.values,
-                        label=f'Color {color_idx}', color=_COLORS[color_idx])
+                        color=_COLORS[color_idx])
             area_data = dist_to_reality.xs(area_id, level=1)
             ax.plot(area_data.index, area_data.values,
-                    label=f'Distance to reality', color='Black')
+                    color='Black', linestyle='--',
+                    label='Distance of the election result\n'
+                          'to the actual color distribution\nValues 0-1',)
+            handles, labels = ax.get_legend_handles_labels()
             ax.set_title(f'Area {area_id}')
             ax.set_xlabel('Step')
             ax.set_ylabel('Color Distribution')
-            #ax.legend()
 
+        fig1.legend(handles, labels, loc='upper center', ncol=3)
         plt.tight_layout()
-        return save_plot_to_base64(fig)
+        color_dist_plot = save_plot_to_base64(fig1)
 
+        # Create subplots within a single figure for election results
+        fig2, axes2 = plt.subplots(nrows=num_rows, ncols=num_cols,
+                                   figsize=(8, 8), sharex=True)
 
-class ElectionResultsElement(TextElement):
-    def render(self, model):
-        # TODO: put together with ColorDistributionElement to create both at once
-        # Only render if show_area_stats is enabled
-        step = model.scheduler.steps
-        if not model.show_area_stats or step == 0:
-            return ""
-
-        # Fetch data from the datacollector
-        data = model.datacollector.get_agent_vars_dataframe()
-        election_results = data['ElectionResults'].dropna()
-
-        # Extract unique area IDs
-        area_ids = election_results.index.get_level_values(1).unique()[1:]
-        num_colors = len(election_results.iloc[0])
-
-        # Create subplots within a single figure
-        num_areas = len(area_ids) - 1  # Exclude the global area
-        num_cols = math.ceil(math.sqrt(num_areas))
-        num_rows = math.ceil(num_areas / num_cols)
-        fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols,
-                                 figsize=(8, 8), sharex=True)
-
-        for ax, area_id in zip(axes.flatten(), area_ids):
+        for ax, area_id in zip(axes2.flatten(), area_ids):
             area_data = election_results.xs(area_id, level=1)
-            for color_idx in range(num_colors):
-                color_data = area_data.apply(lambda x: x[color_idx])
+            for color_id in range(num_colors):
+                color_data = area_data.apply(lambda x: x.index(color_id))
                 ax.plot(color_data.index, color_data.values,
-                        label=f'Color {color_idx}', color=_COLORS[color_idx])
+                        label=f'Color {color_id}', color=_COLORS[color_id])
             ax.set_title(f'Area {area_id}')
             ax.set_xlabel('Step')
-            ax.set_ylabel('Election Results')
+            ax.set_ylabel('Election Results (rank value)')
+            ax.invert_yaxis()
 
         plt.tight_layout()
-        return save_plot_to_base64(fig)
+        election_results_plot = save_plot_to_base64(fig2)
+
+        return color_dist_plot + election_results_plot
 
 
 class PersonalityDistribution(TextElement):
@@ -123,12 +110,13 @@ class PersonalityDistribution(TextElement):
             height = bar.get_height()
             width = bar.get_width()
 
-            for i, c in enumerate(personality):
+            for i, color_idx in enumerate(personality):
                 coords = (bar.get_x() + width / 2 - 0.4 + i * 0.2, height)
-                rect = patches.Rectangle(coords, 0.2, 5, color=colors[c])
+                rect = patches.Rectangle(coords, 0.2, 5,
+                                         color=colors[color_idx])
                 ax.add_patch(rect)
 
-        ax.set_xlabel('Personality ID')
+        ax.set_xlabel('"Personality" ID')
         ax.set_ylabel('Number of Agents')
         ax.set_title('Distribution of Personalities among Agents')
 
