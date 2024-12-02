@@ -35,6 +35,7 @@ class Area(mesa.Agent):
         self.voted_ordering = None
         self.voter_turnout = 0  # In percent
         self.dist_to_reality = None  # Elected vs. actual color distribution
+        self.personality_dist = None
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -121,6 +122,7 @@ class Area(mesa.Agent):
                     cell.is_border_cell = True
         self._idx_field = (adjusted_x, adjusted_y)
         self.update_color_distribution()
+        self.update_personality_dist()
 
     def add_agent(self, agent):
         self.agents.append(agent)
@@ -178,7 +180,6 @@ class Area(mesa.Agent):
         n = preference_profile.shape[0]  # Number agents participated
         return int((n / self.num_agents) * 100) # Voter turnout in percent
 
-
     def update_color_distribution(self):
         """
         This method calculates the current color distribution of the area
@@ -191,6 +192,19 @@ class Area(mesa.Agent):
         for color in range(self.model.num_colors):
             dist_val = color_count.get(color, 0) / self.num_cells  # Float
             self.color_distribution[color] = dist_val
+
+    def update_personality_dist(self):
+        """
+        This method calculates the areas current distribution of personalities.
+        """
+        personalities = list(self.model.personalities)
+        p_counts = {str(i): 0 for i in personalities}
+        # Count the occurrence of each personality
+        for agent in self.agents:
+            p_counts[str(agent.personality)] += 1
+        # Normalize the counts
+        self.personality_dist = [p_counts[str(p)] / self.num_agents
+                                 for p in personalities]
 
     def filter_cells(self, cell_list):
         """
@@ -304,7 +318,7 @@ def create_all_options(n, include_ties=False):
     return r
 
 
-def create_personality(num_colors, num_personality_colors):
+def create_personality(num_colors):
     """ NOT USED
     Creates and returns a list of 'personalities' that are to be assigned
     to agents. Each personality is a NumPy array of length 'num_colors'
@@ -312,18 +326,17 @@ def create_personality(num_colors, num_personality_colors):
     the personality is limited. The array is therefore not normalized.
     White (color 0) is never part of a personality.
     :param num_colors: The number of colors in the simulation.
-    :param num_personality_colors: Number of colors influencing the personality.
     """
     # TODO add unit tests for this function
     personality = np.random.randint(0, 100, num_colors)  # TODO low=0 or 1?
     # Save the sum to "normalize" the values later (no real normalization)
     sum_value = sum(personality) + 1e-8  # To avoid division by zero
     # Select only as many features as needed (num_personality_colors)
-    to_del = num_colors - num_personality_colors  # How many to be deleted
-    if to_del > 0:
-        # The 'replace=False' ensures that indexes aren't chosen twice
-        indices = np.random.choice(num_colors, to_del, replace=False)
-        personality[indices] = 0  # 'Delete' the values
+    # to_del = num_colors - num_personality_colors  # How many to be deleted
+    # if to_del > 0:
+    #     # The 'replace=False' ensures that indexes aren't chosen twice
+    #     indices = np.random.choice(num_colors, to_del, replace=False)
+    #     personality[indices] = 0  # 'Delete' the values
     personality[0] = 0  # White is never part of the personality
     # "Normalize" the rest of the values
     personality = personality / sum_value
@@ -392,7 +405,7 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 num_personality_colors, mu, election_impact_on_mutation,
+                 mu, election_impact_on_mutation,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -434,7 +447,6 @@ class ParticipationModel(mesa.Model):
         # Create agents
         # TODO: Where do the agents get there known cells from and how!?
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
-        self.num_personality_colors = num_personality_colors
         self.personalities = self.create_personalities(num_personalities)
         self.personality_distribution = self.pers_dist(num_personalities)
         self.initialize_voting_agents()

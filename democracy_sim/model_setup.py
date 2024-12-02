@@ -17,10 +17,10 @@ import mesa
 #############
 election_costs = 5
 max_reward = 50
-election_impact_on_mutation = 1.0  # 0.1-5.0
-mu = 0.01  # 0.001-0.5
+election_impact_on_mutation = 1.8  # 0.1-5.0
+mu = 0.05  # 0.001-0.5
 # Voting rules (see social_welfare_functions.py)
-rule_idx = 0
+rule_idx = 1
 # Distance functions (see distance_functions.py)
 distance_idx = 1
 ####################
@@ -28,13 +28,12 @@ distance_idx = 1
 ####################
 num_agents = 800
 # Colors
-num_colors = 4
+num_colors = 3
 color_patches_steps = 3
 patch_power = 1.0
 color_heterogeneity = 0.3
 # Voting Agents
-num_personality_colors = 4  # TODO: does this make sense when we have to use orderings anyways?
-num_personalities = 10
+num_personalities = 4
 # Grid
 grid_rows = 100  # height
 grid_cols = 80  # width
@@ -43,14 +42,14 @@ canvas_height = grid_rows * cell_size
 canvas_width = grid_cols * cell_size
 draw_borders = True
 # Voting Areas
-# num_areas = 16
-# av_area_height = 25
-# # area_height = grid_rows // int(sqrt(num_areas))
-# av_area_width = 20
-# # area_width = grid_cols // int(sqrt(num_areas))
-num_areas = 4
-av_area_height = 50
-av_area_width = 40
+num_areas = 16
+av_area_height = 25
+# area_height = grid_rows // int(sqrt(num_areas))
+av_area_width = 20
+# area_width = grid_cols // int(sqrt(num_areas))
+# num_areas = 4
+# av_area_height = 50
+# av_area_width = 40
 area_size_variance = 0.0
 ########################
 # Statistics and Views #
@@ -201,13 +200,13 @@ model_params = {
     ),
     "num_personalities": mesa.visualization.Slider(
         name="# of different personalities", value=num_personalities,
-        min_value=1, max_value=factorial(num_personality_colors), step=1
+        min_value=1, max_value=factorial(num_colors), step=1
     ),
-    "num_personality_colors": mesa.visualization.Slider(
-        name="# colors determining the personality",
-        value=num_personality_colors,
-        min_value=1, max_value=num_colors-1, step=1
-    ),
+    # "num_personality_colors": mesa.visualization.Slider(
+    #     name="# colors determining the personality",
+    #     value=num_personality_colors,
+    #     min_value=1, max_value=num_colors-1, step=1
+    # ),
     "color_patches_steps": mesa.visualization.Slider(
         name="Patches size (# steps)", value=color_patches_steps,
         min_value=0, max_value=9, step=1,

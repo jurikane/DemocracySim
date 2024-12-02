@@ -25,15 +25,15 @@ class CustomModularServer(ModularServer):
 
 personality_distribution = PersonalityDistribution()
 area_stats = AreaStats()
-steps_text = StepsTextElement()
 vto_areas = VoterTurnoutElement()
+area_personality_dists = AreaPersonalityDists()
 
 server = CustomModularServer(
     model_cls=ParticipationModel,
     visualization_elements=[canvas_element, color_distribution_chart,
-                            personality_distribution,
                             wealth_chart, voter_turnout, vto_areas,
-                            area_stats, steps_text],
+                            personality_distribution, area_stats,
+                            area_personality_dists],
     name="DemocracySim",
     model_params=params,
 )
