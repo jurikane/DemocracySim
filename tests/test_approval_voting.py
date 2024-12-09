@@ -1,12 +1,13 @@
 from democracy_sim.social_welfare_functions import approval_voting
 from tests.test_majority_rule import simple, paradoxical
+import numpy as np
 
 # TODO adapt to approval voting (state = merely copied from majority_rule.py)
 
 # Simple and standard cases
 approval_simple_cases = [
-    (simple, [2, 1, 0]),  # TODO: Whats the expected result?
-    (paradoxical, [0, 4, 3, 1, 2])  # TODO '' ''
+    (simple, [[2, 1, 0]]),  # TODO: Whats the expected result?
+    (paradoxical, [[2, 1, 0, 3, 4], [2, 1, 3, 0, 4]])  # TODO '' ''
 ]
 
 # Following "paradoxical" example is taken from
@@ -20,47 +21,53 @@ approval_simple_cases = [
 #    d d e c
 #    e a a a
 
-# def test_approval_voting():
-#     # Test predefined cases
-#     for pref_table, expected in approval_simple_cases:
-#         res_ranking = approval_voting(pref_table)
-#         assert list(res_ranking) == expected
+def test_approval_voting():
+    # Test predefined cases
+    for pref_table, expected in approval_simple_cases:
+        res_ranking = approval_voting(pref_table)
+        is_correct = False
+        for exp in expected:
+            if list(res_ranking) == exp:
+                is_correct = True
+        assert is_correct
 
-# # Cases with ties - "all equally possible"
-#
-# with_ties_all = np.array([
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25]
-#     ])
-#
-# with_overall_tie = np.array([
-#     [0.4, 0.3, 0.2, 0.1],
-#     [0.1, 0.4, 0.3, 0.2],
-#     [0.2, 0.1, 0.4, 0.3],
-#     [0.3, 0.2, 0.1, 0.4],
-# ])
-#
-# with_ties_mixed = np.array([
-#     [0.4, 0.3, 0.2, 0.1],
-#     [0.25, 0.25, 0.25, 0.25],
-#     [0.25, 0.25, 0.25, 0.25],
-#     [0.1, 0.4, 0.3, 0.2],
-#     [0.2, 0.1, 0.4, 0.3],
-#     [0.25, 0.25, 0.25, 0.25],
-#     [0.3, 0.2, 0.1, 0.4],
-# ])
-#
-# all_equally_possible = [with_ties_all, with_overall_tie, with_ties_mixed]
-#
-# def test_equally_possible(cv_threshold=0.125):
-#     for pref_rel in all_equally_possible:
-#         cv = majority_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
-#         print(f"CV: {cv}")
-#         assert cv < cv_threshold
-#
+# Cases with ties - "all equally possible"
+
+with_ties_all = np.array([
+        [0.25, 0.25, 0.25, 0.25],
+        [0.25, 0.25, 0.25, 0.25],
+        [0.25, 0.25, 0.25, 0.25],
+        [0.25, 0.25, 0.25, 0.25],
+        [0.25, 0.25, 0.25, 0.25]
+    ])
+
+with_overall_tie = np.array([
+    [0.4, 0.3, 0.2, 0.1],
+    [0.1, 0.4, 0.3, 0.2],
+    [0.2, 0.1, 0.4, 0.3],
+    [0.3, 0.2, 0.1, 0.4],
+])
+
+with_ties_mixed = np.array([
+    [0.4, 0.3, 0.2, 0.1],
+    [0.25, 0.25, 0.25, 0.25],
+    [0.25, 0.25, 0.25, 0.25],
+    [0.1, 0.4, 0.3, 0.2],
+    [0.2, 0.1, 0.4, 0.3],
+    [0.25, 0.25, 0.25, 0.25],
+    [0.3, 0.2, 0.1, 0.4],
+])
+
+all_equally_possible = [with_ties_all, with_overall_tie, with_ties_mixed]
+
+def test_equally_possible():
+    for pref_rel in all_equally_possible:
+        winners = set()
+        for _ in range(500):
+            winner = approval_voting(pref_rel)
+            winners.add(winner[0])
+        assert set(winners) == {0, 1, 2, 3}
+
 # # Cases with ties - "not all equally possible"
 # with_ties_unequal = np.array([
 #         [0.25, 0.25, 0.25, 0.25],

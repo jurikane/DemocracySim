@@ -15,7 +15,7 @@ import mesa
 #############
 # Elections #
 #############
-election_costs = 5
+election_costs = 1
 max_reward = 50
 election_impact_on_mutation = 1.8  # 0.1-5.0
 mu = 0.05  # 0.001-0.5
@@ -27,6 +27,7 @@ distance_idx = 1
 # Model parameters #
 ####################
 num_agents = 800
+common_assets = 40000
 # Colors
 num_colors = 3
 color_patches_steps = 3
@@ -129,7 +130,7 @@ def participation_draw(cell: ColorCell):
         text = f"{a.num_agents} agents, color dist: {a.color_distribution}"
         portrayal[f"Area {unique_id}"] = text
     for voter in cell.agents:
-        text = f"personality: {voter.personality}"
+        text = f"personality: {voter.personality}, assets: {voter.assets}"
         portrayal[f"Agent {voter.unique_id}"] = text
     return portrayal
 
@@ -202,11 +203,10 @@ model_params = {
         name="# of different personalities", value=num_personalities,
         min_value=1, max_value=factorial(num_colors), step=1
     ),
-    # "num_personality_colors": mesa.visualization.Slider(
-    #     name="# colors determining the personality",
-    #     value=num_personality_colors,
-    #     min_value=1, max_value=num_colors-1, step=1
-    # ),
+    "common_assets": mesa.visualization.Slider(
+        name="Initial common assets", value=common_assets,
+        min_value=num_agents, max_value=1000*num_agents, step=10
+    ),
     "color_patches_steps": mesa.visualization.Slider(
         name="Patches size (# steps)", value=color_patches_steps,
         min_value=0, max_value=9, step=1,

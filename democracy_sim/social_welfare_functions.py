@@ -125,8 +125,8 @@ def imp_prepr_for_approval(pref_table, threshold=None):
     :param threshold: Will be overwritten (will be set according to variances).
     :return: The preference table with the options approved or not.
     """
-    threshold = np.var(pref_table, axis=0)
-    return (pref_table <= threshold).astype(int)
+    threshold = np.mean(pref_table, axis=1) - np.var(pref_table, axis=1)
+    return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
 def approval_voting(pref_table):

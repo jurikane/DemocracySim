@@ -4,8 +4,7 @@ from democracy_sim.participation_model import (ParticipationModel, Area,
                                                social_welfare_functions)
 from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
                                        num_agents, num_colors, num_areas,
-                                       num_personalities,
-                                       num_personality_colors as npc, mu,
+                                       num_personalities, common_assets, mu,
                                        election_impact_on_mutation as e_impact,
                                        draw_borders, rule_idx, distance_idx,
                                        color_heterogeneity as heterogeneity,
@@ -22,7 +21,7 @@ class TestParticipationModel(unittest.TestCase):
                                         num_agents=num_agents,
                                         num_colors=num_colors,
                                         num_personalities=num_personalities,
-                                        num_personality_colors=npc, mu=mu,
+                                        common_assets=common_assets, mu=mu,
                                         election_impact_on_mutation=e_impact,
                                         num_areas=num_areas,
                                         draw_borders=draw_borders,
@@ -53,12 +52,12 @@ class TestParticipationModel(unittest.TestCase):
     def test_model_options(self):
         self.assertEqual(self.model.num_agents, num_agents)
         self.assertEqual(self.model.num_colors, num_colors)
-        self.assertEqual(self.model.num_personality_colors, npc)
         self.assertEqual(self.model.num_areas, num_areas)
         self.assertEqual(self.model.area_size_variance, area_size_variance)
         self.assertEqual(self.model.draw_borders, draw_borders)
         v_rule = social_welfare_functions[rule_idx]
         dist_func = distance_functions[distance_idx]
+        self.assertEqual(self.model.common_assets, common_assets)
         self.assertEqual(self.model.voting_rule, v_rule)
         self.assertEqual(self.model.distance_func, dist_func)
         self.assertEqual(self.model.election_costs, election_costs)

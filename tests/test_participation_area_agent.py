@@ -69,9 +69,7 @@ class TestArea(unittest.TestCase):
         # Get any existing area
         existing_area = random.sample(self.model.areas, 1)[0]
         # Additional area and agent
-        personality = np.zeros(self.model.num_colors)
-        personality[0] = 0.3
-        personality[1] = 0.7
+        personality = random.choice(self.model.personalities)
         a = VoteAgent(num_agents + 1, self.model, pos=(0, 0),
                       personality=personality, assets=25)
         additional_test_area = Area(self.model.num_areas + 1,

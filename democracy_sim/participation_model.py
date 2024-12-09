@@ -166,15 +166,15 @@ class Area(mesa.Agent):
         real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
         self.dist_to_reality = dist_func(real_color_ord, self.voted_ordering,
                                          model.color_search_pairs)
-        # Calculate the rewards per agent
-        reward_pa = (1 - self.dist_to_reality) * model.max_reward
+        # Calculate the rpa - rewards per agent (can be negative)
+        rpa = (0.5 - self.dist_to_reality) * model.max_reward  # TODO: change this (?)
         # Distribute the two types of rewards
         color_search_pairs = model.color_search_pairs
         for agent in self.agents:
             # Personality-based reward factor
             p = dist_func(agent.personality, real_color_ord, color_search_pairs)
             # + Common reward (reward_pa) for all agents
-            agent.assets = agent.assets + p * reward_pa + reward_pa
+            agent.assets = int(agent.assets + (0.5-p) * model.max_reward + rpa)
         # TODO check whether the current color dist and the mutation of the colors is calculated and applied correctly and does not interfere in any way with the election process
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
@@ -405,7 +405,7 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 mu, election_impact_on_mutation,
+                 mu, election_impact_on_mutation, common_assets,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -435,6 +435,7 @@ class ParticipationModel(mesa.Model):
         self.options = create_all_options(num_colors)
         # Simulation variables
         self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
+        self.common_assets = common_assets
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing rankings
@@ -513,6 +514,7 @@ class ParticipationModel(mesa.Model):
         """
         dist = self.personality_distribution
         rng = np.random.default_rng()
+        assets = self.common_assets // self.num_agents
         for a_id in range(self.num_agents):
             # Get a random position
             x = self.random.randrange(self.width)
@@ -520,7 +522,7 @@ class ParticipationModel(mesa.Model):
             personality = rng.choice(self.personalities, p=dist)
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(a_id, self, (x, y), personality,
-                              assets=5, add=False)  # TODO: initial assets?!
+                              assets=assets, add=False)  # TODO: initial assets?!
             self.voting_agents[a_id] = agent  # Add using the index (faster)
             # Add the agent to the grid by placing it on a cell
             cell = self.grid.get_cell_list_contents([(x, y)])[0]

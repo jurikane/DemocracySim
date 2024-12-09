@@ -11,9 +11,7 @@ class TestVotingAgent(unittest.TestCase):
         test_model = TestParticipationModel()
         test_model.setUp()
         self.model = test_model.model
-        personality = np.zeros(self.model.num_colors)
-        personality[0] = 0.3
-        personality[1] = 0.7
+        personality = random.choice(self.model.personalities)
         self.agent = VoteAgent(num_agents + 1, self.model, pos=(0, 0),
                                personality=personality, assets=25)
         self.additional_test_area = Area(self.model.num_areas + 1,
