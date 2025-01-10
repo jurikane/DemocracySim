@@ -33,6 +33,7 @@ num_colors = 3
 color_patches_steps = 3
 patch_power = 1.0
 color_heterogeneity = 0.3
+known_cells = 10
 # Voting Agents
 num_personalities = 4
 # Grid
@@ -200,12 +201,16 @@ model_params = {
         step=1
     ),
     "num_personalities": mesa.visualization.Slider(
-        name="# of different personalities", value=num_personalities,
+        name="# different personalities", value=num_personalities,
         min_value=1, max_value=factorial(num_colors), step=1
     ),
     "common_assets": mesa.visualization.Slider(
         name="Initial common assets", value=common_assets,
         min_value=num_agents, max_value=1000*num_agents, step=10
+    ),
+    "known_cells": mesa.visualization.Slider(
+        name="# known fields", value=known_cells,
+        min_value=1, max_value=100, step=1
     ),
     "color_patches_steps": mesa.visualization.Slider(
         name="Patches size (# steps)", value=color_patches_steps,

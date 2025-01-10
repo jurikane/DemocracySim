@@ -5,6 +5,7 @@ from democracy_sim.participation_model import (ParticipationModel, Area,
 from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
                                        num_agents, num_colors, num_areas,
                                        num_personalities, common_assets, mu,
+                                       known_cells,
                                        election_impact_on_mutation as e_impact,
                                        draw_borders, rule_idx, distance_idx,
                                        color_heterogeneity as heterogeneity,
@@ -21,6 +22,7 @@ class TestParticipationModel(unittest.TestCase):
                                         num_agents=num_agents,
                                         num_colors=num_colors,
                                         num_personalities=num_personalities,
+                                        known_cells=known_cells,
                                         common_assets=common_assets, mu=mu,
                                         election_impact_on_mutation=e_impact,
                                         num_areas=num_areas,
@@ -79,14 +81,14 @@ class TestParticipationModel(unittest.TestCase):
         self.assertAlmostEqual(sum(p_dist), 1.0)
         self.assertEqual(len(p_dist), num_personalities)
         voting_agents = self.model.voting_agents
-        num_agnts = self.model.num_agents
+        nr_agents = self.model.num_agents
         personalities = list(self.model.personalities)
         p_counts = {str(i): 0 for i in personalities}
         # Count the occurrence of each personality
         for agent in voting_agents:
             p_counts[str(agent.personality)] += 1
         # Normalize the counts to get the real personality distribution
-        real_dist = [p_counts[str(p)] / num_agnts for p in personalities]
+        real_dist = [p_counts[str(p)] / nr_agents for p in personalities]
         # Simple tests
         self.assertEqual(len(real_dist), len(p_dist))
         self.assertAlmostEqual(float(sum(real_dist)), 1.0)

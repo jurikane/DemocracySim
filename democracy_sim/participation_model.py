@@ -70,7 +70,7 @@ class Area(mesa.Agent):
 
     @property
     def num_cells(self):
-        return len(self.cells)
+        return self._width * self._height
 
     @property
     def idx_field(self):
@@ -143,6 +143,8 @@ class Area(mesa.Agent):
         # Ask agents for participation
         preference_profile = []
         for agent in self.agents:
+            # Give agents their (new) known fields
+            agent.update_known_cells(area=self)
             if (agent.assets >= el_costs
                     and agent.ask_for_participation(area=self)):
                 agent.num_elections_participated += 1
@@ -175,6 +177,9 @@ class Area(mesa.Agent):
             p = dist_func(agent.personality, real_color_ord, color_search_pairs)
             # + Common reward (reward_pa) for all agents
             agent.assets = int(agent.assets + (0.5-p) * model.max_reward + rpa)
+            # Correct wealth if below zero
+            if agent.assets < 0:
+                agent.assets = 0
         # TODO check whether the current color dist and the mutation of the colors is calculated and applied correctly and does not interfere in any way with the election process
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
@@ -227,7 +232,7 @@ class Area(mesa.Agent):
             return  # TODO: What to do if no agent participated..?
 
         # Mutate colors in cells
-        # Take some number of cells to mutate (i.e. 5 %)
+        # Take some number of cells to mutate (i.e., 5 %)
         n_to_mutate = int(self.model.mu * self.num_cells)
         # TODO/Idea: What if the voter_turnout determines the mutation rate?
         # randomly select x cells
@@ -405,7 +410,7 @@ class ParticipationModel(mesa.Model):
     """A model with some number of agents."""
 
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 mu, election_impact_on_mutation, common_assets,
+                 mu, election_impact_on_mutation, common_assets, known_cells,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, draw_borders, heterogeneity,
                  rule_idx, distance_idx, election_costs, max_reward,
@@ -430,6 +435,7 @@ class ParticipationModel(mesa.Model):
         # Elections
         self.election_costs = election_costs
         self.max_reward = max_reward
+        self.known_cells = known_cells
         self.voting_rule = social_welfare_functions[rule_idx]
         self.distance_func = distance_functions[distance_idx]
         self.options = create_all_options(num_colors)

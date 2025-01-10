@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, List, Optional
 import numpy as np
 from mesa import Agent
 if TYPE_CHECKING:  # Type hint for IDEs
@@ -54,7 +54,9 @@ class VoteAgent(Agent):
         self._assets = assets
         self._num_elections_participated = 0
         self.personality = personality
-        self.known_cells = []  # ColorCell objects the agent knows (knowledge)
+        self.cell = model.grid.get_cell_list_contents([(row, col)])[0]
+        # ColorCell objects the agent knows (knowledge)
+        self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells
         # Add the agent to the models' agent list and the cell
         if add:
             model.voting_agents.append(self)
@@ -101,6 +103,19 @@ class VoteAgent(Agent):
     def num_elections_participated(self, value):
         self._num_elections_participated = value
 
+    def update_known_cells(self, area):
+        """
+        This method is to update the list of known cells before casting a vote.
+        :param area: The area that holds the pool of cells in question
+        """
+        n_cells = len(area.cells)
+        k = len(self.known_cells)
+        self.known_cells = (
+            self.random.sample(area.cells, k)
+            if n_cells >= k
+            else area.cells
+        )
+
     def ask_for_participation(self, area):
         """
         The agent decides
@@ -136,7 +151,7 @@ class VoteAgent(Agent):
         a_factor = self.decide_altruism_factor(area)  # TODO: Implement this
         # compute the preference ranking vector as a mix between the agent's
         # own preferences/personality traits and the estimated real distribution
-        est_dist = self.estimate_real_distribution(area)
+        est_dist, conf = self.estimate_real_distribution(area)
         ass_opt = combine_and_normalize(self.personality, est_dist, a_factor)
         return ass_opt
 
@@ -181,14 +196,15 @@ class VoteAgent(Agent):
     def estimate_real_distribution(self, area):
         """
         The agent estimates the real color distribution in the area based on
-        her own knowledge (self.known_fields).
+        her own knowledge (self.known_cells).
         """
-        relevant_cells = area.filter_cells(self.known_cells)
-        known_colors = np.array([cell.color for cell in relevant_cells])
+        # relevant_cells = area.filter_cells(self.known_cells)
+        known_colors = np.array([cell.color for cell in self.known_cells])
         unique, counts = np.unique(known_colors, return_counts=True)
         distribution = np.zeros(self.model.num_colors)
         distribution[unique] = counts / known_colors.size
-        return distribution
+        confidence = len(self.known_cells) / area.num_cells
+        return distribution, confidence
 
 
 class ColorCell(Agent):

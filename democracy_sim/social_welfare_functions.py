@@ -7,6 +7,8 @@ pref_table: numpy matrix with one row per agent, column number is option number
             and the values (each in [0,1]) are normalized ranking values.
 The purpose of this is to allow for non-discrete and non-equidistant rankings.
 """
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 
@@ -55,7 +57,7 @@ def run_tie_breaking_preparation_for_majority(pref_table, noise_factor=100):
     noise_eps = non_zero_variances / noise_factor
     noise = np.random.uniform(-noise_eps[:, np.newaxis],
                               noise_eps[:, np.newaxis], (n, m))
-    # The noise_eps[:, np.newaxis] reshapes noise_eps from shape (n,) to (n, 1)
+    # `noise_eps[:, np.newaxis]` reshapes noise_eps from shape `(n,)` to (n, 1)
     pref_tab_var_non_zero += noise
 
     # Put the parts back together
@@ -116,16 +118,18 @@ def preprocessing_for_approval(pref_table, threshold=None):
     return (pref_table < threshold).astype(int)
 
 
-def imp_prepr_for_approval(pref_table, threshold=None):
+def imp_prepr_for_approval(pref_table):
     """
     This is just like preprocessing_for_approval, but more intelligent.
     It sets the threshold depending on the variances.
     :param pref_table: The agent's preferences.
     Beware: the values are disagreements => smaller = less disagreement
-    :param threshold: Will be overwritten (will be set according to variances).
     :return: The preference table with the options approved or not.
     """
+    # The threshold is set according to the variances
     threshold = np.mean(pref_table, axis=1) - np.var(pref_table, axis=1)
+    if TYPE_CHECKING:
+        assert isinstance(threshold, np.ndarray)
     return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
@@ -153,7 +157,7 @@ def approval_voting(pref_table):
 
 def continuous_score_voting(pref_table):
     """
-    TODO: integrade and test
+    TODO: integrate and test
     This function implements a continuous score voting based on disagreement.
     Beware: Input is a preference table (values define a ranking, index=option),
             but the output is a ranking/an ordering (values represent options).

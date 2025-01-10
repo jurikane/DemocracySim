@@ -65,9 +65,7 @@ class TestArea(unittest.TestCase):
         area.conduct_election()
         # TODO
 
-    def test_estimate_real_distribution(self):
-        # Get any existing area
-        existing_area = random.sample(self.model.areas, 1)[0]
+    def test_adding_new_area_and_agent_within_it(self):
         # Additional area and agent
         personality = random.choice(self.model.personalities)
         a = VoteAgent(num_agents + 1, self.model, pos=(0, 0),
@@ -82,26 +80,31 @@ class TestArea(unittest.TestCase):
         assert a in test_area.agents  # Test if agent is present
         print(f"Agent {a.unique_id} is in area {test_area.unique_id}")
         print(f"Areas color-cells: {[c.unique_id for c in test_area.cells]}")
+
+    def test_estimate_real_distribution(self):
+        # Get any existing area
+        rnd_area = random.sample(self.model.areas, 1)[0]
+        a = random.sample(rnd_area.agents, 1)[0]
         # Test the estimate_real_distribution method
-        k = random.sample(range(2, len(test_area.cells)), 1)[0]
+        a.update_known_cells(area=rnd_area)
+        k = len(a.known_cells)
         print(f"Sample size: {k}")
-        sample_1 = random.sample(test_area.cells, k)
-        sample_2 = random.sample(existing_area.cells, 3)
-        a.known_cells = sample_1 + sample_2
         a_colors = [c.color for c in a.known_cells]  # To test against
         print(f"Cells that agent {a.unique_id} knows of:\n"
               f"{[c.unique_id for c in a.known_cells]} with colors: {a_colors}")
-        print(f"Cells not part of the area: {[c.unique_id for c in sample_2]}")
-        rel_cells = test_area.filter_cells(a.known_cells)
-        rel_color_vec = [c.color for c in rel_cells]
-        print("The relevant cells should be:\n",
-              [c.unique_id for c in rel_cells], "with colors", rel_color_vec)
-        est_distribution = a.estimate_real_distribution(test_area)
-        print(f"{a.unique_id}s' estimated color dist is: {est_distribution}")
+        filtered = rnd_area.filter_cells(a.known_cells)
+        select_wrong = [c not in filtered for c in a.known_cells]
+        wrong = [c.unique_id for i, c in enumerate(a.known_cells)
+                 if select_wrong[i]]
+        assert not any(wrong), f"Error: Cells {wrong} are not part of the area!"
+        est_distribution, conf = a.estimate_real_distribution(rnd_area)
+        assert 0.0 < conf < 1.0, "Error: Confidence out of range [0, 1]!"
+        print(f"{a.unique_id}s' estimated color dist is: {est_distribution}",
+              f"with confidence: {conf}")
         self.assertAlmostEqual(sum(est_distribution), 1.0, places=7)
         len_colors = self.model.num_colors
         self.assertEqual(len(est_distribution), len_colors)
-        counts = [rel_color_vec.count(color) for color in range(len_colors)]
+        counts = [a_colors.count(color) for color in range(len_colors)]
         print(f"Color counts: {counts}")
         s = sum(counts)
         expected_distribution = [i / s for i in counts]

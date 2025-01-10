@@ -41,11 +41,11 @@ class TestVotingAgent(unittest.TestCase):
         k = random.sample(range(2, len(test_area.cells)), 1)[0]
         print(f"Sample size: {k}")
         a.known_cells = random.sample(test_area.cells, k)
-        est_dist = a.estimate_real_distribution(test_area)
+        est_dist, conf = a.estimate_real_distribution(test_area)
         own_prefs = a.personality
         # own_prefs = np.array([0.25, 0.5, 0.0, 0.0]) # Should also work..
         print(f"Agent {a.unique_id}s' personality: {own_prefs}"
-              f" and estimated color distribution: {est_dist}")
+              f" estimated color dist: {est_dist} with confidences: {conf}")
         for a_factor in [0.0, 0.2, 0.5, 1.0]:
             comb = combine_and_normalize(own_prefs, est_dist, a_factor)
             print(f"Assumed opt. distribution with factor {a_factor}: \n{comb}")
@@ -65,9 +65,10 @@ class TestVotingAgent(unittest.TestCase):
         max_size = len(test_area.cells)
         k = random.sample(range(2, max_size), 1)[0]
         a.known_cells = random.sample(test_area.cells, k=k)
-        est_dist = a.estimate_real_distribution(test_area)
+        est_dist, conf = a.estimate_real_distribution(test_area)
         own_prefs = a.personality
-        print(f"The agents\npersonality: {own_prefs} \nest_dist   : {est_dist}")
+        print(f"The agents\npersonality: {own_prefs} \n"
+              f"est_dist   : {est_dist} and confidences: {conf}")
         r = a.compute_assumed_opt_dist(test_area)
         print(f"Assumed optimal distribution: {r}")
         self.assertTrue(np.isclose(sum(r), 1.0, atol=1e-8))
