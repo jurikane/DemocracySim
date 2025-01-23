@@ -13,6 +13,7 @@ edit_uri: edit/dev/docs/
 nav:
     - Home: index.md
     - Teaser: teaser.md
+    - Concept: concept.md
     #- Overview: overview.md
     #- Code: the_voting_process_step_by_step.md
     - Mesa: mesa_docs.md
