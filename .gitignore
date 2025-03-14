@@ -18,3 +18,5 @@ templates
 /docs/images/CI-images
 .coverage*
 *.cache
+ai_info.txt
+convert_docstrings.py

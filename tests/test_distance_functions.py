@@ -3,8 +3,6 @@ from democracy_sim.distance_functions import *
 import numpy as np
 from itertools import combinations
 
-from democracy_sim.participation_model import ParticipationModel
-
 
 class TestKendallTauDistance(unittest.TestCase):
 

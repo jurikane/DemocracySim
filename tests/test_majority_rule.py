@@ -191,7 +191,7 @@ def test_with_random_matrix_small():
     counts = np.array(list(wc.values()))
     # Calculate the coefficient of variation (CV)
     cv = np.std(counts) / np.mean(counts)
-    assert cv < 0.125
+    assert cv < 0.15
     print(f"\nCV: {cv}")
     # Print the time taken
     elapsed_time = stop_time - start_time

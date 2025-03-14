@@ -213,7 +213,7 @@ class AreaPersonalityDists(TextElement):
                                  figsize=(8, 8), sharex=True)
         for ax, area in zip(axes.flatten(), model.areas):
             # Fetch data
-            p_dist = area.personality_dist
+            p_dist = area.personality_distribution
             num_agents = area.num_agents
             # Subplot
             heights = [int(val * num_agents) for val in p_dist]

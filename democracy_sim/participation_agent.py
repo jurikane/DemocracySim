@@ -43,7 +43,6 @@ class VoteAgent(Agent):
         :add: Whether to add the agent to the model's agent list and color cell.
           The 'add' variable is set to false on initialization of the model.
         """
-        # Pass the parameters to the parent class.
         super().__init__(unique_id=unique_id, model=model)
         # The "pos" variable in mesa is special, so I avoid it here
         try:
@@ -62,6 +61,9 @@ class VoteAgent(Agent):
             model.voting_agents.append(self)
             cell = model.grid.get_cell_list_contents([(row, col)])[0]
             cell.add_agent(self)
+        # Election relevant variables
+        self.est_real_dist = np.zeros(self.model.num_colors)
+        self.confidence = 0.0
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -149,10 +151,10 @@ class VoteAgent(Agent):
         """
         # Compute the "altruism_factor" via a decision tree
         a_factor = self.decide_altruism_factor(area)  # TODO: Implement this
-        # compute the preference ranking vector as a mix between the agent's
-        # own preferences/personality traits and the estimated real distribution
+        # Compute the preference ranking vector as a mix between the agent's own
+        #   preferences/personality traits and the estimated real distribution.
         est_dist, conf = self.estimate_real_distribution(area)
-        ass_opt = combine_and_normalize(self.personality, est_dist, a_factor)
+        ass_opt = combine_and_normalize(est_dist, self.personality, a_factor)
         return ass_opt
 
     def vote(self, area):
@@ -166,23 +168,13 @@ class VoteAgent(Agent):
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
-        # TODO est_best_dist = self.compute_assumed_opt_dist(area)
+        est_best_dist = self.compute_assumed_opt_dist(area)
         # Make sure that r= is normalized!
         # (r.min()=0.0 and r.max()=1.0 and all vals x are within [0.0, 1.0]!)
         ##############
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
-        # # For TESTING
-        # # we just shuffle the option vector (ints) then normalize
-        # # and interpret the result as a preference vector (values=prefs)
-        # # (makes no sense, but it'll work for testing)
-        # r = np.arange(self.model.options.shape[0])
-        # # Shuffle the array in place
-        # np.random.shuffle(r)
-        # r = np.array(r, dtype=float)
-        # r /= r.sum()
-        # return r
-        ##############
+
         options = self.model.options
         dist_func = self.model.distance_func
         ranking = np.zeros(options.shape[0])
@@ -200,27 +192,38 @@ class VoteAgent(Agent):
         """
         # relevant_cells = area.filter_cells(self.known_cells)
         known_colors = np.array([cell.color for cell in self.known_cells])
+        # Get the unique color ids present and count their occurrence
         unique, counts = np.unique(known_colors, return_counts=True)
-        distribution = np.zeros(self.model.num_colors)
-        distribution[unique] = counts / known_colors.size
-        confidence = len(self.known_cells) / area.num_cells
-        return distribution, confidence
+        # Update the est_real_dist and confidence values of the agent
+        self.est_real_dist.fill(0)  # To ensure the ones not in unique are 0
+        self.est_real_dist[unique] = counts / known_colors.size
+        self.confidence = len(self.known_cells) / area.num_cells
+        return self.est_real_dist, self.confidence
 
 
 class ColorCell(Agent):
     """
-    Represents a cell's color
+    Represents a single cell (a field in the grid) with a specific color.
+
+    Attributes:
+        color (int): The color of the cell.
     """
 
     def __init__(self, unique_id, model, pos, initial_color: int):
         """
-        Create a cell, in the given state, at the given row, col position.
+        Initializes a ColorCell, at the given row, col position.
+
+        Args:
+            unique_id (int): The unique identifier of the cell.
+            model (mesa.Model): The mesa model of which the cell is part of.
+            pos (Tuple[int, int]): The position of the cell in the grid.
+            initial_color (int): The initial color of the cell.
         """
         super().__init__(unique_id, model)
         # The "pos" variable in mesa is special, so I avoid it here
         self._row = pos[0]
         self._col = pos[1]
-        self._color = initial_color  # The cell's current color (int)
+        self.color = initial_color  # The cell's current color (int)
         self._next_color = None
         self.agents = []
         self.areas = []
@@ -244,15 +247,6 @@ class ColorCell(Agent):
     def position(self):  # The variable pos is special in mesa!
         """The location of this cell."""
         return self._row, self._col
-
-    @property
-    def color(self):
-        """The current color of this cell."""
-        return self._color
-
-    @color.setter
-    def color(self, value):
-        self._color = value
 
     @property
     def num_agents_in_cell(self):

@@ -13,7 +13,23 @@ edit_uri: edit/dev/docs/
 nav:
     - Home: index.md
     - Teaser: teaser.md
-    - Concept: concept.md
+    - Research:
+        - Concept: research/research_concept.md
+        - Metrics: research/metrics.md
+        - Goals: research/goals.md
+    - Technical:
+        - Overview: technical/technical_overview.md
+        - Installation Instructions: technical/installation_instructions.md
+        - API Reference:
+            - Model (Environment): technical/api/Model.md
+            - Area (Territory): technical/api/Area.md
+            - Grid Cell: technical/api/ColorCell.md
+            - Voting Agent: technical/api/VoteAgent.md
+            - Inherited Classes: technical/api/inherited.md
+        #- User Guide: technical/user_guide.md #1. Provide step-by-step guides for common project usage.
+        #- Examples: technical/examples.md #1. Show key use cases via practical code examples or interactive demos.
+        #- Developer Docs: technical/dev_docs.md #Offer guidelines for contributing or extending the project (e.g., folder structure, conventions, CI/CD pipelines).
+        - Architecture Overview: technical/architecture_overview.md
     #- Overview: overview.md
     #- Code: the_voting_process_step_by_step.md
     - Mesa: mesa_docs.md
@@ -51,6 +67,8 @@ theme:
     - toc.follow
     - toc.integrate
     - search.share
+    - search.highlight
+    - search.suggest
     - content.action.edit
 # Plugins
 plugins:
@@ -65,6 +83,8 @@ plugins:
           name: Deutsch
           build: true
   - search
+  - mkdocstrings:
+      default_handler: python
 
 # Extensions
 markdown_extensions:
