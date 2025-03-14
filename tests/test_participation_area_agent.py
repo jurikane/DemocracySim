@@ -23,7 +23,7 @@ class TestArea(unittest.TestCase):
         all_color_cells = self.model.color_cells
         rand_area.cells = random.sample(all_color_cells, len(rand_area.cells))
         # Run/test the update_color_distribution method
-        rand_area.update_color_distribution()
+        rand_area._update_color_distribution()
         new_dst = rand_area.color_distribution
         print(f"Area {rand_area.unique_id}s new color distribution: {new_dst}")
         # Check if the distribution has changed
@@ -39,10 +39,10 @@ class TestArea(unittest.TestCase):
         other_cells = random.sample(self.model.color_cells, 4)
         raw_cell_list = area_cell_sample + other_cells
         print(f"Cells to be filtered: {[c.unique_id for c in raw_cell_list]}")
-        filtered_cells = existing_area.filter_cells(raw_cell_list)
+        filtered_cells = existing_area._filter_cells(raw_cell_list)
         print(f"Filtered cells:       {[c.unique_id for c in filtered_cells]}")
         # Check if the cells are filtered correctly
-        add_cells = existing_area.filter_cells(other_cells)
+        add_cells = existing_area._filter_cells(other_cells)
         if len(add_cells) > 0:
             print(f"Additional cells: {[c.unique_id for c in add_cells]}")
             area_cell_sample += add_cells
@@ -53,16 +53,16 @@ class TestArea(unittest.TestCase):
         # Test with majority_rule and spearman
         self.model.voting_rule = majority_rule
         self.model.distance_func = spearman
-        area.conduct_election()
+        area._conduct_election()
         # Test with approval_voting and spearman
         self.model.voting_rule = approval_voting
-        area.conduct_election()
+        area._conduct_election()
         # Test with approval_voting and kendall_tau
         self.model.distance_func = kendall_tau
-        area.conduct_election()
+        area._conduct_election()
         # Test with majority_rule and kendall_tau
         self.model.voting_rule = majority_rule
-        area.conduct_election()
+        area._conduct_election()
         # TODO
 
     def test_adding_new_area_and_agent_within_it(self):
@@ -92,7 +92,7 @@ class TestArea(unittest.TestCase):
         a_colors = [c.color for c in a.known_cells]  # To test against
         print(f"Cells that agent {a.unique_id} knows of:\n"
               f"{[c.unique_id for c in a.known_cells]} with colors: {a_colors}")
-        filtered = rnd_area.filter_cells(a.known_cells)
+        filtered = rnd_area._filter_cells(a.known_cells)
         select_wrong = [c not in filtered for c in a.known_cells]
         wrong = [c.unique_id for i, c in enumerate(a.known_cells)
                  if select_wrong[i]]
