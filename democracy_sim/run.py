@@ -9,7 +9,8 @@ from democracy_sim.visualisation_elements import *
 class CustomModularServer(ModularServer):
     """ This is to prevent double initialization of the model.
     For some reason, the Server resets the model once on initialization
-    and again on server launch. """
+    and again on server launch.
+    """
     def __init__(self, model_cls, visualization_elements,
                  name="Mesa Model", model_params=None, port=None):
         self.initialized = False

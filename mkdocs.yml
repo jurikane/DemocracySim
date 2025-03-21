@@ -19,17 +19,18 @@ nav:
         - Goals: research/goals.md
     - Technical:
         - Overview: technical/technical_overview.md
-        - Installation Instructions: technical/installation_instructions.md
+        #- Installation Instructions: technical/installation_instructions.md
         - API Reference:
             - Model (Environment): technical/api/Model.md
             - Area (Territory): technical/api/Area.md
             - Grid Cell: technical/api/ColorCell.md
             - Voting Agent: technical/api/VoteAgent.md
             - Inherited Classes: technical/api/inherited.md
+            - Utility Functions: technical/api/Utility_functions.md
         #- User Guide: technical/user_guide.md #1. Provide step-by-step guides for common project usage.
         #- Examples: technical/examples.md #1. Show key use cases via practical code examples or interactive demos.
         #- Developer Docs: technical/dev_docs.md #Offer guidelines for contributing or extending the project (e.g., folder structure, conventions, CI/CD pipelines).
-        - Architecture Overview: technical/architecture_overview.md
+        #- Architecture Overview: technical/architecture_overview.md
     #- Overview: overview.md
     #- Code: the_voting_process_step_by_step.md
     - Mesa: mesa_docs.md
