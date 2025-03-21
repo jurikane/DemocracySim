@@ -1,5 +1,9 @@
 from math import comb
 import numpy as np
+from numpy.typing import NDArray
+from typing import TypeAlias
+
+FloatArray: TypeAlias = NDArray[np.float64]
 
 
 def kendall_tau_on_ranks(rank_arr_1, rank_arr_2, search_pairs, color_vec):
@@ -15,11 +19,15 @@ def kendall_tau_on_ranks(rank_arr_1, rank_arr_2, search_pairs, color_vec):
     Rank vectors hold the rank of each option (option = index).
     Not to be confused with an ordering (or sequence) where the vector
     holds options and the index is the rank.
-    :param rank_arr_1: First (NumPy) array containing the ranks of each option
-    :param rank_arr_2: The second rank array
-    :param search_pairs: The pairs of indices (for efficiency)
-    :param color_vec: The vector of colors (for efficiency)
-    :return: The kendall tau distance
+
+    Args:
+        rank_arr_1: First (NumPy) array containing the ranks of each option
+        rank_arr_2: The second rank array
+        search_pairs: The pairs of indices (for efficiency)
+        color_vec: The vector of colors (for efficiency)
+
+    Returns:
+        The kendall tau distance
     """
     # Get the ordering (option names being 0 to length)
     ordering_1 = np.argsort(rank_arr_1)
@@ -46,10 +54,14 @@ def unnormalized_kendall_tau(ordering_1, ordering_2, search_pairs):
     """
     This function calculates the kendal tau distance on two orderings.
     An ordering holds the option names in the order of their rank (rank=index).
-    :param ordering_1: First (NumPy) array containing ranked options
-    :param ordering_2: The second ordering array
-    :param search_pairs: Containing search pairs of indices (for efficiency)
-    :return: The kendall tau distance
+
+    Args:
+        ordering_1: First (NumPy) array containing ranked options
+        ordering_2: The second ordering array
+        search_pairs: Containing search pairs of indices (for efficiency)
+
+    Returns:
+        The kendall tau distance
     """
     # Rename the elements to reduce the problem to counting inversions
     mapping = {option: idx for idx, option in enumerate(ordering_1)}
@@ -70,10 +82,14 @@ def kendall_tau(ordering_1, ordering_2, search_pairs):
     The larger the distance, the more dissimilar the two lists are.
     Kendall tau distance is also called bubble-sort distance.
     An ordering holds the option names in the order of their rank (rank=index).
-    :param ordering_1: First (NumPy) array containing ranked options
-    :param ordering_2: The second ordering array
-    :param search_pairs: Containing the pairs of indices (for efficiency)
-    :return: The kendall tau distance
+
+    Args:
+        ordering_1: First (NumPy) array containing ranked options
+        ordering_2: The second ordering array
+        search_pairs: Containing the pairs of indices (for efficiency)
+
+    Returns:
+        The kendall tau distance
     """
     # TODO: remove these tests (comment out) on actual simulations to speed up
     n = ordering_1.size
@@ -103,9 +119,13 @@ def spearman_distance(rank_arr_1, rank_arr_2):
     of the two lists.
     This function is meant to work with numeric values as well.
     Hence, we only assume the rank values to be comparable (e.q. normalized).
-    :param rank_arr_1: First (NumPy) array containing the ranks of each option
-    :param rank_arr_2: The second rank array
-    :return: The Spearman distance
+
+    Args:
+        rank_arr_1: First (NumPy) array containing the ranks of each option
+        rank_arr_2: The second rank array
+
+    Returns:
+        The Spearman distance
     """
     # TODO: remove these tests (comment out) on actual simulations
     assert rank_arr_1.size == rank_arr_2.size, \
@@ -123,10 +143,14 @@ def spearman(ordering_1, ordering_2, _search_pairs=None):
     Spearman's foot rule is a measure of the distance between ranked lists.
     It is given as the sum of the absolute differences between the ranks
     of the two orderings (values from 0 to n-1 in any order).
-    :param ordering_1: The first (NumPy) array containing the option's ranks.
-    :param ordering_2: The second rank array.
-    :param _search_pairs: This parameter is intentionally unused.
-    :return: The Spearman distance
+
+    Args:
+        ordering_1: The first (NumPy) array containing the option's ranks.
+        ordering_2: The second rank array.
+        _search_pairs: This parameter is intentionally unused.
+
+    Returns:
+        The Spearman distance
     """
     # TODO: remove these tests (comment out) on actual simulations to speed up
     n = ordering_1.size

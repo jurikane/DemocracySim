@@ -10,10 +10,17 @@ def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
     Combine two arrays weighted by a factor favoring arr_1.
     The first array is to be the estimated real distribution.
     And the other is to be the personality vector of the agent.
-    :param arr_1: The first array to be combined (real distribution).
-    :param arr_2: The second array to be combined (personality vector).
-    :param factor: The factor to weigh the two arrays.
-    :return: The normalized result of the weighted linear combination.
+
+    Args:
+        arr_1: The first array to be combined (real distribution).
+        arr_2: The second array to be combined (personality vector).
+        factor: The factor to weigh the two arrays.
+
+    Returns:
+        result (np.array): The normalized weighted linear combination.
+
+    Example:
+        TODO
     """
     # Ensure f is between 0 and 1 TODO: remove this on simulations to speed up
     if not (0 <= factor <= 1):
@@ -28,20 +35,18 @@ def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
 
 class VoteAgent(Agent):
     """An agent that has limited knowledge and resources and
-    can decide to use them to participate in elections."""
+    can decide to use them to participate in elections.
+    """
 
     def __init__(self, unique_id, model, pos, personality, assets=1, add=True):
         """ Create a new agent.
-        :param unique_id: The unique identifier of the agent.
-        :param model: The simulation model of which the agent is part of.
-        :type model: ParticipationModel
-        :param pos: The position of the agent in the grid.
-        :type pos: Tuple
-        :param personality: Represents the agent's preferences among colors.
-        :type personality: Numpy.ndarray
-        :param assets: The wealth/assets/motivation of the agent.
-        :add: Whether to add the agent to the model's agent list and color cell.
-          The 'add' variable is set to false on initialization of the model.
+
+        Attributes:
+            unique_id: The unique identifier of the agent.
+            model: The simulation model of which the agent is part of.
+            pos: The position of the agent in the grid.
+            personality: Represents the agent's preferences among colors.
+            assets: The wealth/assets/motivation of the agent.
         """
         super().__init__(unique_id=unique_id, model=model)
         # The "pos" variable in mesa is special, so I avoid it here
@@ -108,7 +113,9 @@ class VoteAgent(Agent):
     def update_known_cells(self, area):
         """
         This method is to update the list of known cells before casting a vote.
-        :param area: The area that holds the pool of cells in question
+
+        Args:
+            area: The area that holds the pool of cells in question
         """
         n_cells = len(area.cells)
         k = len(self.known_cells)
@@ -122,8 +129,12 @@ class VoteAgent(Agent):
         """
         The agent decides
         whether to participate in the upcoming election of a given area.
-        :param area: The area in which the election takes place.
-        :return: True if the agent decides to participate, False otherwise
+
+        Args:
+            area: The area in which the election takes place.
+
+        Returns:
+            True if the agent decides to participate, False otherwise
         """
         #print("Agent", self.unique_id, "decides whether to participate",
         #      "in election of area", area.unique_id)
@@ -145,9 +156,12 @@ class VoteAgent(Agent):
         Computes a color distribution that the agent assumes to be an optimal
         choice in any election (regardless of whether it exists as a real option
         to vote for or not). It takes "altruistic" concepts into consideration.
-        :param area: The area in which the election takes place.
-        :return: The assumed optimal color distribution (normalized).
-        TODO add unit test for this method
+
+        Args:
+            area (Area): The area in which the election takes place.
+
+        Returns:
+            ass_opt: The assumed optimal color distribution (normalized).
         """
         # Compute the "altruism_factor" via a decision tree
         a_factor = self.decide_altruism_factor(area)  # TODO: Implement this
@@ -163,8 +177,9 @@ class VoteAgent(Agent):
         i.e., she returns a preference ranking vector over all options.
         (Ranking: `index = option`, `value proportional to rank`)
         The available options are set in the model.
-        :param area: The area in which the election takes place.
-        :return ranking: A normalized preference-ranking (sum-normalization)
+
+        Args:
+            area (Area): The area in which the election takes place.
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
@@ -189,8 +204,10 @@ class VoteAgent(Agent):
         """
         The agent estimates the real color distribution in the area based on
         her own knowledge (self.known_cells).
+
+        Args:
+            area (Area): The area the agent uses to estimate.
         """
-        # relevant_cells = area.filter_cells(self.known_cells)
         known_colors = np.array([cell.color for cell in self.known_cells])
         # Get the unique color ids present and count their occurrence
         unique, counts = np.unique(known_colors, return_counts=True)
@@ -209,7 +226,7 @@ class ColorCell(Agent):
         color (int): The color of the cell.
     """
 
-    def __init__(self, unique_id, model, pos, initial_color: int):
+    def __init__(self, unique_id, model, pos: tuple, initial_color: int):
         """
         Initializes a ColorCell, at the given row, col position.
 

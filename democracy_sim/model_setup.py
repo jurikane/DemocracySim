@@ -99,9 +99,11 @@ def participation_draw(cell: ColorCell):
     This function is registered with the visualization server to be called
     each tick to indicate how to draw the cell in its current color.
 
-    :param cell: The cell in the simulation
+    Args:
+        cell: The cell in the simulation
 
-    :return: The portrayal dictionary.
+    Returns:
+        The portrayal dictionary.
     """
     if cell is None:
         raise AssertionError
