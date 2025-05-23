@@ -86,6 +86,10 @@ plugins:
   - search
   - mkdocstrings:
       default_handler: python
+      handlers:
+        python:
+          options:
+            show_private_members: true
 
 # Extensions
 markdown_extensions:

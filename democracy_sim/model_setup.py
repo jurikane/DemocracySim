@@ -3,10 +3,10 @@ This file handles the definition of the canvas and model parameters.
 """
 from typing import TYPE_CHECKING, cast
 from mesa.visualization.modules import ChartModule
-from democracy_sim.participation_agent import ColorCell
-from democracy_sim.participation_model import (ParticipationModel,
-                                               distance_functions,
-                                               social_welfare_functions)
+from participation_agent import ColorCell
+from participation_model import (ParticipationModel,
+                                 distance_functions,
+                                 social_welfare_functions)
 from math import factorial
 import mesa
 

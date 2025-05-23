@@ -38,7 +38,8 @@ class VoteAgent(Agent):
     can decide to use them to participate in elections.
     """
 
-    def __init__(self, unique_id, model, pos, personality, assets=1, add=True):
+    def __init__(self, unique_id, model, pos, personality=None,
+                 personality_idx=None, assets=1, add=True):
         """ Create a new agent.
 
         Attributes:
@@ -46,6 +47,7 @@ class VoteAgent(Agent):
             model: The simulation model of which the agent is part of.
             pos: The position of the agent in the grid.
             personality: Represents the agent's preferences among colors.
+            personality_idx: Index of personality in model's personalities list.
             assets: The wealth/assets/motivation of the agent.
         """
         super().__init__(unique_id=unique_id, model=model)
@@ -58,6 +60,7 @@ class VoteAgent(Agent):
         self._assets = assets
         self._num_elections_participated = 0
         self.personality = personality
+        self.personality_idx = personality_idx
         self.cell = model.grid.get_cell_list_contents([(row, col)])[0]
         # ColorCell objects the agent knows (knowledge)
         self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells

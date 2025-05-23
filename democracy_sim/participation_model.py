@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, cast, List, Optional
 import mesa
-from democracy_sim.participation_agent import VoteAgent, ColorCell
-from democracy_sim.social_welfare_functions import majority_rule, approval_voting
-from democracy_sim.distance_functions import spearman, kendall_tau
+from participation_agent import VoteAgent, ColorCell
+from social_welfare_functions import majority_rule, approval_voting
+from distance_functions import spearman, kendall_tau
 from itertools import permutations, product, combinations
 from math import sqrt
 import numpy as np
@@ -343,6 +343,21 @@ def compute_collective_assets(model):
     sum_assets = sum(agent.assets for agent in model.voting_agents)
     return sum_assets
 
+def get_grid_colors(model):
+    """
+    Returns the current grid state as a list of rows.
+    Each row is a list of cell colors. Assumes that the cells were
+    created in row-major order and stored in model.color_cells.
+    """
+    grid = []
+    for row in range(model.height):
+        start = row * model.width
+        end = start + model.width
+        # Get the color for each cell in the row.
+        row_colors = [model.color_cells[i].color for i in range(start, end)]
+        grid.append(row_colors)
+    return grid
+
 
 def compute_gini_index(model):
     # TODO: separate to be able to calculate it zone-wise as well as globally
@@ -644,10 +659,12 @@ class ParticipationModel(mesa.Model):
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
-            personality = rng.choice(self.personalities, p=dist)
+            # Choose a personality based on the distribution
+            personality_idx = rng.choice(len(self.personalities), p=dist)
+            personality = self.personalities[personality_idx]
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(a_id, self, (x, y), personality,
-                              assets=assets, add=False)  # TODO: initial assets?!
+                              personality_idx, assets=assets, add=False)  # TODO: initial assets?!
             self.voting_agents[a_id] = agent  # Add using the index (faster)
             # Add the agent to the grid by placing it on a cell
             cell = self.grid.get_cell_list_contents([(x, y)])[0]
@@ -801,7 +818,8 @@ class ParticipationModel(mesa.Model):
                 "Collective assets": compute_collective_assets,
                 "Gini Index (0-100)": compute_gini_index,
                 "Voter turnout globally (in percent)": get_voter_turnout,
-                **color_data
+                **color_data,
+                "GridColors": get_grid_colors
             },
             agent_reporters={
                 # "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,

@@ -1,7 +1,11 @@
 /.idea
 .DS_Store
+.junie
+TODO.txt
 __pycache__/
 *.ipynb
+/democracy_sym/config/*
+/democracy_sym/simulation_output/*
 /examples
 /starter_model
 /mesa
@@ -22,3 +26,4 @@ templates
 *.cache
 ai_info.txt
 convert_docstrings.py
+simulation_output/
