@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/mesa_docs/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/mesa_docs/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/mesa_docs/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/teaser/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/teaser/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/teaser/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/research/goals/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/goals/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/goals/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/research/metrics/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/metrics/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/metrics/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/research/research_concept/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/research_concept/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/research_concept/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/approval_voting/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/approval_voting/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/approval_voting/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/preference_relations/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/preference_relations/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/preference_relations/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/technical_overview/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/technical_overview/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/technical_overview/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/Area/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Area/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Area/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/ColorCell/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/ColorCell/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/ColorCell/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/Model/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Model/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Model/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/Utility_functions/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Utility_functions/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Utility_functions/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/VoteAgent/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/VoteAgent/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/VoteAgent/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/technical/api/inherited/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/inherited/"/>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/inherited/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/mesa_docs/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/mesa_docs/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/mesa_docs/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/teaser/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/teaser/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/teaser/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/QA/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/QA/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/research/goals/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/goals/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/goals/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/research/metrics/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/metrics/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/metrics/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/research/research_concept/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/research/research_concept/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/research/research_concept/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/approval_voting/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/approval_voting/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/approval_voting/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/preference_relations/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/preference_relations/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/preference_relations/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/technical_overview/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/technical_overview/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/technical_overview/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/Area/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Area/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Area/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/ColorCell/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/ColorCell/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/ColorCell/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/Model/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Model/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Model/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/Utility_functions/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/Utility_functions/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/Utility_functions/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/VoteAgent/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/VoteAgent/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/VoteAgent/"/>
+    </url>
+    <url>
+        <loc>https://jurikane.github.io/DemocracySim/de/technical/api/inherited/</loc>
+        <lastmod>2025-06-15</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="de" href="https://jurikane.github.io/DemocracySim/de/technical/api/inherited/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://jurikane.github.io/DemocracySim/technical/api/inherited/"/>
+    </url>
+</urlset>
