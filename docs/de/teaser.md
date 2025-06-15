@@ -1,8 +1,8 @@
-# Zukunft gestalten: Demokratische Forschung zur Bewältigung globaler Herausforderungen
+# Zukunft gestalten: Demokratie-Forschung zur Bewältigung globaler Herausforderungen
 
 In einer Welt voller Komplexität und Unsicherheit stehen wir an einem Scheideweg. 
 Dringende globale Herausforderungen wie der Klimawandel[^9], soziale Ungleichheit[^8] und die ethischen Dilemmata[^4], 
-die mit dem rasanten Fortschritt der künstlichen Intelligenz (KI) einhergehen, drängen nach Lösungen.
+die mit dem rasanten Fortschritt künstlicher Intelligenz (KI) einhergehen, drängen nach Lösungen.
 
 Eine Zukunft, in der KI die menschliche Intelligenz in vielen Bereichen übertrifft, erscheint zunehmend wahrscheinlich[^3]. 
 Können wir diese Technologie sinnvoll und sicher in bestehende Governance-Verfahren und Strukturen integrieren? 
@@ -47,13 +47,17 @@ Reale demokratische Verwaltung geht weit über das bloße Ineinklangbringen indi
 beinhaltet Pfadabhängigkeiten vergangener Entscheidungen, Desinformation und mangelnde Beteiligung, 
 um nur einige offensichtliche Herausforderungen zu nennen.
 
-Diese Herausforderungen zu bewältigen, erfordert innovative Ansätze. 
-Dieses Projekt zielt darauf ab, langfristig möglichst viele dieser Einflüsse durch Multi-Agenten-basierte Simulationen integriert zu untersuchen.
+Um diese Herausforderungen zu bewältigen, sind innovative Ansätze erforderlich. 
+Das vorliegende Projekt zielt darauf ab, langfristig möglichst viele dieser Einflüsse durch Multi-Agenten-basierte 
+Simulationen integriert zu untersuchen.
 
-Während das Modell und die Forschungsfragen der vorgeschlagenen Masterarbeit 
-diesen Ansatz nur in seinen absoluten Grundzügen darstellen können, sollte das Potenzial, durch Multi-Agenten-basiertes Modellieren 
-langfristig alle wesentlichen Aspekte der realen demokratischen Selbstverwaltung untersuchen zu können, 
-nicht unterschätzt werden. 
+Das Modell und die Forschungsfragen einer Masterarbeit 
+können diesen Ansatz natürlich nur in ihren absoluten Grundzügen darstellen. 
+Soweit uns bekannt, wurde dieser Ansatz noch nicht systematisch in der 
+Erforschung kollektiver Entscheidungsfindung angewandt, weshalb wir auch sehr grundlegend beginnen.
+Dennoch sollte das Potenzial von Multi-Agenten-basiertem Modellieren nicht unterschätzt werden. 
+Langfristig wird dadurch sehr wahrscheinlich ermöglicht, 
+alle wesentlichen Aspekte der realen demokratischen Selbstverwaltung zu untersuchen[^10].
 Die kollektive Intelligenz einer Gesellschaft durch verbesserte Governance-Verfahren zu stärken, 
 ist wahrscheinlich der effektivste Weg und unser größter Hebel, die Herausforderungen unserer Zeit zu meistern.
 
@@ -76,3 +80,5 @@ ist wahrscheinlich der effektivste Weg und unser größter Hebel, die Herausford
 [^8]: Thomas Piketty. Das Kapital im 21. Jahrhundert. CH Beck, 2014.
 
 [^9]: Hans-Otto Pörtner, Debra C Roberts, H Adams, C Adler, P Aldunce, E Ali, R Ara Begum, R Betts, R Bezner Kerr, R Biesbroek, et al. [Climate change 2022: Impacts, adaptation and vulnerability](https://hal.science/hal-03774939/document). IPCC Sixth Assessment Report, 2022.
+
+[^10]: Robert L Axtell and J Doyne Farmer. [Agent-based modeling in economics and finance](https://oms-inet.files.svdcdn.com/production/files/JEL-v2.0.pdf): Past, present, and future. In: Journal of Economic Literature (2022), pp. 1–10

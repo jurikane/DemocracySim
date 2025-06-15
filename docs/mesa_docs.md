@@ -10,7 +10,7 @@ Mesa is highly flexible, allowing to simulate complex systems and observe emerge
 
 ### Agent-Based Modeling and Complex Societal Questions
 
-Multi-agent based simulation is a valuable tool to research voting rules and collective decision-making
+Multi-agent-based simulation is a valuable tool to research voting rules and collective decision-making
 as it allows for the modeling of very complex interactions that are challenging to capture with traditional methods[^3].
 ABM is mainly used to research and analyze complex relationships. 
 The focus is on understanding how individual behaviors and interactions lead to collective outcomes. 
