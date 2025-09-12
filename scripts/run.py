@@ -1,9 +1,9 @@
 from mesa.visualization.ModularVisualization import ModularServer
-from democracy_sim.participation_model import ParticipationModel
-from democracy_sim.model_setup import (model_params as params, canvas_element,
-                                       voter_turnout, wealth_chart,
-                                       color_distribution_chart)
-from democracy_sim.visualisation_elements import *
+from src.participation_model import ParticipationModel
+from src.model_setup import (model_params as params, canvas_element,
+                             voter_turnout, wealth_chart,
+                             color_distribution_chart)
+from src.utils.visualisation_elements import *
 
 
 class CustomModularServer(ModularServer):

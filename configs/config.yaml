@@ -9,8 +9,8 @@ model:
   distance_idx: 1
 
   # Model parameters
-  num_agents: 800
-  common_assets: 40000
+  num_agents: 5
+  common_assets: 400
   num_colors: 3
   color_patches_steps: 3
   patch_power: 1.0
@@ -27,17 +27,17 @@ model:
   draw_borders: true
 
   # Voting Areas
-  num_areas: 16
-  av_area_height: 25
-  av_area_width: 20
+  num_areas: 2
+  av_area_height: 50
+  av_area_width: 80
   area_size_variance: 0.0
 
   # Statistics and Views
   show_area_stats: true
 
 simulation:
-  runs:         2     # number of independent seeds
-  num_steps:    100
+  runs:         3     # number of independent seeds
+  num_steps:    3
   processes:    8      # ≤ CPU cores
   store_grid:   true  # set true only if you really need full grids
   grid_interval: 1    # save every 10th step if grids enabled

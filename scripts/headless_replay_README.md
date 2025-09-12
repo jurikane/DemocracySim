@@ -21,7 +21,7 @@ This workflow allows you to:
 To run a simulation in headless mode:
 
 ```bash
-cd democracy_sim
+cd src
 python run_headless.py
 ```
 
@@ -35,7 +35,7 @@ By default, this will:
 You can specify a custom configuration file:
 
 ```bash
-python run_headless.py --config path/to/your/config.yaml
+python run_headless.py --configs path/to/your/configs.yaml
 ```
 
 ### Output Files
@@ -56,7 +56,7 @@ The headless simulation produces two main output files:
 To replay a previously saved simulation:
 
 ```bash
-cd democracy_sim
+cd src
 python run_replay.py
 ```
 

@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, cast, List, Optional
 import numpy as np
 from mesa import Agent
 if TYPE_CHECKING:  # Type hint for IDEs
-    from democracy_sim.participation_model import ParticipationModel
+    from src.participation_model import ParticipationModel
 
 
 def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
@@ -156,6 +156,7 @@ class VoteAgent(Agent):
 
     def compute_assumed_opt_dist(self, area):
         """
+        # TODO PRIO 4 (this part is not used) => think about using personality as dist and personality_idx as is (pointer to ordering) and use either as required | also think about making classes for orders and dists to not confuse them and have it set up correctly and well documented
         Computes a color distribution that the agent assumes to be an optimal
         choice in any election (regardless of whether it exists as a real option
         to vote for or not). It takes "altruistic" concepts into consideration.
@@ -186,7 +187,7 @@ class VoteAgent(Agent):
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
-        est_best_dist = self.compute_assumed_opt_dist(area)
+        est_best_dist = self.compute_assumed_opt_dist(area)  # TODO !!! (Why is this not used ???)
         # Make sure that r= is normalized!
         # (r.min()=0.0 and r.max()=1.0 and all vals x are within [0.0, 1.0]!)
         ##############
