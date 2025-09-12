@@ -1,4 +1,4 @@
-# configs.yaml
+# To use this configuration, set: CONFIG_FILE=toy.yaml
 model:
   # Elections
   election_costs: 1
@@ -9,28 +9,28 @@ model:
   distance_idx: 1
 
   # Model parameters
-  num_agents: 800
-  common_assets: 40000
+  num_agents: 5
+  common_assets: 500
   num_colors: 3
   color_patches_steps: 3
   patch_power: 1.0
   heterogeneity: 0.3  # color_heterogeneity
-  known_cells: 10
+  known_cells: 5
 
   # Voting Agents
-  num_personalities: 4
+  num_personalities: 3
 
   # Grid parameters
-  height: 100            # (grid_rows)
-  width: 80              # (grid_cols)
-  cell_size: 10
+  height: 20            # (grid_rows)
+  width: 10             # (grid_cols)
+  cell_size: 50
 
   draw_borders: true
 
   # Voting Areas
-  num_areas: 16
-  av_area_height: 25
-  av_area_width: 20
+  num_areas: 2
+  av_area_height: 10
+  av_area_width: 10
   area_size_variance: 0.0
 
   # Statistics and Views

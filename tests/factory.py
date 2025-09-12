@@ -1,4 +1,4 @@
-from democracy_sim.participation_model import ParticipationModel
+from src.participation_model import ParticipationModel
 
 
 def create_default_model(**overrides):

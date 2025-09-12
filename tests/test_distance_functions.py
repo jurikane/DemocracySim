@@ -1,5 +1,5 @@
 import unittest
-from democracy_sim.distance_functions import *
+from src.utils.distance_functions import *
 import numpy as np
 from itertools import combinations
 

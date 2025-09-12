@@ -1,17 +1,17 @@
 import unittest
-from democracy_sim.participation_model import (ParticipationModel, Area,
-                                               distance_functions,
-                                               social_welfare_functions)
-from democracy_sim.model_setup import (grid_rows as height, grid_cols as width,
-                                       num_agents, num_colors, num_areas,
-                                       num_personalities, common_assets, mu,
-                                       known_cells,
-                                       election_impact_on_mutation as e_impact,
-                                       draw_borders, rule_idx, distance_idx,
-                                       color_heterogeneity as heterogeneity,
-                                       color_patches_steps, av_area_height,
-                                       av_area_width, area_size_variance,
-                                       patch_power, election_costs, max_reward)
+from src.participation_model import (ParticipationModel, Area,
+                                     distance_functions,
+                                     social_welfare_functions)
+from src.model_setup import (grid_rows as height, grid_cols as width,
+                             num_agents, num_colors, num_areas,
+                             num_personalities, common_assets, mu,
+                             known_cells,
+                             election_impact_on_mutation as e_impact,
+                             draw_borders, rule_idx, distance_idx,
+                             color_heterogeneity as heterogeneity,
+                             color_patches_steps, av_area_height,
+                             av_area_width, area_size_variance,
+                             patch_power, election_costs, max_reward)
 import mesa
 
 

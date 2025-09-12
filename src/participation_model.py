@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, cast, List, Optional
 import mesa
-from participation_agent import VoteAgent, ColorCell
-from social_welfare_functions import majority_rule, approval_voting
-from distance_functions import spearman, kendall_tau
+from src.agents.participation_agent import VoteAgent, ColorCell
+from src.utils.social_welfare_functions import majority_rule, approval_voting
+from src.utils.distance_functions import spearman, kendall_tau
 from itertools import permutations, product, combinations
 from math import sqrt
 import numpy as np
@@ -142,7 +142,11 @@ class Area(mesa.Agent):
             for y_area in range(self._height):
                 x = (adjusted_x + x_area) % self.model.width
                 y = (adjusted_y + y_area) % self.model.height
-                cell = self.model.grid.get_cell_list_contents([(x, y)])[0]
+                contents = self.model.grid.get_cell_list_contents([(x, y)])
+                if not contents:
+                    raise RuntimeError(
+                        f"Grid cell ({x},{y}) is empty – expected a ColorCell.")
+                cell = contents[0]
                 if TYPE_CHECKING:
                     cell = cast(ColorCell, cell)
                 self.add_cell(cell)  # Add the cell to the area
@@ -150,8 +154,8 @@ class Area(mesa.Agent):
                 for agent in cell.agents:
                     self.add_agent(agent)
                 cell.add_area(self)  # Add the area to the color-cell
-                # Mark as a border cell if true
-                if (x_area == 0 or y_area == 0
+                # Mark as a border cell if true, but not for the global area
+                if self.unique_id != -1 and (x_area == 0 or y_area == 0
                         or x_area == self._width - 1
                         or y_area == self._height - 1):
                     cell.is_border_cell = True
@@ -731,15 +735,11 @@ class ParticipationModel(mesa.Model):
         if self.num_areas == 0:
             return
         # Calculate the number of areas in each direction
-        roo_apx = round(sqrt(self.num_areas))
         nr_areas_x = self.grid.width // self.av_area_width
-        nr_areas_y = self.grid.width // self.av_area_height
+        nr_areas_y = self.grid.height // self.av_area_height
         # Calculate the distance between the areas
-        area_x_dist = self.grid.width // roo_apx
-        area_y_dist = self.grid.height // roo_apx
-        print(f"roo_apx: {roo_apx}, nr_areas_x: {nr_areas_x}, "
-              f"nr_areas_y: {nr_areas_y}, area_x_dist: {area_x_dist}, "
-              f"area_y_dist: {area_y_dist}")  # TODO rm print
+        area_x_dist = self.grid.width // nr_areas_x
+        area_y_dist = self.grid.height // nr_areas_y
         x_coords = range(0, self.grid.width, area_x_dist)
         y_coords = range(0, self.grid.height, area_y_dist)
         # Add additional areas if necessary (num_areas not a square number)

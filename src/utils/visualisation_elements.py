@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from typing import TYPE_CHECKING, cast
 from mesa.visualization import TextElement
 import matplotlib.patches as patches
-from model_setup import _COLORS
+from src.model_setup import _COLORS
 import base64
 import math
 import io
@@ -210,7 +210,7 @@ class AreaPersonalityDists(TextElement):
         num_cols = math.ceil(math.sqrt(num_areas))
         num_rows = math.ceil(num_areas / num_cols)
         fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols,
-                                 figsize=(8, 8), sharex=True)
+                                 figsize=(8, num_areas), sharex=True)
         for ax, area in zip(axes.flatten(), model.areas):
             # Fetch data
             p_dist = area.personality_distribution

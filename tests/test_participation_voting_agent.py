@@ -1,6 +1,6 @@
 from .test_participation_model import *
-from democracy_sim.participation_model import Area
-from democracy_sim.participation_agent import VoteAgent, combine_and_normalize
+from src.participation_model import Area
+from src.agents.participation_agent import VoteAgent, combine_and_normalize
 import numpy as np
 import random
 
@@ -51,7 +51,8 @@ class TestVotingAgent(unittest.TestCase):
             print(f"Assumed opt. distribution with factor {a_factor}: \n{comb}")
             # Validation
             if a_factor == 0.0:
-                self.assertEqual(list(comb), list(est_dist))
+                # TODO: This test fails sometimes (11.09.25)
+                self.assertEqual(list(comb), list(est_dist))  # <--- here
             elif a_factor == 1.0:
                 if sum(own_prefs) != 1.0:
                     own_prefs = own_prefs / sum(own_prefs)

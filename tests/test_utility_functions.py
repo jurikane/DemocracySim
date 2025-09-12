@@ -1,9 +1,9 @@
 import unittest
 import numpy as np
-from democracy_sim.participation_agent import combine_and_normalize
+from src.agents.participation_agent import combine_and_normalize
 
 class TestUtilityFunctions(unittest.TestCase):
-    """Test utility functions in the democracy_sim package."""
+    """Test utility functions in the src package."""
 
     def test_combine_and_normalize_basic(self):
         """Test basic functionality of combine_and_normalize."""

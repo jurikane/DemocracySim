@@ -1,11 +1,11 @@
 import unittest
 import random
 import numpy as np
-from democracy_sim.participation_model import Area
-from democracy_sim.participation_agent import VoteAgent
+from src.participation_model import Area
+from src.agents.participation_agent import VoteAgent
 from .test_participation_model import TestParticipationModel, num_agents
-from democracy_sim.social_welfare_functions import majority_rule, approval_voting
-from democracy_sim.distance_functions import kendall_tau, spearman
+from src.utils.social_welfare_functions import majority_rule, approval_voting
+from src.utils.distance_functions import kendall_tau, spearman
 
 
 class TestArea(unittest.TestCase):

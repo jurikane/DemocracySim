@@ -4,95 +4,34 @@ This file handles the definition of the canvas and model parameters.
 from typing import TYPE_CHECKING, cast
 from mesa.visualization.modules import ChartModule
 from src.agents.participation_agent import ColorCell
-from src.participation_model import (ParticipationModel,
-                                     distance_functions,
-                                     social_welfare_functions)
+from src.participation_model import (
+    ParticipationModel, distance_functions, social_welfare_functions
+)
 from math import factorial
+from pathlib import Path
 import mesa
+import yaml
+import os
 
-# Parameters
 
-#############
-# Elections #
-#############
-election_costs = 1
-max_reward = 50
-election_impact_on_mutation = 1.8  # 0.1-5.0
-mu = 0.05  # 0.001-0.5
-# Voting rules (see social_welfare_functions.py)
-rule_idx = 1
-# Distance functions (see distance_functions.py)
-distance_idx = 1
-####################
-# Model parameters #
-####################
-num_agents = 800
-common_assets = 40000
+def load_config(config_file=None):
+    if config_file is None:
+        config_file = os.environ.get("CONFIG_FILE", "config.yaml")
+    config_path = Path(__file__).parent.parent / 'configs' / config_file
+    with open(config_path, 'r') as f:
+        conf = yaml.safe_load(f)
+    return conf
+
+
+# Load config
+config = load_config()
+cfg = config["model"]
+
 # Colors
-num_colors = 3
-color_patches_steps = 3
-patch_power = 1.0
-color_heterogeneity = 0.3
-known_cells = 10
-# Voting Agents
-num_personalities = 4
-# Grid
-grid_rows = 100  # height
-grid_cols = 80  # width
-cell_size = 10
-canvas_height = grid_rows * cell_size
-canvas_width = grid_cols * cell_size
-draw_borders = True
-# Voting Areas
-num_areas = 16
-av_area_height = 25
-# area_height = grid_rows // int(sqrt(num_areas))
-av_area_width = 20
-# area_width = grid_cols // int(sqrt(num_areas))
-# num_areas = 4
-# av_area_height = 50
-# av_area_width = 40
-area_size_variance = 0.0
-########################
-# Statistics and Views #
-########################
-show_area_stats = True
-
-
 _COLORS = [
-    "White",
-    "Red",
-    "Green",
-    "Blue",
-    "Yellow",
-    "Aqua",
-    "Fuchsia",
-    #"Lavender",
-    "Lime",
-    "Maroon",
-    #"Navy",
-    #"Olive",
-    "Orange",
-    #"Purple",
-    #"Silver",
-    #"Teal",
-    # "Pink",
-    # "Brown",
-    # "Gold",
-    # "Coral",
-    # "Crimson",
-    # "DarkBlue",
-    # "DarkRed",
-    # "DarkGreen",
-    # "DarkKhaki",
-    # "DarkMagenta",
-    # "DarkOliveGreen",
-    # "DarkOrange",
-    # "DarkTurquoise",
-    # "DarkViolet",
-    # "DeepPink",
+    "White", "Red", "Green", "Blue", "Yellow", "Aqua", "Fuchsia",
+    "Lime", "Maroon", "Orange"
 ]  # 10 colors
-
 
 def participation_draw(cell: ColorCell):
     """
@@ -109,22 +48,22 @@ def participation_draw(cell: ColorCell):
         raise AssertionError
     color = _COLORS[cell.color]
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
-                 "x": cell.row, "y": cell.col,
-                 "Color": color}
+                 "x": cell.row, "y": cell.col, "Color": color}
     # TODO: maybe: draw the agent number in the opposing color
     # If the cell is a border cell, change its appearance
-    if TYPE_CHECKING:  # Type hint for IDEs
+    if TYPE_CHECKING:
         cell.model = cast(ParticipationModel, cell.model)
     if cell.is_border_cell and cell.model.draw_borders:
         portrayal["Shape"] = "circle"
-        portrayal["r"] = 0.9  # Adjust the radius to fit within the cell
+        portrayal["r"] = 0.9
         if color == "White":
             portrayal["Color"] = "LightGrey"
     # Add position (x, y) to the hover-text
     portrayal["Position"] = f"{cell.position}"
     portrayal["Color - text"] = _COLORS[cell.color]
+    # Print number of agents in the cell if there are any
     if cell.num_agents_in_cell > 0:
-        portrayal[f"text"] = str(cell.num_agents_in_cell)
+        portrayal["text"] = str(cell.num_agents_in_cell)
         portrayal["text_color"] = "Black"
     for a in cell.areas:
         unique_id = a.unique_id
@@ -137,119 +76,120 @@ def participation_draw(cell: ColorCell):
         portrayal[f"Agent {voter.unique_id}"] = text
     return portrayal
 
-
 canvas_element = mesa.visualization.CanvasGrid(
-    participation_draw, grid_cols, grid_rows, canvas_width, canvas_height
+    participation_draw,
+    cfg["width"],
+    cfg["height"],
+    cfg["width"] * cfg["cell_size"],
+    cfg["height"] * cfg["cell_size"]
 )
 
-
-wealth_chart = mesa.visualization.modules.ChartModule(
+wealth_chart = ChartModule(
     [{"Label": "Collective assets", "Color": "Black"}],
     data_collector_name='datacollector'
 )
 
+color_distribution_chart = ChartModule(
+    [{"Label": f"Color {i}",
+      "Color": "LightGrey" if _COLORS[i] == "White" else _COLORS[i]}
+     for i in range(len(_COLORS))],
+    data_collector_name='datacollector'
+)
 
-color_distribution_chart = mesa.visualization.modules.ChartModule(
-        [{"Label": f"Color {i}",
-          "Color": "LightGrey" if _COLORS[i] == "White" else _COLORS[i]}
-         for i in range(len(_COLORS))],
-        data_collector_name='datacollector'
-    )
-
-voter_turnout = mesa.visualization.ChartModule(
+voter_turnout = ChartModule(
     [{"Label": "Voter turnout globally (in percent)", "Color": "Black"},
      {"Label": "Gini Index (0-100)", "Color": "Red"}],
-    data_collector_name='datacollector')
-
+    data_collector_name='datacollector'
+)
 
 model_params = {
-    "height": grid_rows,
-    "width": grid_cols,
+    "height": cfg["height"],
+    "width": cfg["width"],
     "draw_borders": mesa.visualization.Checkbox(
-        name="Draw border cells", value=draw_borders
+        name="Draw border cells", value=cfg.get("draw_borders", True)
     ),
     "rule_idx": mesa.visualization.Slider(
         name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
-        value=rule_idx, min_value=0, max_value=len(social_welfare_functions)-1,
+        value=cfg["rule_idx"], min_value=0, max_value=len(social_welfare_functions)-1,
     ),
     "distance_idx": mesa.visualization.Slider(
         name=f"Dist-Function index {[f.__name__ for f in distance_functions]}",
-        value=distance_idx, min_value=0, max_value=len(distance_functions)-1,
+        value=cfg["distance_idx"], min_value=0, max_value=len(distance_functions)-1,
     ),
     "election_costs": mesa.visualization.Slider(
-        name="Election costs", value=election_costs, min_value=0, max_value=100,
+        name="Election costs", value=cfg["election_costs"], min_value=0, max_value=100,
         step=1, description="The costs for participating in an election"
     ),
     "max_reward": mesa.visualization.Slider(
-        name="Maximal reward", value=max_reward, min_value=0,
-        max_value=election_costs*100,
+        name="Maximal reward", value=cfg["max_reward"], min_value=0,
+        max_value=cfg["election_costs"]*100,
         step=1, description="The costs for participating in an election"
     ),
     "mu": mesa.visualization.Slider(
-        name="Mutation rate", value=mu, min_value=0.001, max_value=0.5,
+        name="Mutation rate", value=cfg["mu"], min_value=0.001, max_value=0.5,
         step=0.001, description="Probability of a color cell to mutate"
     ),
     "election_impact_on_mutation": mesa.visualization.Slider(
-        name="Election impact on mutation", value=election_impact_on_mutation,
+        name="Election impact on mutation", value=cfg["election_impact_on_mutation"],
         min_value=0.1, max_value=5.0, step=0.1,
         description="Factor determining how strong mutation accords to election"
     ),
     "num_agents": mesa.visualization.Slider(
-        name="# Agents", value=num_agents, min_value=10, max_value=99999,
+        name="# Agents", value=cfg["num_agents"], min_value=10, max_value=99999,
         step=10
     ),
     "num_colors": mesa.visualization.Slider(
-        name="# Colors", value=num_colors, min_value=2, max_value=len(_COLORS),
+        name="# Colors", value=cfg["num_colors"], min_value=2, max_value=len(_COLORS),
         step=1
     ),
     "num_personalities": mesa.visualization.Slider(
-        name="# different personalities", value=num_personalities,
-        min_value=1, max_value=factorial(num_colors), step=1
+        name="# different personalities", value=cfg["num_personalities"],
+        min_value=1, max_value=factorial(cfg["num_colors"]), step=1
     ),
     "common_assets": mesa.visualization.Slider(
-        name="Initial common assets", value=common_assets,
-        min_value=num_agents, max_value=1000*num_agents, step=10
+        name="Initial common assets", value=cfg["common_assets"],
+        min_value=cfg["num_agents"], max_value=1000*cfg["num_agents"], step=10
     ),
     "known_cells": mesa.visualization.Slider(
-        name="# known fields", value=known_cells,
+        name="# known fields", value=cfg["known_cells"],
         min_value=1, max_value=100, step=1
     ),
     "color_patches_steps": mesa.visualization.Slider(
-        name="Patches size (# steps)", value=color_patches_steps,
+        name="Patches size (# steps)", value=cfg["color_patches_steps"],
         min_value=0, max_value=9, step=1,
         description="More steps lead to bigger color patches"
     ),
     "patch_power": mesa.visualization.Slider(
-        name="Patches power", value=patch_power, min_value=0.0, max_value=3.0,
+        name="Patches power", value=cfg["patch_power"], min_value=0.0, max_value=3.0,
         step=0.2, description="Increases the power/radius of the color patches"
     ),
     "heterogeneity": mesa.visualization.Slider(
         name="Global color distribution heterogeneity",
-        value=color_heterogeneity, min_value=0.0, max_value=0.9, step=0.1,
+        value=cfg["heterogeneity"], min_value=0.0, max_value=0.9, step=0.1,
         description="The higher the heterogeneity factor the greater the" +
                     "difference in how often some colors appear overall"
     ),
     "num_areas": mesa.visualization.Slider(
-        name=f"# Areas within the {grid_rows}x{grid_cols} world", step=1,
-        value=num_areas, min_value=4, max_value=min(grid_cols, grid_rows)//2
+        name=f"# Areas within the {cfg['height']}x{cfg['width']} world", step=1,
+        value=cfg["num_areas"], min_value=1, max_value=min(cfg["width"], cfg["height"])//2
     ),
     "av_area_height": mesa.visualization.Slider(
-        name="Av. area height", value=av_area_height,
-        min_value=2, max_value=grid_rows//2,
+        name="Av. area height", value=cfg["av_area_height"],
+        min_value=2, max_value=cfg["height"]//2,
         step=1, description="Select the average height of an area"
     ),
     "av_area_width": mesa.visualization.Slider(
-        name="Av. area width", value=av_area_width,
-        min_value=2, max_value=grid_cols//2,
+        name="Av. area width", value=cfg["av_area_width"],
+        min_value=2, max_value=cfg["width"]//2,
         step=1, description="Select the average width of an area"
     ),
     "area_size_variance": mesa.visualization.Slider(
-        name="Area size variance", value=area_size_variance,
+        name="Area size variance", value=cfg["area_size_variance"],
         # TODO there is a division by zero error for value=1.0 - check this
         min_value=0.0, max_value=0.99, step=0.1,
         description="Select the variance of the area sizes"
     ),
     "show_area_stats": mesa.visualization.Checkbox(
-            name="Show all statistics", value=show_area_stats
-        ),
+        name="Show all statistics", value=cfg.get("show_area_stats", True)
+    ),
 }
