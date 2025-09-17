@@ -26,6 +26,7 @@ def load_config(config_file=None):
 # Load config
 config = load_config()
 cfg = config["model"]
+vis_cfg = config.get("visualization", {})
 
 # Colors
 _COLORS = [
@@ -47,13 +48,14 @@ def participation_draw(cell: ColorCell):
     if cell is None:
         raise AssertionError
     color = _COLORS[cell.color]
+    draw_borders = vis_cfg.get("draw_borders", True)
     portrayal = {"Shape": "rect", "w": 1, "h": 1, "Filled": "true", "Layer": 0,
                  "x": cell.row, "y": cell.col, "Color": color}
     # TODO: maybe: draw the agent number in the opposing color
     # If the cell is a border cell, change its appearance
     if TYPE_CHECKING:
         cell.model = cast(ParticipationModel, cell.model)
-    if cell.is_border_cell and cell.model.draw_borders:
+    if cell.is_border_cell and draw_borders:
         portrayal["Shape"] = "circle"
         portrayal["r"] = 0.9
         if color == "White":
@@ -80,8 +82,8 @@ canvas_element = mesa.visualization.CanvasGrid(
     participation_draw,
     cfg["width"],
     cfg["height"],
-    cfg["width"] * cfg["cell_size"],
-    cfg["height"] * cfg["cell_size"]
+    cfg["width"] * vis_cfg["cell_size"],
+    cfg["height"] * vis_cfg["cell_size"]
 )
 
 wealth_chart = ChartModule(
@@ -102,12 +104,18 @@ voter_turnout = ChartModule(
     data_collector_name='datacollector'
 )
 
+visualization_params = {
+    "draw_borders": mesa.visualization.Checkbox(
+            name="Draw border cells", value=vis_cfg.get("draw_borders", True)
+        ),
+    "show_area_stats": mesa.visualization.Checkbox(
+        name="Show all statistics", value=cfg.get("show_area_stats", True)
+    ),
+}
+
 model_params = {
     "height": cfg["height"],
     "width": cfg["width"],
-    "draw_borders": mesa.visualization.Checkbox(
-        name="Draw border cells", value=cfg.get("draw_borders", True)
-    ),
     "rule_idx": mesa.visualization.Slider(
         name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
         value=cfg["rule_idx"], min_value=0, max_value=len(social_welfare_functions)-1,
@@ -188,8 +196,5 @@ model_params = {
         # TODO there is a division by zero error for value=1.0 - check this
         min_value=0.0, max_value=0.99, step=0.1,
         description="Select the variance of the area sizes"
-    ),
-    "show_area_stats": mesa.visualization.Checkbox(
-        name="Show all statistics", value=cfg.get("show_area_stats", True)
     ),
 }

@@ -23,9 +23,6 @@ model:
   # Grid parameters
   height: 100            # (grid_rows)
   width: 80              # (grid_cols)
-  cell_size: 10
-
-  draw_borders: true
 
   # Voting Areas
   num_areas: 16
@@ -33,6 +30,11 @@ model:
   av_area_width: 20
   area_size_variance: 0.0
 
+# Visualization parameters
+visualization:
+  # Grid parameters
+  cell_size: 10
+  draw_borders: true
   # Statistics and Views
   show_area_stats: true
 

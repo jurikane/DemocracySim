@@ -1,9 +1,13 @@
-from .test_participation_model import *
+from .test_participation_model import TestParticipationModel
+import unittest
 from src.participation_model import Area
 from src.agents.participation_agent import VoteAgent, combine_and_normalize
 import numpy as np
 import random
+from src.model_setup import config
 
+model_cfg = config["model"]
+vis_cfg = config.get("visualization", {})
 
 class TestVotingAgent(unittest.TestCase):
 
@@ -12,8 +16,8 @@ class TestVotingAgent(unittest.TestCase):
         test_model.setUp()
         self.model = test_model.model
         personality = random.choice(self.model.personalities)
-        self.agent = VoteAgent(num_agents + 1, self.model, pos=(0, 0),
-                               personality=personality, assets=25)
+        self.agent = VoteAgent(model_cfg["num_agents"] + 1, self.model,
+                               pos=(0, 0), personality=personality, assets=25)
         self.additional_test_area = Area(self.model.num_areas + 1,
                                          model=self.model, height=5,
                                          width=5, size_variance=0)

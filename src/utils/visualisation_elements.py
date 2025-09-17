@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
-from typing import TYPE_CHECKING, cast
 from mesa.visualization import TextElement
 import matplotlib.patches as patches
-from src.model_setup import _COLORS
+from src.model_setup import _COLORS, vis_cfg
 import base64
 import math
 import io
 
 _COLORS[0] = "LightGray"
+# Visualization config
+show_area_stats = vis_cfg.get("show_area_stats", True)
 
 def save_plot_to_base64(fig):
     buf = io.BytesIO()
@@ -23,7 +24,7 @@ class AreaStats(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0:
+        if not show_area_stats or step == 0:
             return ""
 
         # Fetch data from the datacollector
@@ -85,8 +86,6 @@ class PersonalityDistribution(TextElement):
         self.pers_dist_plot = None
 
     def create_once(self, model):
-        if TYPE_CHECKING:
-            model = cast('ParticipationModel', model)
         # Fetch data
         dists = model.personality_distribution
         personalities = model.personalities
@@ -96,7 +95,7 @@ class PersonalityDistribution(TextElement):
         num_colors = len(personalities[0])
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        heights = dists * num_agents
+        heights = dists # * num_agents
         bars = ax.bar(range(num_personalities), heights, width=0.6)
 
         for bar, personality in zip(bars, personalities):
@@ -111,7 +110,7 @@ class PersonalityDistribution(TextElement):
                 ax.add_patch(rect)
 
         ax.set_xlabel('"Personality" ID')
-        ax.set_ylabel('Number of Agents')
+        ax.set_ylabel(f'Percentage of the {num_agents} Agents')
         ax.set_title('Global distribution of personalities among agents')
 
         plt.tight_layout()
@@ -128,7 +127,7 @@ class VoterTurnoutElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0:
+        if not show_area_stats or step == 0:
             return ""
         # Fetch data from the datacollector
         data = model.datacollector.get_agent_vars_dataframe()
@@ -162,7 +161,7 @@ class MatplotlibElement(TextElement):
     def render(self, model):
         # Only render if show_area_stats is enabled
         step = model.scheduler.steps
-        if not model.show_area_stats or step == 0:
+        if not show_area_stats or step == 0:
             return ""
         # Fetch data from the datacollector
         data = model.datacollector.get_model_vars_dataframe()
@@ -197,9 +196,6 @@ class AreaPersonalityDists(TextElement):
         self.areas_pers_dist_plot = None
 
     def create_once(self, model):
-        if TYPE_CHECKING:
-            model = cast('ParticipationModel', model)
-
         colors = _COLORS[:model.num_colors]
         personalities = model.personalities
         num_colors = len(personalities[0])
@@ -218,6 +214,9 @@ class AreaPersonalityDists(TextElement):
             # Subplot
             heights = [int(val * num_agents) for val in p_dist]
             bars = ax.bar(range(num_personalities), heights, color='skyblue')
+            # Set the top of all bars to the color code of the personality
+            max_height = max(heights) if heights else 1
+            p_top_hight = max_height * 0.02  # Top 2% colored acc. to personality
 
             for bar, personality in zip(bars, personalities):
                 height = bar.get_height()
@@ -226,7 +225,7 @@ class AreaPersonalityDists(TextElement):
                 for i, color_idx in enumerate(personality):
                     rect_width = width / num_colors
                     coords = (bar.get_x() + i * rect_width, height)
-                    rect = patches.Rectangle(coords, rect_width, 2,
+                    rect = patches.Rectangle(coords, rect_width, p_top_hight,
                                              color=colors[color_idx])
                     ax.add_patch(rect)
 

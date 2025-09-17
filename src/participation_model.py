@@ -4,7 +4,6 @@ from src.agents.participation_agent import VoteAgent, ColorCell
 from src.utils.social_welfare_functions import majority_rule, approval_voting
 from src.utils.distance_functions import spearman, kendall_tau
 from itertools import permutations, product, combinations
-from math import sqrt
 import numpy as np
 
 # Voting rules to be accessible by index
@@ -173,8 +172,11 @@ class Area(mesa.Agent):
         for agent in self.agents:
             p_counts[str(agent.personality)] += 1
         # Normalize the counts
-        self._personality_distribution = [p_counts[str(p)] / self.num_agents
-                                          for p in personalities]
+        if self.num_agents == 0:
+            self._personality_distribution = [0 for _ in personalities]
+        else:
+            self._personality_distribution = [p_counts[str(p)] / self.num_agents
+                                              for p in personalities]
 
     def add_agent(self, agent: VoteAgent) -> None:
         """
@@ -211,10 +213,21 @@ class Area(mesa.Agent):
         # Ask agents for participation and their votes
         preference_profile = self._tally_votes()
         # Check for the case that no agent participated
-        if preference_profile.ndim != 2:
+        if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
+            # TODO: What to do in this case? Cease the simulation?
+            # Set to previous outcome but dont distribute rewards
             print("Area", self.unique_id, "no one participated in the election")
-            return 0  # TODO: What to do in this case? Cease the simulation?
-        # Aggregate the preferences ⇒ returns an option ordering
+            # If no previous outcome, use the real distribution ordering
+            real_color_ord = np.argsort(self.color_distribution)[::-1]
+            if self._voted_ordering is None:
+                self._voted_ordering = real_color_ord
+            # Update dist_to_reality for monitoring but no rewards
+            self._dist_to_reality = self.model.distance_func(
+                real_color_ord, self._voted_ordering,
+                self.model.color_search_pairs
+            )
+            return 0
+        # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         aggregated = self.model.voting_rule(preference_profile)
         # Save the "elected" ordering in self._voted_ordering
         winning_option = aggregated[0]
@@ -241,8 +254,7 @@ class Area(mesa.Agent):
         """
         preference_profile = []
         for agent in self.agents:
-            model = self.model
-            el_costs = model.election_costs
+            el_costs = self.model.election_costs
             # Give agents their (new) known fields
             agent.update_known_cells(area=self)
             if (agent.assets >= el_costs
@@ -278,9 +290,8 @@ class Area(mesa.Agent):
             # Personality-based reward factor
             p = dist_func(a.personality, real_color_ord, color_search_pairs)
             # + common reward (reward_pa) for all agents
-            a.assets = int(a.assets + (0.5 - p) * model.max_reward + rpa)
-            if a.assets < 0:  # Correct wealth if it fell below zero
-                a.assets = 0
+            pers_reward = (0.5 - p) * model.max_reward  # Personality-based reward
+            a.assets = max(0, int(a.assets + pers_reward + rpa))
 
     def _update_color_distribution(self) -> None:
         """
@@ -537,7 +548,6 @@ class ParticipationModel(mesa.Model):
             (metrics and statistics) at each simulation step.
         scheduler (CustomScheduler): The scheduler responsible for executing the
             step function.
-        draw_borders (bool): Only for visualization (no effect on simulation).
         _preset_color_dst (ndarray): A predefined global color distribution
             (set randomly) that affects cell initialization globally.
         """
@@ -545,9 +555,8 @@ class ParticipationModel(mesa.Model):
     def __init__(self, height, width, num_agents, num_colors, num_personalities,
                  mu, election_impact_on_mutation, common_assets, known_cells,
                  num_areas, av_area_height, av_area_width, area_size_variance,
-                 patch_power, color_patches_steps, draw_borders, heterogeneity,
-                 rule_idx, distance_idx, election_costs, max_reward,
-                 show_area_stats):
+                 patch_power, color_patches_steps, heterogeneity,
+                 rule_idx, distance_idx, election_costs, max_reward):
         super().__init__()
         # TODO clean up class (public/private variables)
         self.height = height
@@ -562,7 +571,6 @@ class ParticipationModel(mesa.Model):
         # Random bias factors that affect the initial color distribution
         self._vertical_bias = self.random.uniform(0, 1)
         self._horizontal_bias = self.random.uniform(0, 1)
-        self.draw_borders = draw_borders
         # Color distribution (global)
         self._preset_color_dst = self.create_color_distribution(heterogeneity)
         self._av_area_color_dst = self._preset_color_dst
@@ -582,15 +590,15 @@ class ParticipationModel(mesa.Model):
         self.search_pairs = list(combinations(range(0, self.options.size), 2))  # TODO check if correct!
         self.option_vec = np.arange(self.options.size)  # Also to speed up
         self.color_search_pairs = list(combinations(range(0, num_colors), 2))
-        # Create color cells
+        # Create color cells (IDs start after areas+agents)
         self.color_cells: List[Optional[ColorCell]] = [None] * (height * width)
-        self._initialize_color_cells()
-        # Create agents
+        self._initialize_color_cells(id_start=num_agents + num_areas)
+        # Create voting agents (IDs start after areas)
         # TODO: Where do the agents get there known cells from and how!?
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
         self.personalities = self.create_personalities(num_personalities)
         self.personality_distribution = self.pers_dist(num_personalities)
-        self.initialize_voting_agents()
+        self.initialize_voting_agents(id_start=num_areas)
         # Area variables
         self.global_area = self.initialize_global_area()  # TODO create bool variable to make this optional
         self.areas: List[Optional[Area]] = [None] * num_areas
@@ -605,8 +613,6 @@ class ParticipationModel(mesa.Model):
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
         self.datacollector.collect(self)
-        # Statistics
-        self.show_area_stats = show_area_stats
 
     @property
     def num_colors(self):
@@ -632,34 +638,42 @@ class ParticipationModel(mesa.Model):
     def preset_color_dst(self):
         return len(self._preset_color_dst)
 
-    def _initialize_color_cells(self):
+    def _initialize_color_cells(self, id_start=0):
         """
-        This method initializes a color cells for each cell in the model's grid.
+        Initialize one ColorCell per grid cell.
+        Args:
+            id_start (int): The starting ID to ensure unique IDs.
         """
         # Create a color cell for each cell in the grid
-        for unique_id, (_, (row, col)) in enumerate(self.grid.coord_iter()):
+        for idx, (_, (row, col)) in enumerate(self.grid.coord_iter()):
+            # Assign unique ID after areas and agents
+            unique_id = id_start + idx
             # The colors are chosen by a predefined color distribution
             color = self.color_by_dst(self._preset_color_dst)
-            # Create the cell
+            # Create the cell (skip ids for area and voting agents)
             cell = ColorCell(unique_id, self, (row, col), color)
             # Add it to the grid
             self.grid.place_agent(cell, (row, col))
             # Add the color cell to the scheduler
             #self.scheduler.add(cell) # TODO: check speed diffs using this..
             # And to the 'model.color_cells' list (for faster access)
-            self.color_cells[unique_id] = cell  # TODO: check if its not better to simply use the grid when finally changing the grid type to SingleGrid
+            self.color_cells[idx] = cell  # TODO: check if its not better to simply use the grid when finally changing the grid type to SingleGrid
 
-    def initialize_voting_agents(self):
+    def initialize_voting_agents(self, id_start=0):
         """
         This method initializes as many voting agents as set in the model with
         a randomly chosen personality. It places them randomly on the grid.
         It also ensures that each agent is assigned to the color cell it is
         standing on.
+        Args:
+            id_start (int): The starting ID for agents to ensure unique IDs.
         """
         dist = self.personality_distribution
         rng = np.random.default_rng()
         assets = self.common_assets // self.num_agents
-        for a_id in range(self.num_agents):
+        for idx in range(self.num_agents):
+            # Assign unique ID after areas
+            unique_id = id_start + idx
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
@@ -667,10 +681,10 @@ class ParticipationModel(mesa.Model):
             personality_idx = rng.choice(len(self.personalities), p=dist)
             personality = self.personalities[personality_idx]
             # Create agent without appending (add to the pre-defined list)
-            agent = VoteAgent(a_id, self, (x, y), personality,
+            agent = VoteAgent(unique_id, self, (x, y), personality,
                               personality_idx, assets=assets, add=False)  # TODO: initial assets?!
-            self.voting_agents[a_id] = agent  # Add using the index (faster)
-            # Add the agent to the grid by placing it on a cell
+            self.voting_agents[idx] = agent  # Add using the index (faster)
+            # Add the agent to the grid by placing it on a ColorCell
             cell = self.grid.get_cell_list_contents([(x, y)])[0]
             if TYPE_CHECKING:
                 cell = cast(ColorCell, cell)
