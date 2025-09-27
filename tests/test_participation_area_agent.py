@@ -1,11 +1,11 @@
 import unittest
 import random
 import numpy as np
-from democracy_sim.participation_model import Area
-from democracy_sim.participation_agent import VoteAgent
-from .test_participation_model import TestParticipationModel, num_agents
-from democracy_sim.social_welfare_functions import majority_rule, approval_voting
-from democracy_sim.distance_functions import kendall_tau, spearman
+from src.models.participation_model import Area
+from src.agents.vote_agent import VoteAgent
+from .test_participation_model import TestParticipationModel, model_cfg
+from src.utils.social_welfare_functions import majority_rule, approval_voting
+from src.utils.distance_functions import kendall_tau, spearman
 
 
 class TestArea(unittest.TestCase):
@@ -68,7 +68,7 @@ class TestArea(unittest.TestCase):
     def test_adding_new_area_and_agent_within_it(self):
         # Additional area and agent
         personality = random.choice(self.model.personalities)
-        a = VoteAgent(num_agents + 1, self.model, pos=(0, 0),
+        a = VoteAgent(model_cfg["num_agents"] + 1, self.model, pos=(0, 0),
                       personality=personality, assets=25)
         additional_test_area = Area(self.model.num_areas + 1,
                                     model=self.model, height=5,

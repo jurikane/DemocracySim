@@ -19,5 +19,6 @@ class TestUpdateColorDistribution(unittest.TestCase):
             cell.color = 1
         area._update_color_distribution()
         new_dist = area._color_distribution
-        self.assertFalse(np.array_equal(old_dist, new_dist))
+        # TODO: This test fails sometimes (11.09.25)
+        self.assertFalse(np.array_equal(old_dist, new_dist))  # <--- here
         self.assertAlmostEqual(np.sum(new_dist), 1.0, places=5)
