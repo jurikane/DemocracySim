@@ -7,21 +7,21 @@ pref_table: numpy matrix with one row per agent, column number is option number
             and the values (each in [0,1]) are normalized ranking values.
 The purpose of this is to allow for non-discrete and non-equidistant rankings.
 """
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 
-def complete_ranking(ranking: np.array, num_options: int):
+def complete_ranking(ranking: np.ndarray, num_options: int) -> np.ndarray:
     """
     This function adds options that are not in the ranking in a random order.
 
     Args:
-        ranking: The ranking to be completed with the missing options.
-        num_options: The total number of options.
+        ranking (nd.ndarray): Partial ranking of option indices.
+        num_options (int): The total number of options.
 
     Returns:
-        The completed ranking.
+        np.ndarray: Completed ranking of length `num_options`.
     """
     all_options = np.arange(num_options)
     mask = np.isin(all_options, ranking, invert=True)
@@ -29,7 +29,9 @@ def complete_ranking(ranking: np.array, num_options: int):
     np.random.shuffle(non_included_options)
     return np.concatenate((ranking, non_included_options))
 
-def run_tie_breaking_preparation_for_majority(pref_table, noise_factor=100):
+def run_tie_breaking_preparation_for_majority(pref_table: np.ndarray,
+                                              noise_factor: int = 100
+                                              ) -> np.ndarray:
     """
     This function prepares the preference table for majority rule such that
     it handles ties in the voters' preferences.
@@ -37,11 +39,11 @@ def run_tie_breaking_preparation_for_majority(pref_table, noise_factor=100):
     The tie breaking is randomized to ensure anonymity and neutrality.
 
     Args:
-        pref_table: The agent's preferences.
-        noise_factor: Influences the amount of noise to be added
+        pref_table (np.ndarray): Preferences per agent (rows) per option (cols).
+        noise_factor (int): Controls noise magnitude.
 
     Returns:
-        The preference table without ties for first choices.
+        np.ndarray: Table without ties in first choices.
     """
     # Add some random noise to break ties (based on the variances)
     variances = np.var(pref_table, axis=1)
@@ -69,17 +71,18 @@ def run_tie_breaking_preparation_for_majority(pref_table, noise_factor=100):
     # Put the parts back together
     return np.concatenate((pref_tab_var_non_zero, pref_tab_var_zero))
 
-def majority_rule(pref_table):
+def majority_rule(pref_table: np.ndarray) -> np.ndarray:
     """
     This function implements the majority rule social welfare function.
     Beware: Input is a preference table (values define a ranking, index=option),
             but the output is a ranking/an ordering (values represent options).
 
     Args:
-        pref_table: The agent's preferences (disagreement) as a NumPy matrix
+        pref_table (np.ndarray): Preferences (disagreement values)
+            per agent (rows) per option (cols).
 
     Returns:
-        The resulting preference ranking (beware: its not a pref. relation)
+        np.ndarray: Resulting preference ranking (beware: not a pref. relation)
     """
     n, m = pref_table.shape  # n agents, m options
     # Break ties if they exist
@@ -106,8 +109,11 @@ def majority_rule(pref_table):
         ranking = complete_ranking(ranking, m)
     return ranking
 
-def preprocessing_for_approval(pref_table, threshold=None):
+def preprocessing_for_approval(pref_table: np.ndarray,
+                               threshold: Optional[float] = None) -> np.ndarray:
     """
+    Interpret values below threshold as approval.
+
     This function prepares the preference table for approval voting
     by interpreting every value below a threshold as an approval.
     Beware: the values are distance/disagreement => smaller = less disagreement
@@ -119,27 +125,27 @@ def preprocessing_for_approval(pref_table, threshold=None):
     can still vary depending on the specific values in the preference table.
 
     Args:
-        pref_table: The agent's preferences.
-        threshold: The threshold for approval.
+        pref_table (np.ndarray): Preferences table.
+        threshold (float | None): Approval threshold; defaults to 1/m.
 
     Returns:
-        The preference table with the options approved or not.
+        np.ndarray: Binary approvals with shape of `pref_table`.
     """
     if threshold is None:
         threshold = 1 / pref_table.shape[1]
     return (pref_table < threshold).astype(int)
 
 
-def imp_prepr_for_approval(pref_table):
+def imp_prepr_for_approval(pref_table: np.ndarray) -> np.ndarray:
     """
     This is just like preprocessing_for_approval, but more intelligent.
     It sets the threshold depending on the variances.
 
     Args:
-        pref_table: The agent's preferences.
+        pref_table (np.ndarray): Preferences table.
 
     Returns:
-        The preference table with the options approved or not.
+        np.ndarray: Binary approvals with shape of `pref_table`.
     """
     # The threshold is set according to the variances
     threshold = np.mean(pref_table, axis=1) - np.var(pref_table, axis=1)
@@ -148,18 +154,19 @@ def imp_prepr_for_approval(pref_table):
     return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
-def approval_voting(pref_table):
-    """ TODO: does this take the meaning of the values into account? value = dist. = disagreement !
+def approval_voting(pref_table: np.ndarray) -> np.ndarray:
+    """
     This function implements the approval voting social welfare function.
     Beware: Input is a preference table (values define a ranking, index=option),
             but the output is a ranking/an ordering (values represent options).
 
     Args:
-        pref_table: The agent's preferences (disagreement) as a NumPy matrix
+        pref_table (np.ndarray): Agent's preferences (disagreement) as matrix.
 
     Returns:
-        The resulting preference ranking (beware: not a pref. relation).
+        np.ndarray: Resulting preference ranking (beware: not a pref. relation).
     """
+    # TODO: does this take the meaning of the values into account? value = dist. = disagreement !
     pref_table = imp_prepr_for_approval(pref_table)
     # Count how often each option is approved
     approval_counts = np.sum(pref_table, axis=0)
@@ -172,19 +179,19 @@ def approval_voting(pref_table):
     return np.argsort(-(approval_counts + noise))  # TODO: check order (ascending/descending) - np.argsort sorts ascending
 
 
-def continuous_score_voting(pref_table):
+def continuous_score_voting(pref_table: np.ndarray) -> np.ndarray:
     """
-    TODO: integrate and test
     This function implements a continuous score voting based on disagreement.
     Beware: Input is a preference table (values define a ranking, index=option),
             but the output is a ranking/an ordering (values represent options).
 
     Args:
-        pref_table: The agent's preferences (disagreement) as a NumPy matrix
+        pref_table (np.ndarray): Agent's preferences (disagreement) as matrix.
 
     Returns:
-        The resulting preference ranking (beware: not a pref. relation).
+        np.ndarray: Resulting preference ranking (beware: not a pref. relation).
     """
+    # TODO: integrate and test
     # Sum up the disagreement for each option
     scores = np.sum(pref_table, axis=0)
     # Add noise to break ties

@@ -1,0 +1,46 @@
+# To use this configuration, set: CONFIG_FILE=toy.yaml
+model:
+  # Elections
+  election_costs: 1
+  max_reward: 2
+  election_impact_on_mutation: 1.8
+  mu: 0.05
+  rule_idx: 1
+  distance_idx: 1
+
+  # Model parameters
+  num_agents: 5
+  common_assets: 5000
+  num_colors: 3
+  color_patches_steps: 3
+  patch_power: 1.0
+  heterogeneity: 0.3  # color_heterogeneity
+  known_cells: 5
+
+  # Voting Agents
+  num_personalities: 3
+
+  # Grid parameters
+  height: 20            # (grid_rows)
+  width: 10             # (grid_cols)
+
+  # Voting Areas
+  num_areas: 2
+  av_area_height: 10
+  av_area_width: 10
+  area_size_variance: 0.0
+
+# Visualization parameters
+visualization:
+  # Grid parameters
+  cell_size: 30
+  draw_borders: true
+  # Statistics and Views
+  show_area_stats: true
+
+simulation:
+  runs:         3     # number of independent seeds
+  num_steps:    3
+  processes:    8      # ≤ CPU cores
+  store_grid:   true  # set true only if full grid is needed
+  grid_interval: 1    # save every i'th step if grids enabled

@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def create_gaussian_distribution(size):
+def create_gaussian_distribution(size: int) -> np.ndarray:
     # Generate a normal distribution
-    rng = np.random.default_rng()
-    dist = rng.normal(0, 1, size)
+    def_rng = np.random.default_rng()
+    dist = def_rng.normal(0, 1, size)
     dist.sort()  # To create a gaussian curve like array
     dist = np.abs(dist)  # Flip negative values "up"
     # Normalize the distribution to sum to one
@@ -17,23 +17,32 @@ def create_gaussian_distribution(size):
     return dist
 
 # Example usage
-nr_options = 20
-gaussian_dist = create_gaussian_distribution(nr_options)
-s = gaussian_dist.sum()
+if __name__ == "__main__":
+    nr_options = 20
+    gaussian_dist = create_gaussian_distribution(nr_options)
+    s = gaussian_dist.sum()
 
-nr_zeroes = gaussian_dist.size - np.count_nonzero(gaussian_dist)
-print("There are", nr_zeroes, "zero values in the distribution")
+    nr_zeroes = gaussian_dist.size - np.count_nonzero(gaussian_dist)
+    print("There are", nr_zeroes, "zero values in the distribution")
 
-# Plot the distribution
-plt.plot(gaussian_dist)
-plt.title("Normalized Gaussian Distribution")
-plt.show()
+    # Plot the distribution
+    plt.plot(gaussian_dist)
+    plt.title("Normalized Gaussian Distribution")
+    plt.show()
 
-sample_size = 800
-pool = np.arange(nr_options)
-rng = np.random.default_rng()
-print(pool.shape)
-chosen = rng.choice(pool, sample_size, p=gaussian_dist)
+    sample_size = 800
+    pool = np.arange(nr_options)
+    rng = np.random.default_rng()
+    print(pool.shape)
+    chosen = rng.choice(pool, sample_size, p=gaussian_dist)
 
-plt.hist(chosen)
-plt.show()
+    plt.hist(chosen)
+    plt.show()
+
+
+def test_distribution_normalized():
+    dist = create_gaussian_distribution(20)
+    assert np.isclose(dist.sum(), 1.0)
+    assert (dist >= 0).all()
+    # Ensure variation (not all equal)
+    assert np.unique(dist).size > 1

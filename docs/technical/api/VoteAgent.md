@@ -1,3 +1,3 @@
 # Class `VoteAgent`
 
-::: democracy_sim.participation_agent.VoteAgent
+::: src.agents.vote_agent.VoteAgent
