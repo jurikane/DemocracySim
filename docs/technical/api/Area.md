@@ -1,7 +1,7 @@
 # Class `Area`
 
-::: democracy_sim.participation_model.Area
+::: src.agents.area.Area
 
 ## Private Method
 
-::: democracy_sim.participation_model.Area._conduct_election
+::: src.agents.area.Area._conduct_election

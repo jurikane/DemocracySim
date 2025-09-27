@@ -1,0 +1,42 @@
+model:
+  # Elections
+  election_costs: 1
+  max_reward: 2
+  election_impact_on_mutation: 1.8
+  mu: 0.05
+  rule_idx: 1
+  distance_idx: 1
+
+  # Model parameters
+  num_agents: 800
+  common_assets: 40000
+  num_colors: 3
+  color_patches_steps: 3
+  patch_power: 1.0
+  heterogeneity: 0.3
+  known_cells: 10
+
+  # Voting Agents
+  num_personalities: 4
+
+  # Grid parameters
+  height: 100
+  width: 80
+
+  # Voting Areas
+  num_areas: 16
+  av_area_height: 25
+  av_area_width: 20
+  area_size_variance: 0.0
+
+visualization:
+  cell_size: 10
+  draw_borders: true
+  show_area_stats: true
+
+simulation:
+  runs: 3
+  num_steps: 3
+  processes: 8
+  store_grid: true
+  grid_interval: 1

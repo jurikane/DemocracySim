@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from democracy_sim.social_welfare_functions import majority_rule
+from src.utils.social_welfare_functions import majority_rule
 
 # Simple and standard cases (lower values = higher rank)
 

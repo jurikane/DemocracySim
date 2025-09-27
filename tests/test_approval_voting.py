@@ -1,4 +1,4 @@
-from democracy_sim.social_welfare_functions import approval_voting
+from src.utils.social_welfare_functions import approval_voting
 from tests.test_majority_rule import simple, paradoxical
 import numpy as np
 

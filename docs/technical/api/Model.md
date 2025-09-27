@@ -1,3 +1,3 @@
 # Class `ParticipationModel`
 
-::: democracy_sim.participation_model.ParticipationModel
+::: src.models.participation_model.ParticipationModel

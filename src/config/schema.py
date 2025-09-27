@@ -1,0 +1,54 @@
+from pydantic import BaseModel
+from typing import Optional
+
+class ModelConfig(BaseModel):
+    """
+    Configuration for the core simulation model.
+    """
+    election_costs: float  # Cost for participating in an election
+    max_reward: float      # Maximum possible reward per election
+    election_impact_on_mutation: float  # Impact of election on mutation rate
+    mu: float              # Mutation rate
+    rule_idx: int          # Index of the voting rule to use
+    distance_idx: int      # Index of the distance function to use
+    num_agents: int        # Number of agents in the simulation
+    common_assets: int     # Initial collective assets
+    num_colors: int        # Number of color options
+    color_patches_steps: int  # Steps for color patch adjustment
+    patch_power: float     # Power/radius of color patching
+    heterogeneity: float   # Heterogeneity factor for color distribution
+    known_cells: int       # Number of cells each agent knows
+    num_personalities: int # Number of unique agent personalities
+    height: int            # Grid height
+    width: int             # Grid width
+    num_areas: int         # Number of areas (territories)
+    av_area_height: int    # Average area height
+    av_area_width: int     # Average area width
+    area_size_variance: float  # Variance in area sizes
+    seed: Optional[int] = None # Random seed for reproducibility
+
+class VisualizationConfig(BaseModel):
+    """
+    Configuration for visualization settings.
+    """
+    cell_size: int = 10                # Size of each grid cell in pixels
+    draw_borders: bool                 # Whether to draw area borders
+    show_area_stats: Optional[bool] = True  # Show area statistics overlay
+
+class SimulationConfig(BaseModel):
+    """
+    Configuration for simulation runs and storage.
+    """
+    runs: int             # Number of simulation runs
+    num_steps: int        # Number of steps per run
+    processes: int        # Number of parallel processes
+    store_grid: bool      # Whether to store grid state
+    grid_interval: int    # Interval for storing grid state
+
+class AppConfig(BaseModel):
+    """
+    Top-level application configuration.
+    """
+    model: ModelConfig
+    visualization: VisualizationConfig
+    simulation: SimulationConfig

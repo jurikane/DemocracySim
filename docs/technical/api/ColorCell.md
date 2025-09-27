@@ -1,3 +1,3 @@
 # Class `ColorCell`
 
-::: democracy_sim.participation_agent.ColorCell
+::: src.agents.color_cell.ColorCell
