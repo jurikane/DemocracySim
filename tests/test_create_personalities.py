@@ -1,5 +1,5 @@
 import unittest
-import numpy as np
+from math import factorial
 from itertools import permutations
 from tests.factory import create_default_model
 from unittest.mock import MagicMock
@@ -48,7 +48,7 @@ class TestParticipationModel(unittest.TestCase):
     def test_create_personalities_full_permutation(self):
         """Test that generating the full set of permutations does return all."""
         num_colors = self.model.num_colors
-        n_personalities = np.math.factorial(num_colors)
+        n_personalities = factorial(num_colors)
         personalities = self.model.create_personalities(n_personalities)
         expected_permutations = set(permutations(range(num_colors)))
         self.assertEqual(set(map(tuple, personalities)), expected_permutations)

@@ -3,7 +3,6 @@
 :::mesa.Model
 
 ---
----
 
 ## Mesa Base Agent Class
 

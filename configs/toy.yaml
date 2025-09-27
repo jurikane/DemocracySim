@@ -2,7 +2,7 @@
 model:
   # Elections
   election_costs: 1
-  max_reward: 50
+  max_reward: 2
   election_impact_on_mutation: 1.8
   mu: 0.05
   rule_idx: 1
@@ -10,7 +10,7 @@ model:
 
   # Model parameters
   num_agents: 5
-  common_assets: 500
+  common_assets: 5000
   num_colors: 3
   color_patches_steps: 3
   patch_power: 1.0
@@ -33,7 +33,7 @@ model:
 # Visualization parameters
 visualization:
   # Grid parameters
-  cell_size: 10
+  cell_size: 30
   draw_borders: true
   # Statistics and Views
   show_area_stats: true
@@ -42,8 +42,5 @@ simulation:
   runs:         3     # number of independent seeds
   num_steps:    3
   processes:    8      # ≤ CPU cores
-  store_grid:   true  # set true only if you really need full grids
-  grid_interval: 1    # save every 10th step if grids enabled
-
-output:
-  directory: "simulation_output"
+  store_grid:   true  # set true only if full grid is needed
+  grid_interval: 1    # save every i'th step if grids enabled

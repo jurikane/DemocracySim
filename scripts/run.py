@@ -1,52 +1,27 @@
+"""
+Script to run the DemocracySim model server.
+Configure using a config file (YAML or TOML) inside the configs folder.
+Use --config to specify a config file (YAML or TOML).
+Example:
+python -m scripts.run -c config.yaml --no-browser
+"""
+import argparse
 from mesa.visualization.ModularVisualization import ModularServer
-from src.participation_model import ParticipationModel
-from src.model_setup import (
-    model_params as params,
-    canvas_element,
-    voter_turnout,
-    wealth_chart,
-    color_distribution_chart,
-)
-from src.utils.visualisation_elements import (
-    PersonalityDistribution,
-    AreaStats,
-    VoterTurnoutElement,
-    AreaPersonalityDists,
-)
+from src.config.loader import load_config
+from src.model_setup import make_server
 
-class CustomModularServer(ModularServer):
-    """Prevents double initialization of the model."""
-    def __init__(self, model_cls, visualization_elements,
-                 name="Mesa Model", model_params=None, port=None):
-        self.initialized = False
-        super().__init__(model_cls, visualization_elements, name, model_params, port)
+def main():
+    parser = argparse.ArgumentParser(description="Run DemocracySim")
+    parser.add_argument("--config", "-c", type=str, default=None,
+                        help="Path to YAML/TOML config")
+    parser.add_argument("--no-browser",
+                        action="store_true",
+                        help="Do not open browser on launch")
+    args = parser.parse_args()
 
-    def reset_model(self):
-        if not self.initialized:
-            self.initialized = True
-            return
-        super().reset_model()
-
-personality_distribution = PersonalityDistribution()
-area_stats = AreaStats()
-vto_areas = VoterTurnoutElement()
-area_personality_dists = AreaPersonalityDists()
-
-server = CustomModularServer(
-    model_cls=ParticipationModel,
-    visualization_elements=[
-        canvas_element,
-        color_distribution_chart,
-        wealth_chart,
-        voter_turnout,
-        vto_areas,
-        personality_distribution,
-        area_stats,
-        area_personality_dists,
-    ],
-    name="DemocracySim",
-    model_params=params,
-)
+    cfg = load_config(args.config)
+    server: ModularServer = make_server(cfg)
+    server.launch(open_browser=not args.no_browser)
 
 if __name__ == "__main__":
-    server.launch(open_browser=True)
+    main()

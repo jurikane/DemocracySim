@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from src.agents.participation_agent import combine_and_normalize
+from src.agents.vote_agent import combine_and_normalize
 
 class TestUtilityFunctions(unittest.TestCase):
     """Test utility functions in the src package."""

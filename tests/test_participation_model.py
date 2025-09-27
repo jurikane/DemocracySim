@@ -1,12 +1,14 @@
 import unittest
-from src.participation_model import (ParticipationModel, Area,
-                                     distance_functions,
-                                     social_welfare_functions)
-from src.model_setup import config
+from src.models.participation_model import (ParticipationModel, Area,
+                                            distance_functions,
+                                            social_welfare_functions)
+from src.config.loader import load_config
 import mesa
 
-model_cfg = config["model"]
-vis_cfg = config.get("visualization", {})
+config = load_config()
+model_cfg = config.model.model_dump()
+vis_cfg = config.visualization.model_dump()
+
 
 class TestParticipationModel(unittest.TestCase):
 

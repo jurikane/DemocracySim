@@ -1,474 +1,19 @@
-from typing import TYPE_CHECKING, cast, List, Optional
+from typing import TYPE_CHECKING, cast, List, Optional, Callable
 import mesa
-from src.agents.participation_agent import VoteAgent, ColorCell
+import numpy as np
+from math import factorial
+from src.agents import Area, VoteAgent, ColorCell
 from src.utils.social_welfare_functions import majority_rule, approval_voting
 from src.utils.distance_functions import spearman, kendall_tau
 from itertools import permutations, product, combinations
-import numpy as np
+from src.utils.metrics import (compute_gini_index, compute_collective_assets,
+                               get_voter_turnout, get_grid_colors)
+
 
 # Voting rules to be accessible by index
 social_welfare_functions = [majority_rule, approval_voting]
 # Distance functions
 distance_functions = [spearman, kendall_tau]
-
-
-class Area(mesa.Agent):
-    def __init__(self, unique_id, model, height, width, size_variance):
-        """
-        Create a new area.
-
-        Attributes:
-            unique_id (int): The unique identifier of the area.
-            model (ParticipationModel): The simulation model of which the area is part of.
-            height (int): The average height of the area (see size_variance).
-            width (int): The average width of the area (see size_variance).
-            size_variance (float): A variance factor applied to height and width.
-        """
-        if TYPE_CHECKING:  # Type hint for IDEs
-            model = cast(ParticipationModel, model)
-        super().__init__(unique_id=unique_id,  model=model)
-        self._set_dimensions(width, height, size_variance)
-        self.agents = []
-        self._personality_distribution = None
-        self.cells = []
-        self._idx_field = None  # An indexing position of the area in the grid
-        self._color_distribution = np.zeros(model.num_colors) # Initialize to 0
-        self._voted_ordering = None
-        self._voter_turnout = 0  # In percent
-        self._dist_to_reality = None  # Elected vs. actual color distribution
-
-    def __str__(self):
-        return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
-                f"at idx_field={self._idx_field}, "
-                f"num_agents={self.num_agents}, num_cells={self.num_cells}, "
-                f"color_distribution={self.color_distribution})")
-
-    def _set_dimensions(self, width, height, size_var):
-        """
-        Sets the area's dimensions based on the provided width, height, and variance factor.
-
-        This function adjusts the width and height by a random factor drawn from
-        the range [1 - size_var, 1 + size_var]. If size_var is zero, no variance
-        is applied.
-
-        Args:
-            width (int): The average width of the area.
-            height (int): The average height of the area.
-            size_var (float): A variance factor applied to width and height.
-                Must be in [0, 1].
-
-        Raises:
-            ValueError: If size_var is not between 0 and 1.
-        """
-        if size_var == 0:
-            self._width = width
-            self._height = height
-            self.width_off, self.height_off = 0, 0
-        elif size_var > 1 or size_var < 0:
-            raise ValueError("Size variance must be between 0 and 1")
-        else:  # Apply variance
-            w_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
-            h_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
-            self._width = int(width * w_var_factor)
-            self.width_off = abs(width - self._width)
-            self._height = int(height * h_var_factor)
-            self.height_off = abs(height - self._height)
-
-    @property
-    def num_agents(self):
-        return len(self.agents)
-
-    @property
-    def num_cells(self):
-        return self._width * self._height
-
-    @property
-    def personality_distribution(self):
-        return self._personality_distribution
-
-    @property
-    def color_distribution(self):
-        return self._color_distribution
-
-    @property
-    def voted_ordering(self):
-        return self._voted_ordering
-
-    @property
-    def voter_turnout(self):
-        return self._voter_turnout
-
-    @property
-    def dist_to_reality(self):
-        return self._dist_to_reality
-
-    @property
-    def idx_field(self):
-        return self._idx_field
-
-    @idx_field.setter
-    def idx_field(self, pos: tuple):
-        """
-        Sets the indexing field (cell coordinate in the grid) of the area.
-
-        This method sets the areas indexing-field (top-left cell coordinate)
-        which determines which cells and agents on the grid belong to the area.
-        The cells and agents are added to the area's lists of cells and agents.
-
-        Args:
-            pos: (x, y) representing the areas top-left coordinates.
-        """
-        # TODO: Check - isn't it better to make sure agents are added to the area when they are created?
-        # TODO -- There is something wrong here!!! (Agents are not added to the areas)
-        if TYPE_CHECKING:  # Type hint for IDEs
-            self.model = cast(ParticipationModel, self.model)
-        try:
-            x_val, y_val = pos
-        except ValueError:
-            raise ValueError("The idx_field must be a tuple")
-        # Check if the values are within the grid
-        if x_val < 0 or x_val >= self.model.width:
-            raise ValueError(f"The x={x_val} value must be within the grid")
-        if y_val < 0 or y_val >= self.model.height:
-            raise ValueError(f"The y={y_val} value must be within the grid")
-        x_off = self.width_off // 2
-        y_off = self.height_off // 2
-        # Adjusting indices with offset and ensuring they wrap around the grid
-        adjusted_x = (x_val + x_off) % self.model.width
-        adjusted_y = (y_val + y_off) % self.model.height
-        # Assign the cells to the area
-        for x_area in range(self._width):
-            for y_area in range(self._height):
-                x = (adjusted_x + x_area) % self.model.width
-                y = (adjusted_y + y_area) % self.model.height
-                contents = self.model.grid.get_cell_list_contents([(x, y)])
-                if not contents:
-                    raise RuntimeError(
-                        f"Grid cell ({x},{y}) is empty – expected a ColorCell.")
-                cell = contents[0]
-                if TYPE_CHECKING:
-                    cell = cast(ColorCell, cell)
-                self.add_cell(cell)  # Add the cell to the area
-                # Add all voting agents to the area
-                for agent in cell.agents:
-                    self.add_agent(agent)
-                cell.add_area(self)  # Add the area to the color-cell
-                # Mark as a border cell if true, but not for the global area
-                if self.unique_id != -1 and (x_area == 0 or y_area == 0
-                        or x_area == self._width - 1
-                        or y_area == self._height - 1):
-                    cell.is_border_cell = True
-        self._idx_field = (adjusted_x, adjusted_y)
-        self._update_color_distribution()
-        self._update_personality_distribution()
-
-    def _update_personality_distribution(self) -> None:
-        """
-        This method calculates the areas current distribution of personalities.
-        """
-        personalities = list(self.model.personalities)
-        p_counts = {str(i): 0 for i in personalities}
-        # Count the occurrence of each personality
-        for agent in self.agents:
-            p_counts[str(agent.personality)] += 1
-        # Normalize the counts
-        if self.num_agents == 0:
-            self._personality_distribution = [0 for _ in personalities]
-        else:
-            self._personality_distribution = [p_counts[str(p)] / self.num_agents
-                                              for p in personalities]
-
-    def add_agent(self, agent: VoteAgent) -> None:
-        """
-        Appends an agent to the areas agents list.
-
-        Args:
-            agent (VoteAgent): The agent to be added to the area.
-        """
-        self.agents.append(agent)
-
-    def add_cell(self, cell: ColorCell) -> None:
-        """
-        Appends a cell to the areas cells list.
-
-        Args:
-            cell (ColorCell): The agent to be added to the area.
-        """
-        self.cells.append(cell)
-
-
-    def _conduct_election(self) -> int:
-        """
-        Simulates the election within the area and manages rewards.
-
-        The election process asks agents to participate, collects votes,
-        aggregates preferences using the model's voting rule,
-        and saves the elected option as the latest winning option.
-        Agents incur costs for participation
-        and may receive rewards based on the outcome.
-
-        Returns:
-            int: The voter turnout in percent. Returns 0 if no agent participates.
-        """
-        # Ask agents for participation and their votes
-        preference_profile = self._tally_votes()
-        # Check for the case that no agent participated
-        if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
-            # TODO: What to do in this case? Cease the simulation?
-            # Set to previous outcome but dont distribute rewards
-            print("Area", self.unique_id, "no one participated in the election")
-            # If no previous outcome, use the real distribution ordering
-            real_color_ord = np.argsort(self.color_distribution)[::-1]
-            if self._voted_ordering is None:
-                self._voted_ordering = real_color_ord
-            # Update dist_to_reality for monitoring but no rewards
-            self._dist_to_reality = self.model.distance_func(
-                real_color_ord, self._voted_ordering,
-                self.model.color_search_pairs
-            )
-            return 0
-        # Aggregate the preferences ⇒ returns an option ordering (indices into options)
-        aggregated = self.model.voting_rule(preference_profile)
-        # Save the "elected" ordering in self._voted_ordering
-        winning_option = aggregated[0]
-        self._voted_ordering = self.model.options[winning_option]
-        # Calculate and distribute rewards
-        self._distribute_rewards()
-        # TODO check whether the current color dist and the mutation of the
-        #  colors is calculated and applied correctly and does not interfere
-        #  in any way with the election process
-        # Statistics
-        n = preference_profile.shape[0]  # Number agents participated
-        return int((n / self.num_agents) * 100) # Voter turnout in percent
-
-    def _tally_votes(self):
-        """
-        Gathers votes from agents who choose to (and can afford to) participate.
-
-        Each participating agent contributes a vector of dissatisfaction values with
-        respect to the available options. These values are combined into a NumPy array.
-
-        Returns:
-            np.ndarray: A 2D array representing the preference profiles of all
-                participating agents. Each row corresponds to an agent's vote.
-        """
-        preference_profile = []
-        for agent in self.agents:
-            el_costs = self.model.election_costs
-            # Give agents their (new) known fields
-            agent.update_known_cells(area=self)
-            if (agent.assets >= el_costs
-                    and agent.ask_for_participation(area=self)):
-                agent.num_elections_participated += 1
-                # Collect the participation fee
-                agent.assets = agent.assets - el_costs
-                # Ask the agent for her preference
-                preference_profile.append(agent.vote(area=self))
-                # agent.vote returns an array containing dissatisfaction values
-                # between 0 and 1 for each option, interpretable as rank values.
-        return np.array(preference_profile)
-
-    def _distribute_rewards(self) -> None:
-        """
-        Calculates and distributes rewards (or penalties) to agents based on outcomes.
-
-        The function measures the difference between the actual color distribution
-        and the elected outcome using a distance metric. It then increments or reduces
-        agent assets accordingly, ensuring assets do not fall below zero.
-        """
-        model = self.model
-        # Calculate the distance to the real distribution using distance_func
-        real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
-        dist_func = model.distance_func
-        self._dist_to_reality = dist_func(real_color_ord, self.voted_ordering,
-                                          model.color_search_pairs)
-        # Calculate the rpa - rewards per agent (can be negative)
-        rpa = (0.5 - self.dist_to_reality) * model.max_reward  # TODO: change this (?)
-        # Distribute the two types of rewards
-        color_search_pairs = model.color_search_pairs
-        for a in self.agents:
-            # Personality-based reward factor
-            p = dist_func(a.personality, real_color_ord, color_search_pairs)
-            # + common reward (reward_pa) for all agents
-            pers_reward = (0.5 - p) * model.max_reward  # Personality-based reward
-            a.assets = max(0, int(a.assets + pers_reward + rpa))
-
-    def _update_color_distribution(self) -> None:
-        """
-        Recalculates the area's color distribution and updates the _color_distribution attribute.
-
-        This method counts how many cells of each color belong to the area, normalizes
-        the counts by the total number of cells, and stores the result internally.
-        """
-        color_count = {}
-        for cell in self.cells:
-            color = cell.color
-            color_count[color] = color_count.get(color, 0) + 1
-        for color in range(self.model.num_colors):
-            dist_val = color_count.get(color, 0) / self.num_cells  # Float
-            self._color_distribution[color] = dist_val
-
-    def _filter_cells(self, cell_list):
-        """
-        This method is used to filter a given list of cells to return only
-        those which are within the area.
-
-        Args:
-            cell_list: A list of ColorCell cells to be filtered.
-
-        Returns:
-            A list of ColorCell cells that are within the area.
-        """
-        cell_set = set(self.cells)
-        return [c for c in cell_list if c in cell_set]
-
-    def step(self) -> None:
-        """
-        Run one step of the simulation.
-
-        Conduct an election in the area,
-        mutate the cells' colors according to the election outcome
-        and update the color distribution of the area.
-        """
-        self._voter_turnout = self._conduct_election()  # The main election logic!
-        if self.voter_turnout == 0:
-            return  # TODO: What to do if no agent participated..?
-
-        # Mutate colors in cells
-        # Take some number of cells to mutate (i.e., 5 %)
-        n_to_mutate = int(self.model.mu * self.num_cells)
-        # TODO/Idea: What if the voter_turnout determines the mutation rate?
-        # randomly select x cells
-        cells_to_mutate = self.random.sample(self.cells, n_to_mutate)
-        # Use voted ordering to pick colors in descending order
-        # To pre-select colors for all cells to mutate
-        # TODO: Think about this: should we take local color-structure
-        #  into account - like in color patches - to avoid colors mutating into
-        #  very random structures? # Middendorf
-        colors = np.random.choice(self.voted_ordering, size=n_to_mutate,
-                                  p=self.model.color_probs)
-        # Assign the newly selected colors to the cells
-        for cell, color in zip(cells_to_mutate, colors):
-            cell.color = color
-        # Important: Update the color distribution (because colors changed)
-        self._update_color_distribution()
-
-
-def compute_collective_assets(model):
-    sum_assets = sum(agent.assets for agent in model.voting_agents)
-    return sum_assets
-
-def get_grid_colors(model):
-    """
-    Returns the current grid state as a list of rows.
-    Each row is a list of cell colors. Assumes that the cells were
-    created in row-major order and stored in model.color_cells.
-    """
-    grid = []
-    for row in range(model.height):
-        start = row * model.width
-        end = start + model.width
-        # Get the color for each cell in the row.
-        row_colors = [model.color_cells[i].color for i in range(start, end)]
-        grid.append(row_colors)
-    return grid
-
-
-def compute_gini_index(model):
-    # TODO: separate to be able to calculate it zone-wise as well as globally
-    # TODO: Unit-test this function
-    # Extract the list of assets for all agents
-    assets = [agent.assets for agent in model.voting_agents]
-    n = len(assets)
-    if n == 0:
-        return 0  # No agents, no inequality
-    # Sort the assets
-    sorted_assets = sorted(assets)
-    # Calculate the Gini Index
-    cumulative_sum = sum((i + 1) * sorted_assets[i] for i in range(n))
-    total_sum = sum(sorted_assets)
-    if total_sum == 0:
-        return 0  # No agent has any assets => view as total equality
-    gini_index = (2 * cumulative_sum) / (n * total_sum) - (n + 1) / n
-    return int(gini_index * 100)  # Return in "percent" (0-100)
-
-
-def get_voter_turnout(model):
-    voter_turnout_sum = 0
-    num_areas = model.num_areas
-    for area in model.areas:
-        voter_turnout_sum += area.voter_turnout
-    if not model.global_area is None:
-        # TODO: Check the correctness and whether it makes sense to include the global area here
-        voter_turnout_sum += model.global_area.voter_turnout
-        num_areas += 1
-    elif num_areas == 0:
-        return 0
-    return voter_turnout_sum / num_areas
-
-
-def create_personality(num_colors):
-    """ NOT USED
-    Creates and returns a list of 'personalities' that are to be assigned
-    to agents. Each personality is a NumPy array of length 'num_colors'
-    but it is not a full ranking vector since the number of colors influencing
-    the personality is limited. The array is therefore not normalized.
-    White (color 0) is never part of a personality.
-
-    Args:
-        num_colors: The number of colors in the simulation.
-    """
-    # TODO add unit tests for this function
-    personality = np.random.randint(0, 100, num_colors)  # TODO low=0 or 1?
-    # Save the sum to "normalize" the values later (no real normalization)
-    sum_value = sum(personality) + 1e-8  # To avoid division by zero
-    # Select only as many features as needed (num_personality_colors)
-    # to_del = num_colors - num_personality_colors  # How many to be deleted
-    # if to_del > 0:
-    #     # The 'replace=False' ensures that indexes aren't chosen twice
-    #     indices = np.random.choice(num_colors, to_del, replace=False)
-    #     personality[indices] = 0  # 'Delete' the values
-    personality[0] = 0  # White is never part of the personality
-    # "Normalize" the rest of the values
-    personality = personality / sum_value
-    return personality
-
-
-def get_color_distribution_function(color):
-    """
-    This method returns a lambda function for the color distribution chart.
-
-    Args:
-        color: The color number (used as index).
-    """
-    return lambda m: m.av_area_color_dst[color]
-
-
-def get_area_voter_turnout(area):
-    if isinstance(area, Area):
-        return area.voter_turnout
-    return None
-
-def get_area_dist_to_reality(area):
-    if isinstance(area, Area):
-        return area.dist_to_reality
-    return None
-
-def get_area_color_distribution(area):
-    if isinstance(area, Area):
-        return area.color_distribution.tolist()
-    return None
-
-def get_election_results(area):
-    """
-    Returns the voted ordering as a list or None if not available.
-
-    Returns: 
-        List of voted ordering or None.
-    """
-    if isinstance(area, Area) and area.voted_ordering is not None:
-        return area.voted_ordering.tolist()
-    return None
 
 
 class CustomScheduler(mesa.time.BaseScheduler):
@@ -556,8 +101,14 @@ class ParticipationModel(mesa.Model):
                  mu, election_impact_on_mutation, common_assets, known_cells,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, heterogeneity,
-                 rule_idx, distance_idx, election_costs, max_reward):
+                 rule_idx, distance_idx, election_costs, max_reward, seed=None):
         super().__init__()
+        if seed is not None:
+            self.random.seed(seed)  # Mesa RNG (Pythons random.Random
+            self.np_random = np.random.default_rng(seed)  # Central NumPy RNG
+            np.random.seed(seed)  # For any legacy/global Numpy calls
+        else:
+            self.np_random = np.random.default_rng()
         # TODO clean up class (public/private variables)
         self.height = height
         self.width = width
@@ -615,30 +166,30 @@ class ParticipationModel(mesa.Model):
         self.datacollector.collect(self)
 
     @property
-    def num_colors(self):
+    def num_colors(self) -> int:
         return len(self.colors)
 
     @property
-    def av_area_color_dst(self):
+    def av_area_color_dst(self) -> np.ndarray:
         return self._av_area_color_dst
 
     @av_area_color_dst.setter
-    def av_area_color_dst(self, value):
+    def av_area_color_dst(self, value) -> None:
         self._av_area_color_dst = value
 
     @property
-    def num_agents(self):
+    def num_agents(self) -> int:
         return len(self.voting_agents)
 
     @property
-    def num_areas(self):
+    def num_areas(self) -> int:
         return len(self.areas)
 
     @property
-    def preset_color_dst(self):
-        return len(self._preset_color_dst)
+    def preset_color_dst(self) -> np.ndarray:
+        return self._preset_color_dst
 
-    def _initialize_color_cells(self, id_start=0):
+    def _initialize_color_cells(self, id_start=0) -> None:
         """
         Initialize one ColorCell per grid cell.
         Args:
@@ -659,7 +210,7 @@ class ParticipationModel(mesa.Model):
             # And to the 'model.color_cells' list (for faster access)
             self.color_cells[idx] = cell  # TODO: check if its not better to simply use the grid when finally changing the grid type to SingleGrid
 
-    def initialize_voting_agents(self, id_start=0):
+    def initialize_voting_agents(self, id_start=0) -> None:
         """
         This method initializes as many voting agents as set in the model with
         a randomly chosen personality. It places them randomly on the grid.
@@ -669,7 +220,6 @@ class ParticipationModel(mesa.Model):
             id_start (int): The starting ID for agents to ensure unique IDs.
         """
         dist = self.personality_distribution
-        rng = np.random.default_rng()
         assets = self.common_assets // self.num_agents
         for idx in range(self.num_agents):
             # Assign unique ID after areas
@@ -678,7 +228,8 @@ class ParticipationModel(mesa.Model):
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
             # Choose a personality based on the distribution
-            personality_idx = rng.choice(len(self.personalities), p=dist)
+            nr = len(self.personalities)
+            personality_idx = self.np_random.choice(nr, p=dist)
             personality = self.personalities[personality_idx]
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(unique_id, self, (x, y), personality,
@@ -690,7 +241,7 @@ class ParticipationModel(mesa.Model):
                 cell = cast(ColorCell, cell)
             cell.add_agent(agent)
 
-    def init_color_probs(self, election_impact):
+    def init_color_probs(self, election_impact) -> np.ndarray:
         """
         This method initializes a probability array for the mutation of colors.
         The probabilities reflect the election outcome with some impact factor.
@@ -703,7 +254,7 @@ class ParticipationModel(mesa.Model):
         p = p / sum(p)
         return p
 
-    def initialize_area(self, a_id: int, x_coord, y_coord):
+    def initialize_area(self, a_id: int, x_coord, y_coord) -> None:
         """
         This method initializes one area in the models' grid.
         """
@@ -730,14 +281,8 @@ class ParticipationModel(mesa.Model):
         are placed randomly on the grid to ensure that `num_areas`
         areas are initialized.
 
-        Args:
-            None.
-
-        Returns:
-            None. initializes `num_areas` and places them directly on the grid.
-
-        Raises:
-            None, but if `self.num_areas == 0`, the method exits early.
+        Initializes `num_areas` and places them directly on the grid.
+        But if `self.num_areas == 0`, the method exits early.
 
         Example:
             - Given `num_areas = 4` and `grid.width = grid.height = 10`,
@@ -775,9 +320,9 @@ class ParticipationModel(mesa.Model):
             self.initialize_area(next(a_ids), x_coord, y_coord)
 
 
-    def initialize_global_area(self):
+    def initialize_global_area(self) -> Area:
         """
-        This method initializes the global area spanning the whole grid.
+        Initializes the global area spanning the whole grid.
 
         Returns:
             Area: The global area (with unique_id set to -1 and idx to (0, 0)).
@@ -789,16 +334,15 @@ class ParticipationModel(mesa.Model):
         return global_area
 
 
-    def create_personalities(self, n: int):
+    def create_personalities(self, n: int) -> np.ndarray:
         """
-        Creates n unique "personalities," where a "personality" is a specific
-        permutation of self.num_colors color indices.
+        Creates n unique personalities as permutations of color indices.
 
         Args:
-            n (int): Number of unique personalities to generate.
+            n (int): Number of unique personalities.
 
         Returns:
-            np.ndarray: Array of shape `(n, num_colors)`.
+            np.ndarray: Shape `(n, num_colors)`.
 
         Raises:
             ValueError: If `n` exceeds the possible unique permutations.
@@ -810,7 +354,7 @@ class ParticipationModel(mesa.Model):
             [2, 1, 0]]
         """
         # p_colors = range(1, self.num_colors)  # Personalities exclude white
-        max_permutations = np.math.factorial(self.num_colors)
+        max_permutations = factorial(self.num_colors)
         if n > max_permutations or n < 1:
             raise ValueError(f"Cannot generate {n} unique personalities: "
                              f"only {max_permutations} unique ones exist.")
@@ -824,7 +368,7 @@ class ParticipationModel(mesa.Model):
         return np.array(list(selected_permutations))
 
 
-    def initialize_datacollector(self):
+    def initialize_datacollector(self) -> mesa.DataCollector:
         color_data = {f"Color {i}": get_color_distribution_function(i) for i in
                       range(self.num_colors)}
         return mesa.DataCollector(
@@ -884,7 +428,7 @@ class ParticipationModel(mesa.Model):
                 cell.color = most_common_color
 
 
-    def create_color_distribution(self, heterogeneity: float):
+    def create_color_distribution(self, heterogeneity: float) -> np.ndarray:
         """
         This method is used to create a color distribution that has a bias
         according to the given heterogeneity factor.
@@ -900,19 +444,19 @@ class ParticipationModel(mesa.Model):
         return dst_array
 
 
-    def color_patches(self, cell: ColorCell, patch_power: float):
+    def color_patches(self, cell: ColorCell, patch_power: float) -> int:
         """
-        This method is used to create a less random initial color distribution
+        Meant to create a less random initial color distribution
         using a similar logic to the color patches model.
         It uses a (normalized) bias coordinate to center the impact of the
         color patches structures impact around.
 
         Args:
-            cell: The cell that may change its color accordingly
-            patch_power: Like a radius of impact around the bias point.
+            cell (ColorCell): The cell possibly changing color.
+            patch_power (float): Radius-like impact around bias point.
 
         Returns:
-            int: The consensus color or the cell's own color if no consensus.
+            int: Consensus color or the cell's own color if no consensus.
         """
         # Calculate the normalized position of the cell
         normalized_x = cell.row / self.height
@@ -954,7 +498,7 @@ class ParticipationModel(mesa.Model):
 
 
     @staticmethod
-    def pers_dist(size):
+    def pers_dist(size: int) -> np.ndarray:
         """
         This method creates a normalized normal distribution array for picking
         and depicting the distribution of personalities in the model.
@@ -963,9 +507,10 @@ class ParticipationModel(mesa.Model):
             size: The mean value of the normal distribution.
 
         Returns:
-            np.array: Normalized (sum is one) array mimicking a gaussian curve.
+            np.ndarray: Normalized (sum is one) array mimicking a gaussian curve.
         """
         # Generate a normal distribution
+        # TODO: Change to model or global rng?!!!
         rng = np.random.default_rng()
         dist = rng.normal(0, 1, size)
         dist.sort()  # To create a gaussian curve like array
@@ -976,7 +521,7 @@ class ParticipationModel(mesa.Model):
 
 
     @staticmethod
-    def create_all_options(n: int, include_ties=False):
+    def create_all_options(n: int, include_ties=False) -> np.ndarray:
         """
         Creates a matrix (an array of all possible ranking vectors),
         if specified including ties.
@@ -987,7 +532,7 @@ class ParticipationModel(mesa.Model):
             include_ties (bool): If True, rankings include ties.
 
         Returns:
-            np.array: A matrix containing all possible ranking vectors.
+            np.ndarray: A matrix containing all possible ranking vectors.
         """
         if include_ties:
             # Create all possible combinations and sort out invalid rankings
@@ -999,7 +544,7 @@ class ParticipationModel(mesa.Model):
         return r
 
     @staticmethod
-    def color_by_dst(color_distribution: np.array) -> int:
+    def color_by_dst(color_distribution: np.ndarray) -> int:
         """
         Selects a color (int) from range(len(color_distribution))
         based on the given color_distribution array, where each entry represents
@@ -1017,7 +562,7 @@ class ParticipationModel(mesa.Model):
         """
         if abs(sum(color_distribution) -1) > 1e-8:
             raise ValueError("The color_distribution array must sum to 1.")
-        r = np.random.random()  # Random float between 0 and 1
+        r = np.random.random()  # Float betw. 0 and 1
         cumulative_sum = 0.0
         for color_idx, prob in enumerate(color_distribution):
             if prob < 0:
@@ -1028,3 +573,41 @@ class ParticipationModel(mesa.Model):
 
         # This point should never be reached.
         raise ValueError("Unexpected error in color_distribution.")
+
+
+def get_color_distribution_function(color: int) -> Callable[
+    [ParticipationModel], float]:
+    """
+    Returns a lambda to extract a single color's distribution from the model.
+
+    Args:
+        color (int): Index of the color.
+
+    Returns:
+        Callable[[ParticipationModel], float]: Extractor.
+    """
+    return lambda m: float(m.av_area_color_dst[color])
+
+
+def get_area_voter_turnout(area: Area) -> Optional[float]:
+    return area.voter_turnout if isinstance(area, Area) else None
+
+
+def get_area_dist_to_reality(area: Area) -> Optional[float]:
+    return area.dist_to_reality if isinstance(area, Area) else None
+
+
+def get_area_color_distribution(area: Area) -> Optional[list[float]]:
+    return area.color_distribution.tolist() if isinstance(area, Area) else None
+
+
+def get_election_results(area: Area) -> Optional[list[int]]:
+    """
+    Returns the voted ordering as a list or None if not available.
+
+    Returns:
+        list[int] | None
+    """
+    if isinstance(area, Area) and area.voted_ordering is not None:
+        return area.voted_ordering.tolist()
+    return None

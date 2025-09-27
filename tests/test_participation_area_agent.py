@@ -1,8 +1,8 @@
 import unittest
 import random
 import numpy as np
-from src.participation_model import Area
-from src.agents.participation_agent import VoteAgent
+from src.models.participation_model import Area
+from src.agents.vote_agent import VoteAgent
 from .test_participation_model import TestParticipationModel, model_cfg
 from src.utils.social_welfare_functions import majority_rule, approval_voting
 from src.utils.distance_functions import kendall_tau, spearman

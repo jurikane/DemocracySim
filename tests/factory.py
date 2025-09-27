@@ -1,4 +1,4 @@
-from src.participation_model import ParticipationModel
+from src.models.participation_model import ParticipationModel
 from pathlib import Path
 import yaml
 

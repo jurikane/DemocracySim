@@ -1,13 +1,15 @@
 from .test_participation_model import TestParticipationModel
 import unittest
-from src.participation_model import Area
-from src.agents.participation_agent import VoteAgent, combine_and_normalize
+from src.models.participation_model import Area
+from src.agents.vote_agent import VoteAgent, combine_and_normalize
+from src.config.loader import load_config
 import numpy as np
 import random
-from src.model_setup import config
 
-model_cfg = config["model"]
-vis_cfg = config.get("visualization", {})
+
+config = load_config()
+model_cfg = config.model
+vis_cfg = config.visualization
 
 class TestVotingAgent(unittest.TestCase):
 
@@ -16,7 +18,7 @@ class TestVotingAgent(unittest.TestCase):
         test_model.setUp()
         self.model = test_model.model
         personality = random.choice(self.model.personalities)
-        self.agent = VoteAgent(model_cfg["num_agents"] + 1, self.model,
+        self.agent = VoteAgent(model_cfg.num_agents + 1, self.model,
                                pos=(0, 0), personality=personality, assets=25)
         self.additional_test_area = Area(self.model.num_areas + 1,
                                          model=self.model, height=5,
@@ -55,12 +57,11 @@ class TestVotingAgent(unittest.TestCase):
             print(f"Assumed opt. distribution with factor {a_factor}: \n{comb}")
             # Validation
             if a_factor == 0.0:
-                # TODO: This test fails sometimes (11.09.25)
-                self.assertEqual(list(comb), list(est_dist))  # <--- here
+                self.assertTrue(np.allclose(comb, est_dist, atol=1e-12))
             elif a_factor == 1.0:
                 if sum(own_prefs) != 1.0:
                     own_prefs = own_prefs / sum(own_prefs)
-                self.assertEqual(list(comb), list(own_prefs))
+                self.assertTrue(np.allclose(comb, own_prefs, atol=1e-12))
             self.assertTrue(np.isclose(sum(comb), 1.0, atol=1e-8))
 
     def test_compute_assumed_opt_dist(self):

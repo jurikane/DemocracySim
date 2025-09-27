@@ -1,29 +1,84 @@
-/.idea
+# OS
 .DS_Store
-.junie
-TODO.txt
+.AppleDouble
+.LSOverride
+
+# IDEs / Editors
+.idea/
+.vscode/
+*.iml
+.run/
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+.hypothesis/
+.ipynb_checkpoints
+
+# Virtual envs / tooling
+.venv/
+venv/
+env/
+ENV/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Coverage / reports / caches
+.coverage
+.coverage.*
+.cache/
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+nosetests.xml
+pytestdebug.log
+
+# Logs / temp
+logs/
+*.log
+*.log.*
+*.tmp
+tmp/
+temp/
+
+# Jupyter
 *.ipynb
-/democracy_sym/config/*
-/democracy_sym/simulation_output/*
-/examples
-/starter_model
-/mesa
+
+# C extensions
+*.so
+
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.webpack-cache/
+.parcel-cache/
+
+# MkDocs
 site/
-sorted-out-tests
-/benchmarks
-/notes
-/docs/work_in_progress_exclude
-# short term:
-Dockerfile
-docker-compose.yml
-Singularity.def
-/app.py
-/main.py
-templates
-/docs/images/CI-images
-.coverage*
-*.cache
-ai_info.txt
-convert_docstrings.py
-simulation_output/
+docs/images/
+
+# Project data and artifacts
+data/
+!data/.gitkeep
+
+# Configs
+configs/**/*.yaml
+!configs/**/default.yaml
+
+# Local env and secrets
+.env
+.env.*
+*.env
+*.secrets
+secrets/
