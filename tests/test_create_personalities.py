@@ -1,7 +1,7 @@
 import unittest
 from math import factorial
 from itertools import permutations
-from tests.factory import create_default_model
+from tests.factory import create_test_model
 from unittest.mock import MagicMock
 
 
@@ -9,7 +9,7 @@ class TestParticipationModel(unittest.TestCase):
 
     def setUp(self):
         """Create a fresh model instance before each test and mock `initialize_area`."""
-        self.model = create_default_model(
+        self.model, _ = create_test_model(
             height=10, width=10, num_agents=100, num_colors=4,
             num_personalities=10, area_size_variance=0.2,
             num_areas=4, av_area_height=5, av_area_width=5,

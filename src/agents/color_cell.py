@@ -1,4 +1,4 @@
-from mesa import Agent
+from mesa import Agent, Model
 
 
 class ColorCell(Agent):
@@ -9,7 +9,7 @@ class ColorCell(Agent):
         color (int): The color of the cell.
     """
 
-    def __init__(self, unique_id, model, pos: tuple, initial_color: int):
+    def __init__(self, unique_id: int, model: Model, pos: tuple, initial_color: int):
         """
         Initializes a ColorCell, at the given row, col position.
 
@@ -20,33 +20,30 @@ class ColorCell(Agent):
             initial_color (int): The initial color of the cell.
         """
         super().__init__(unique_id, model)
-        # The "pos" variable in mesa is special, so I avoid it here
+        # self.pos will be set by the grid when we place the agent
         self._row = pos[0]
         self._col = pos[1]
         self.color = initial_color  # The cell's current color (int)
         self._next_color = None
-        self.agents = []
-        self.areas = []
+        self.agents = []    # TODO change to using mesas AgentSet class!
+        self.areas = []    # TODO change to using mesas AgentSet class!
         self.is_border_cell = False
+        # Add it to the models grid
+        model.grid.place_agent(self, pos)
 
     def __str__(self):
-        return (f"Cell ({self.unique_id}, pos={self.position}, "
+        return (f"Cell ({self.unique_id}, pos={self.pos}, "
                 f"color={self.color}, num_agents={self.num_agents_in_cell})")
-
-    @property
-    def col(self):
-        """The col location of this cell."""
-        return self._col
 
     @property
     def row(self):
         """The row location of this cell."""
-        return self._row
+        return self.pos[0]
 
     @property
-    def position(self):  # The variable pos is special in mesa!
-        """The location of this cell."""
-        return self._row, self._col
+    def col(self):
+        """The col location of this cell."""
+        return self.pos[1]
 
     @property
     def num_agents_in_cell(self):

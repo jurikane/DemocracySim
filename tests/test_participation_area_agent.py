@@ -1,19 +1,107 @@
 import unittest
 import random
 import numpy as np
-from src.models.participation_model import Area
+from src.agents.area import Area
+from src.agents.color_cell import ColorCell
 from src.agents.vote_agent import VoteAgent
-from .test_participation_model import TestParticipationModel, model_cfg
+from src.model_setup import build_model_kwargs
+from src.models.participation_model import ParticipationModel
+from src.config.loader import load_config
 from src.utils.social_welfare_functions import majority_rule, approval_voting
 from src.utils.distance_functions import kendall_tau, spearman
+import mesa.space as space
+from mesa import Model
 
 
-class TestArea(unittest.TestCase):
+###################################
+# Dummy classes for isolated tests #
+###################################
+
+class DummyModel(Model):
+    """Minimal model for testing Area without full ParticipationModel."""
+    def __init__(self, width=5, height=5, num_colors=3):
+        super().__init__()
+        self.width = width
+        self.height = height
+        self.num_colors = num_colors
+        self.grid = space.SingleGrid(height=height, width=width, torus=True)
+        self.personalities = [0, 1]
+        self.voting_agents = []
+        # Stubs for election-related attributes
+        self.distance_func = lambda *args, **kwargs: 0
+        self.voting_rule = lambda x: [0]
+        self.options = [0, 1, 2]
+        self.known_cells = 1
+        self.color_search_pairs = []
+        self.max_reward = 10
+        self.election_costs = 1
+        self.mu = 0.1
+        self.color_probs = [1 / num_colors] * num_colors
+        self.np_random = np.random.default_rng()
+
+##################################
+# Unit tests for the Area class  #
+##################################
+
+class TestAreaBasics(unittest.TestCase):
 
     def setUp(self):
-        test_model = TestParticipationModel()
-        test_model.setUp()
-        self.model = test_model.model
+        self.dummy_model = DummyModel()
+
+    def test_initialization_no_variance(self):
+        area = Area(unique_id=1, model=self.dummy_model, height=2, width=3, size_variance=0)
+        self.assertEqual(area.num_cells, 6)
+        self.assertEqual(area.num_agents, 0)
+        self.assertTrue((area.color_distribution == np.zeros(self.dummy_model.num_colors)).all())
+
+    def test_invalid_variance_raises(self):
+        with self.assertRaises(ValueError):
+            Area(unique_id=2, model=self.dummy_model, height=2, width=3, size_variance=1.5)
+
+    def test_add_agent_and_cell(self):
+        area = Area(1, self.dummy_model, 2, 2, 0)
+        cell = ColorCell(10, self.dummy_model, (0, 0), 1)
+        area.add_cell(cell)
+        dummy_agent = VoteAgent(1, self.dummy_model, (0, 0))
+        area.add_agent(dummy_agent)
+
+        self.assertIn(cell, area.cells)
+        self.assertIn(dummy_agent, area.agents)
+        self.assertEqual(area.num_agents, 1)
+
+    def test_idx_field_assigns_cells(self):
+        # Replace the automatically placed cell with our own
+        cell = ColorCell(11, self.dummy_model, (0, 0), 2)
+        present_cell = self.dummy_model.grid.get_cell_list_contents([(0, 0)])[0]
+        self.dummy_model.grid.remove_agent(present_cell)
+        self.dummy_model.grid.place_agent(cell, (0, 0))
+
+        area = Area(1, self.dummy_model, 1, 1, 0)
+        area.idx_field = (0, 0)
+
+        self.assertEqual(area.idx_field, (0, 0))
+        self.assertIn(cell, area.cells)
+        self.assertAlmostEqual(area.color_distribution.sum(), 1.0, places=7)
+
+    def test_str_representation(self):
+        area = Area(99, self.dummy_model, 2, 3, 0)
+        s = str(area)
+        self.assertIn("Area(id=99", s)
+        self.assertIn("size=2x3", s)
+        self.assertIn("num_agents=0", s)
+        self.assertIn("num_cells=6", s)
+
+
+################################################################
+# Integration tests for Area within ParticipationModel context #
+################################################################
+
+class TestAreaIntegration(unittest.TestCase):
+
+    def setUp(self):
+        self.model_cfg = load_config().model
+        model_cfg = build_model_kwargs(self.model_cfg)
+        self.model = ParticipationModel(**model_cfg)
 
     def test_update_color_distribution(self):
         rand_area = random.sample(self.model.areas, 1)[0]
@@ -68,7 +156,7 @@ class TestArea(unittest.TestCase):
     def test_adding_new_area_and_agent_within_it(self):
         # Additional area and agent
         personality = random.choice(self.model.personalities)
-        a = VoteAgent(model_cfg["num_agents"] + 1, self.model, pos=(0, 0),
+        a = VoteAgent(self.model_cfg.num_agents + 1, self.model, pos=(0, 0),
                       personality=personality, assets=25)
         additional_test_area = Area(self.model.num_areas + 1,
                                     model=self.model, height=5,

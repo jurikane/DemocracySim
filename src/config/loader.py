@@ -13,9 +13,12 @@ def check_schema(open_file):
     return AppConfig.model_validate(raw)
 
 
-def load_config(config_file=None):
+def load_config(config_file=None) -> AppConfig:
     """
     Load configuration from a YAML file.
+
+    Returns:
+        AppConfig: Validated configuration object.
     """
     if config_file is None:
         config_file = os.environ.get("CONFIG_FILE", "default.yaml")

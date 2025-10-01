@@ -1,12 +1,23 @@
 from src.models.participation_model import ParticipationModel
-from pathlib import Path
-import yaml
+from src.model_setup import build_model_kwargs
+from src.config.loader import load_config
+from src.config.schema import AppConfig
 
-DEFAULT_CONFIG = Path("configs/default.yaml")
 
-def create_default_model(**overrides):
-    with open(DEFAULT_CONFIG, "r") as f:
-        config = yaml.safe_load(f)
-    params = config["model"]
+def create_test_model(**overrides) -> tuple[ParticipationModel, dict]:
+    """
+    Create a ParticipationModel instance using the default config
+    (set by DEFAULT_CONFIG, fallback to 'configs/default.yaml'),
+    returning both the model and the parameter dictionary used.
+    This is useful for tests that need to inspect model parameters.
+
+    Args:
+        **overrides: Any model parameters to override from defaults.
+    Returns:
+        tuple: (ParticipationModel instance, config dict)
+    """
+    model_app_cfg = load_config().model
+    params = build_model_kwargs(model_app_cfg)
     params.update(overrides)
-    return ParticipationModel(**params)
+    model = ParticipationModel(**params)
+    return model, params
