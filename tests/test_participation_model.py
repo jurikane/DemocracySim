@@ -1,88 +1,158 @@
-import unittest
-from src.models.participation_model import (ParticipationModel, Area,
-                                            distance_functions,
-                                            social_welfare_functions)
-from src.config.loader import load_config
 import mesa
+import unittest
+import numpy as np
+from src.models.participation_model import (
+    ParticipationModel, Area,
+    distance_functions,
+    social_welfare_functions
+)
+from tests.factory import create_test_model
 
-config = load_config()
-model_cfg = config.model.model_dump()
-vis_cfg = config.visualization.model_dump()
 
-
-class TestParticipationModel(unittest.TestCase):
-
+class TestParticipationModelUnit(unittest.TestCase):
     def setUp(self):
-        self.model = ParticipationModel(**model_cfg)
+        self.model, self.model_cfg = create_test_model()
 
-    # def test_empty_model(self):
-    #     # TODO: Test empty model
-    #     model = ParticipationModel(10, 10, 0, 1, 0, 1, 0, 1, 1, 0.1, 1, 0, False, 1, 1, 1, 1, 1, False)
-    #     self.assertEqual(model.num_agents, 0)
+    ###################################
+    # Basic unit tests for Area class #
+    ###################################
+
+    def test_initialization_creates_expected_components(self):
+        model_cfg = self.model_cfg
+        self.assertEqual(self.model.grid.width, model_cfg["width"])
+        self.assertEqual(self.model.grid.height, model_cfg["height"])
+        self.assertEqual(len(self.model.voting_agents), model_cfg["num_agents"])
+        self.assertEqual(len(self.model.color_cells),
+                         model_cfg["width"] * model_cfg["height"])
+        self.assertEqual(len(self.model.areas), model_cfg["num_areas"])
+        self.assertIsNotNone(self.model.global_area)
+
+    def test_personality_distribution_sums_to_one(self):
+        dist = self.model.personality_distribution
+        np.testing.assert_almost_equal(dist.sum(), 1.0)
+        self.assertEqual(len(dist), len(self.model.personalities))
+
+    def test_preset_color_distribution_valid(self):
+        dst = self.model.preset_color_dst
+        np.testing.assert_almost_equal(sum(dst), 1.0)
+        self.assertTrue(all(p >= 0 for p in dst))
+
+    # --- Static & helper methods ---
+
+    def test_color_by_dst_respects_distribution(self):
+        probs = np.array([0.1, 0.3, 0.6])
+        counts = [0, 0, 0]
+        for _ in range(1000):
+            c = ParticipationModel.color_by_dst(probs)
+            counts[c] += 1
+        self.assertGreater(counts[2], counts[1])
+        self.assertGreater(counts[1], counts[0])
+
+    def test_create_all_options_without_ties(self):
+        opts = ParticipationModel.create_all_options(3)
+        self.assertEqual(opts.shape[1], 3)
+        for row in opts:
+            self.assertEqual(sorted(row), [0, 1, 2])
+
+    def test_create_all_options_with_ties(self):
+        opts = ParticipationModel.create_all_options(2, include_ties=True)
+        self.assertIsInstance(opts, np.ndarray)
+        self.assertEqual(opts.shape[1], 2)
+
+    def test_pers_dist_sums_to_one(self):
+        dist = ParticipationModel.pers_dist(5)
+        np.testing.assert_almost_equal(dist.sum(), 1.0)
+
+    # --- Functional behavior ---
+
+    def test_step_updates_model(self):
+        before = self.model.av_area_color_dst.copy()
+        self.model.step()
+        after = self.model.av_area_color_dst
+        self.assertEqual(len(before), len(after))
+        np.testing.assert_almost_equal(after.sum(), 1.0, decimal=6)
+
+    def test_update_av_area_color_dst(self):
+        self.model.update_av_area_color_dst()
+        dst = self.model.av_area_color_dst
+        np.testing.assert_almost_equal(dst.sum(), 1.0)
+
+    def test_init_color_probs(self):
+        probs = self.model.init_color_probs(1.0)
+        self.assertEqual(probs.shape, (self.model.num_colors,))
+        np.testing.assert_almost_equal(probs.sum(), 1.0)
+
+    def test_initialize_area_adds_area(self):
+        old_num = sum(a is not None for a in self.model.areas)
+        self.model.initialize_area(0, 0, 0)
+        new_num = sum(a is not None for a in self.model.areas)
+        self.assertGreaterEqual(new_num, old_num)
+
+    ################################################################
+    # Integration tests for Area within ParticipationModel context #
+    ################################################################
 
     def test_initialization(self):
-        areas_count = len([area for area in self.model.areas
-                           if isinstance(area, Area)])
+        areas_count = len([
+            area for area in self.model.areas if isinstance(area, Area)])
         self.assertEqual(areas_count, self.model.num_areas)
         self.assertIsInstance(self.model.datacollector, mesa.DataCollector)
-        # TODO ... more tests
 
     def test_model_options(self):
-        self.assertEqual(self.model.num_agents, model_cfg["num_agents"])
-        self.assertEqual(self.model.num_colors, model_cfg["num_colors"])
-        self.assertEqual(self.model.num_areas, model_cfg["num_areas"])
+        self.assertEqual(self.model.num_agents, self.model_cfg["num_agents"])
+        self.assertEqual(self.model.num_colors, self.model_cfg["num_colors"])
+        self.assertEqual(self.model.num_areas, self.model_cfg["num_areas"])
         self.assertEqual(self.model.area_size_variance,
-                         model_cfg["area_size_variance"])
-        v_rule = social_welfare_functions[model_cfg["rule_idx"]]
-        dist_func = distance_functions[model_cfg["distance_idx"]]
-        self.assertEqual(self.model.common_assets, model_cfg["common_assets"])
+                         self.model_cfg["area_size_variance"])
+
+        v_rule = social_welfare_functions[self.model_cfg["rule_idx"]]
+        dist_func = distance_functions[self.model_cfg["distance_idx"]]
+
+        self.assertEqual(self.model.common_assets,
+                         self.model_cfg["common_assets"])
         self.assertEqual(self.model.voting_rule, v_rule)
         self.assertEqual(self.model.distance_func, dist_func)
-        self.assertEqual(self.model.election_costs, model_cfg["election_costs"])
+        self.assertEqual(self.model.election_costs,
+                         self.model_cfg["election_costs"])
 
     def test_create_color_distribution(self):
         eq_dst = self.model.create_color_distribution(heterogeneity=0)
-        self.assertEqual([1/model_cfg["num_colors"] for _ in eq_dst], eq_dst)
-        print(f"Color distribution with heterogeneity=0: {eq_dst}")
+        np.testing.assert_allclose(
+            eq_dst, [1 / self.model_cfg["num_colors"]] * len(eq_dst))
+
         het_dst = self.model.create_color_distribution(heterogeneity=1)
-        print(f"Color distribution with heterogeneity=1: {het_dst}")
         mid_dst = self.model.create_color_distribution(heterogeneity=0.5)
-        print(f"Color distribution with heterogeneity=0.5: {mid_dst}")
-        assert het_dst != eq_dst
-        assert mid_dst != eq_dst
-        assert het_dst != mid_dst
+
+        self.assertFalse(np.allclose(het_dst, eq_dst))
+        self.assertFalse(np.allclose(mid_dst, eq_dst))
+        self.assertFalse(np.allclose(het_dst, mid_dst))
 
     def test_distribution_of_personalities(self):
         p_dist = self.model.personality_distribution
-        self.assertAlmostEqual(sum(p_dist), 1.0)
-        self.assertEqual(len(p_dist), model_cfg["num_personalities"])
+        self.assertAlmostEqual(float(sum(p_dist)), 1.0)
+        self.assertEqual(len(p_dist), self.model_cfg["num_personalities"])
+
         voting_agents = self.model.voting_agents
         nr_agents = self.model.num_agents
         personalities = list(self.model.personalities)
         p_counts = {str(i): 0 for i in personalities}
-        # Count the occurrence of each personality
+
         for agent in voting_agents:
             p_counts[str(agent.personality)] += 1
-        # Normalize the counts to get the real personality distribution
+
         real_dist = [p_counts[str(p)] / nr_agents for p in personalities]
-        # Simple tests
+
         self.assertEqual(len(real_dist), len(p_dist))
         self.assertAlmostEqual(float(sum(real_dist)), 1.0)
-        # Compare each value
-        my_delta = 0.4 / model_cfg["num_personalities"]  # The more personalities, the smaller the delta
+
+        my_delta = 0.4 / self.model_cfg["num_personalities"]
         for p_dist_val, real_p_dist_val in zip(p_dist, real_dist):
             self.assertAlmostEqual(p_dist_val, real_p_dist_val, delta=my_delta)
-
 
     def test_initialize_areas(self):
         # TODO (very non-trivial) - has been tested manually so far.
         pass
 
     def test_step(self):
+        # TODO: Add full step integration test
         pass
-    # TODO add test_step
-    # def test_step(self):
-    #     initial_data = self.model.datacollector.get_model_vars_dataframe().copy()
-    #     self.model.step()
-    #     new_data = self.model.datacollector.get_model_vars_dataframe()
-    #     self.assertNotEqual(initial_data, new_data)

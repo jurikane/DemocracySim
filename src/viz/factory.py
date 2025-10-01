@@ -56,7 +56,7 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
             "Layer": 0,
             "Color": color_name,
             # Hover fields:
-            "Position": f"{agent.position}",
+            "Position": f"{agent.pos}",
             "Color - text": color_name,
         }
 

@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import MagicMock
-from tests.factory import create_default_model
+from tests.factory import create_test_model
 
 class TestDistributeRewards(unittest.TestCase):
     def setUp(self):
-        self.model = create_default_model(num_areas=1)
+        self.model, _ = create_test_model(num_areas=1)
         self.model.initialize_area = MagicMock()
 
     def test_distribute(self):
