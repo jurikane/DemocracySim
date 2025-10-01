@@ -184,6 +184,9 @@ class Area(Agent):
         Args:
             agent (VoteAgent): The agent to be added to the area.
         """
+        # Make sure its an instance of Agent
+        if not isinstance(agent, Agent):
+            raise ValueError("Only VoteAgent instances can be added to an Area")
         self.agents.append(agent)
 
     def add_cell(self, cell: ColorCell) -> None:

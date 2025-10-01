@@ -53,8 +53,8 @@ class ParticipationModel(mesa.Model):
     Attributes:
         grid (mesa.space.SingleGrid): Grid representing the environment
             with a single occupancy per cell (the color).
-        height (int): The height of the grid.
-        width (int): The width of the grid.
+        grid.height (int): The height of the grid.
+        grid.width (int): The width of the grid.
         colors (ndarray): Array containing the unique color identifiers.
         voting_rule (Callable): A function defining the social welfare
             function to aggregate agent preferences. This callable typically
@@ -110,8 +110,6 @@ class ParticipationModel(mesa.Model):
         else:
             self.np_random = np.random.default_rng()
         # TODO clean up class (public/private variables)
-        self.height = height
-        self.width = width
         self.colors = np.arange(num_colors)
         # Create a scheduler that goes through areas first then color cells
         self.scheduler = CustomScheduler(self)
@@ -138,21 +136,21 @@ class ParticipationModel(mesa.Model):
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing rankings
-        self.search_pairs = list(combinations(range(0, self.options.size), 2))  # TODO check if correct!
-        self.option_vec = np.arange(self.options.size)  # Also to speed up
+        self.search_pairs = list(combinations(range(0, self.options.shape[0]), 2))  # TODO check if correct!
+        self.option_vec = np.arange(self.options.shape[0])  # Also to speed up
         self.color_search_pairs = list(combinations(range(0, num_colors), 2))
         # Create color cells (IDs start after areas+agents)
-        self.color_cells: List[Optional[ColorCell]] = [None] * (height * width)
+        self.color_cells: List[Optional[ColorCell]] = [None] * (height * width)  # TODO change to using mesas AgentSet class!
         self._initialize_color_cells(id_start=num_agents + num_areas)
         # Create voting agents (IDs start after areas)
         # TODO: Where do the agents get there known cells from and how!?
-        self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
+        self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents    # TODO change to using mesas AgentSet class!
         self.personalities = self.create_personalities(num_personalities)
         self.personality_distribution = self.pers_dist(num_personalities)
         self.initialize_voting_agents(id_start=num_areas)
         # Area variables
         self.global_area = self.initialize_global_area()  # TODO create bool variable to make this optional
-        self.areas: List[Optional[Area]] = [None] * num_areas
+        self.areas: List[Optional[Area]] = [None] * num_areas    # TODO change to using mesas AgentSet class!
         self.av_area_height = av_area_height
         self.av_area_width = av_area_width
         self.area_size_variance = area_size_variance
@@ -164,6 +162,14 @@ class ParticipationModel(mesa.Model):
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
         self.datacollector.collect(self)
+
+    @property
+    def height(self) -> int:
+        return self.grid.height
+
+    @property
+    def width(self) -> int:
+        return self.grid.width
 
     @property
     def num_colors(self) -> int:
@@ -203,12 +209,10 @@ class ParticipationModel(mesa.Model):
             color = self.color_by_dst(self._preset_color_dst)
             # Create the cell (skip ids for area and voting agents)
             cell = ColorCell(unique_id, self, (row, col), color)
-            # Add it to the grid
-            self.grid.place_agent(cell, (row, col))
             # Add the color cell to the scheduler
             #self.scheduler.add(cell) # TODO: check speed diffs using this..
             # And to the 'model.color_cells' list (for faster access)
-            self.color_cells[idx] = cell  # TODO: check if its not better to simply use the grid when finally changing the grid type to SingleGrid
+            self.color_cells[idx] = cell  # TODO: change to using the grid
 
     def initialize_voting_agents(self, id_start=0) -> None:
         """
@@ -219,6 +223,9 @@ class ParticipationModel(mesa.Model):
         Args:
             id_start (int): The starting ID for agents to ensure unique IDs.
         """
+        # Testing parameter validity
+        if self.num_agents < 1:
+            raise ValueError("The number of agents must be at least 1.")
         dist = self.personality_distribution
         assets = self.common_assets // self.num_agents
         for idx in range(self.num_agents):

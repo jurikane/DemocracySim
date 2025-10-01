@@ -1,14 +1,14 @@
 import unittest
 from unittest.mock import MagicMock
 from numpy import sqrt
-from tests.factory import create_default_model  # Import from factory.py
+from tests.factory import create_test_model  # Import from factory.py
 
 
 class TestParticipationModelInitializeAllAreas(unittest.TestCase):
 
     def setUp(self):
         """Create a fresh model instance before each test and mock `initialize_area`."""
-        self.model = create_default_model(
+        self.model, _ = create_test_model(
             num_areas=4,  # Override num_areas to 4
             height=10,  # Set grid height
             width=10,  # Set grid width
@@ -31,7 +31,7 @@ class TestParticipationModelInitializeAllAreas(unittest.TestCase):
 
     def test_initialize_all_areas_with_non_square_number(self):
         """Test that the method handles non-square numbers by adding extra areas randomly."""
-        model = create_default_model(
+        model, _ = create_test_model(
             num_areas=5,  # Override num_areas to 5
         )
         # model.initialize_all_areas()  # Runs on initialization
@@ -40,14 +40,14 @@ class TestParticipationModelInitializeAllAreas(unittest.TestCase):
 
     def test_initialize_all_areas_no_areas(self):
         """Test that the method does nothing if num_areas is 0."""
-        model = create_default_model(
+        model, _ = create_test_model(
             num_areas=0,  # Set num_areas to 0
         )
         assert model.num_areas == 0  # Verify no areas were initialized
 
     def test_initialize_all_areas_random_additional_areas(self):
         """Test that additional areas are placed randomly if num_areas exceeds uniform grid capacity."""
-        model = create_default_model(
+        model, _ = create_test_model(
             num_areas=5,  # Override num_areas to 5
             height=10,
             width=10,
@@ -68,7 +68,7 @@ class TestParticipationModelInitializeAllAreas(unittest.TestCase):
 
     def test_initialize_all_areas_handles_non_square_distribution(self):
         """Test that the number of areas matches `num_areas` even for non-square cases."""
-        model = create_default_model(
+        model, _ = create_test_model(
             num_areas=6,  # Override num_areas to 6
         )
         # Check that exactly 6 areas are initialized
@@ -76,7 +76,7 @@ class TestParticipationModelInitializeAllAreas(unittest.TestCase):
 
     def test_initialize_all_areas_calculates_distances_correctly(self):
         """Test that area distances are calculated correctly."""
-        model = create_default_model(
+        model, _ = create_test_model(
             num_areas=4,  # Override num_areas to 4
             height=10,
             width=10,
