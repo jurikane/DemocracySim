@@ -1,7 +1,29 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, cast, List, Optional
 import numpy as np
+from typing import TYPE_CHECKING, cast, List, Optional, Protocol, Any
 from mesa import Agent
+
+class Policy(Protocol):
+    def decide_participation(self, agent, area) -> bool: ...
+    def decide_altruism(self, agent, area) -> float: ...
+    def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
+
+class RandomParticipationPolicy:
+    """Default fallback policy: random participation, random altruism, distance-based ranking."""
+    def decide_participation(self, agent, area) -> bool:
+        return bool(agent.random.choice([True, False]))
+    def decide_altruism(self, agent, area) -> float:
+        return agent.random.uniform(0.0, 1.0)
+    def rank_options(self, agent, area, options: Any) -> np.ndarray:
+        # Use existing distance function; identical to original vote logic.
+        dist_func = agent.model.distance_func
+        ranking = np.zeros(options.shape[0])
+        color_search_pairs = agent.model.color_search_pairs
+        for i, option in enumerate(options):
+            ranking[i] = dist_func(agent.personality, option, color_search_pairs)
+        ranking /= ranking.sum() if ranking.sum() else 1.0
+        return ranking
+
 if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell
@@ -37,12 +59,10 @@ def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
 
 
 class VoteAgent(Agent):
-    """An agent that has limited knowledge and resources and
-    can decide to use them to participate in elections.
-    """
+    """An agent with resources and preferences that may participate in elections."""
 
     def __init__(self, unique_id, model: ParticipationModel, pos,
-                 personality=None, personality_idx=None, assets=1, add=True):
+                 personality=None, personality_idx=None, assets=1, add=True, policy: Policy | None = None):
         """ Create a new agent.
 
         Attributes:
@@ -75,6 +95,8 @@ class VoteAgent(Agent):
         # Election relevant variables
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
+        # Policy (behavior strategy)
+        self.policy: Policy = policy if policy is not None else RandomParticipationPolicy()
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -145,7 +167,8 @@ class VoteAgent(Agent):
         #print("Agent", self.unique_id, "decides whether to participate",
         #      "in election of area", area.unique_id)
         # TODO Implement this (is to be decided upon a learned decision tree)
-        return bool(self.random.choice([True, False]))
+        # Delegate to policy for decision
+        return self.policy.decide_participation(self, area)
 
     def decide_altruism_factor(self, area: Area) -> float:
         """
@@ -156,8 +179,7 @@ class VoteAgent(Agent):
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # This part is important - also for monitoring - save/plot a_factors
-        a_factor = self.random.uniform(0.0, 1.0)
-        #print(f"Agent {self.unique_id} has an altruism factor of: {a_factor}")
+        a_factor = self.policy.decide_altruism(self, area)
         return a_factor
 
     def compute_assumed_opt_dist(self, area: Area) -> np.array:
@@ -185,15 +207,7 @@ class VoteAgent(Agent):
         return ass_opt
 
     def vote(self, area: Area):
-        """
-        The agent votes in the election of a given area,
-        i.e., she returns a preference ranking vector over all options.
-        (Ranking: `index = option`, `value proportional to rank`)
-        The available options are set in the model.
-
-        Args:
-            area (Area): The area in which the election takes place.
-        """
+        """Return a normalized preference ranking vector over all options."""
         # TODO Implement this (is to be decided upon a learned decision tree)
         # Compute the color distribution that is assumed to be the best choice.
         est_best_dist = self.compute_assumed_opt_dist(area)  # TODO !!! (Why is this not used ???)
@@ -204,13 +218,8 @@ class VoteAgent(Agent):
             self.model = cast(ParticipationModel, self.model)
 
         options = self.model.options
-        dist_func = self.model.distance_func
-        ranking = np.zeros(options.shape[0])
-        color_search_pairs = self.model.color_search_pairs
-        for i, option in enumerate(options):
-            # TODO: is it possible to leave out white?
-            ranking[i] = dist_func(self.personality, option, color_search_pairs)
-        ranking /= ranking.sum()  # Normalize the preference vector
+        # Delegate to policy ranking
+        ranking = self.policy.rank_options(self, area, options)
         return ranking
 
     def estimate_real_distribution(self, area: Area) -> tuple[np.array, float]:

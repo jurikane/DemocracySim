@@ -40,3 +40,4 @@ simulation:
   processes: 8
   store_grid: true
   grid_interval: 1
+  base_seed: 57

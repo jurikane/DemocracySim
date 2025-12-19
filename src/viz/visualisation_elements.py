@@ -8,7 +8,7 @@ import io
 
 # Visualization config (is set by make_canvas before these are instantiated)
 vis_cfg = get_vis_cfg()
-show_area_stats = bool(vis_cfg.show_area_stats)
+show_area_stats = bool(getattr(vis_cfg, 'show_area_stats', True))
 
 
 def save_plot_to_base64(fig):
@@ -23,11 +23,14 @@ def save_plot_to_base64(fig):
 
 class AreaStats(TextElement):
     def render(self, model):
-        step = model.scheduler.steps
+        step = getattr(model.scheduler, 'steps', 0)
         if not show_area_stats or step == 0:
             return ""
-
         data = model.datacollector.get_agent_vars_dataframe()
+        if data is None or len(data) == 0:
+            return ""
+        if 'ColorDistribution' not in data.columns or 'DistToReality' not in data.columns or 'ElectionResults' not in data.columns:
+            return ""
         color_distribution = data['ColorDistribution'].dropna()
         dist_to_reality = data['DistToReality'].dropna()
         election_results = data['ElectionResults'].dropna()
@@ -48,23 +51,35 @@ class AreaStats(TextElement):
         for i, area_id in enumerate(area_ids):
             row = i
             ax1 = axes[row][0]
-            area_data = color_distribution.xs(area_id, level=1)
-            a_data = dist_to_reality.xs(area_id, level=1)
+            try:
+                area_data = color_distribution.xs(area_id, level=1)
+                a_data = dist_to_reality.xs(area_id, level=1)
+            except Exception:
+                continue
             ax1.plot(a_data.index, a_data.values, color='Black', linestyle='--')
             for color_idx in range(num_colors):
-                cdata = area_data.apply(lambda x: x[color_idx])
-                ax1.plot(cdata.index, cdata.values, color=COLORS[color_idx])
+                try:
+                    cdata = area_data.apply(lambda x: x[color_idx])
+                    ax1.plot(cdata.index, cdata.values, color=COLORS[color_idx])
+                except Exception:
+                    continue
             ax1.set_title(f'Area {area_id} \n--- deviation from voted distribution')
             ax1.set_xlabel('Step')
             ax1.set_ylabel('Color Distribution')
 
             ax2 = axes[row][1]
-            area_data = election_results.xs(area_id, level=1)
+            try:
+                area_data = election_results.xs(area_id, level=1)
+            except Exception:
+                continue
             for color_id in range(num_colors):
-                cdata = area_data.apply(lambda x: list(x).index(color_id) if color_id in x else None)
-                ax2.plot(cdata.index, cdata.values, marker='o',
-                         label=f'Color {color_id}', color=COLORS[color_id],
-                         linewidth=0.2)
+                try:
+                    cdata = area_data.apply(lambda x: list(x).index(color_id) if color_id in x else None)
+                    ax2.plot(cdata.index, cdata.values, marker='o',
+                             label=f'Color {color_id}', color=COLORS[color_id],
+                             linewidth=0.2)
+                except Exception:
+                    continue
             ax2.set_title(f'Area {area_id} \n')
             ax2.set_xlabel('Step')
             ax2.set_ylabel('Elected ranking (rank values)')
@@ -80,12 +95,19 @@ class PersonalityDistribution(TextElement):
         self.pers_dist_plot = None
 
     def create_once(self, model):
-        dists = model.personality_distribution
-        personalities = model.personalities
-        num_personalities = personalities.shape[0]
-        num_agents = model.num_agents
-        colors = COLORS[:model.num_colors]
-        num_colors = len(personalities[0])
+        try:
+            dists = getattr(model, 'personality_distribution', None)
+            personalities = getattr(model, 'personalities', None)
+            if dists is None or personalities is None:
+                self.pers_dist_plot = ""
+                return
+            num_personalities = personalities.shape[0]
+            num_agents = getattr(model, 'num_agents', 0)
+            colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
+            num_colors = len(personalities[0])
+        except Exception:
+            self.pers_dist_plot = ""
+            return
 
         fig, ax = plt.subplots(figsize=(6, 4))
         heights = dists
@@ -108,25 +130,33 @@ class PersonalityDistribution(TextElement):
         self.pers_dist_plot = save_plot_to_base64(fig)
 
     def render(self, model):
-        if model.scheduler.steps == 0:
+        if getattr(model.scheduler, 'steps', 0) == 0:
             self.create_once(model)
-        return self.pers_dist_plot
+        return self.pers_dist_plot or ""
 
 
 class VoterTurnoutElement(TextElement):
     def render(self, model):
-        step = model.scheduler.steps
+        step = getattr(model.scheduler, 'steps', 0)
         if not show_area_stats or step == 0:
             return ""
-        data = model.datacollector.get_agent_vars_dataframe()
-        voter_turnout = data['VoterTurnout'].dropna()
+        try:
+            data = model.datacollector.get_agent_vars_dataframe()
+            if data is None or len(data) == 0 or 'VoterTurnout' not in data.columns:
+                return ""
+            voter_turnout = data['VoterTurnout'].dropna()
+        except Exception:
+            return ""
         if len(voter_turnout) == 0:
             return ""
 
         area_ids = voter_turnout.index.get_level_values(1).unique()
         fig, ax = plt.subplots(figsize=(8, 6))
         for i, area_id in enumerate(area_ids):
-            area_data = voter_turnout.xs(area_id, level=1)
+            try:
+                area_data = voter_turnout.xs(area_id, level=1)
+            except Exception:
+                continue
             if i < 10:
                 line_style = '-'
             elif i < 20:
@@ -144,11 +174,14 @@ class VoterTurnoutElement(TextElement):
 
 class MatplotlibElement(TextElement):
     def render(self, model):
-        step = model.scheduler.steps
+        step = getattr(model.scheduler, 'steps', 0)
         if not show_area_stats or step == 0:
             return ""
-        data = model.datacollector.get_model_vars_dataframe()
-        collective_assets = data.get("Collective assets")
+        try:
+            data = model.datacollector.get_model_vars_dataframe()
+            collective_assets = data.get("Collective assets")
+        except Exception:
+            collective_assets = None
         if collective_assets is None:
             return ""
         fig, ax = plt.subplots()
@@ -162,11 +195,11 @@ class MatplotlibElement(TextElement):
 
 class StepsTextElement(TextElement):
     def render(self, model):
-        step = model.scheduler.steps
-        first_agents = [str(a) for a in model.voting_agents[:5]]
-        return (f"Step: {step} | cells: {len(model.color_cells)} | "
-                f"areas: {len(model.areas)} | First 5 voters of "
-                f"{len(model.voting_agents)}: {first_agents}")
+        step = getattr(model.scheduler, 'steps', 0)
+        first_agents = [str(a) for a in getattr(model, 'voting_agents', [])[:5]]
+        return (f"Step: {step} | cells: {len(getattr(model, 'color_cells', []))} | "
+                f"areas: {len(getattr(model, 'areas', []))} | First 5 voters of "
+                f"{len(getattr(model, 'voting_agents', []))}: {first_agents}")
 
 
 class AreaPersonalityDists(TextElement):
@@ -175,12 +208,19 @@ class AreaPersonalityDists(TextElement):
         self.areas_pers_dist_plot = None
 
     def create_once(self, model):
-        colors = COLORS[:model.num_colors]
-        personalities = model.personalities
-        num_colors = len(personalities[0])
-        num_personalities = personalities.shape[0]
+        try:
+            colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
+            personalities = getattr(model, 'personalities', None)
+            if personalities is None:
+                self.areas_pers_dist_plot = ""
+                return
+            num_colors = len(personalities[0])
+            num_personalities = personalities.shape[0]
+            num_areas = len(getattr(model, 'areas', []))
+        except Exception:
+            self.areas_pers_dist_plot = ""
+            return
 
-        num_areas = len(model.areas)
         if num_areas == 0:
             self.areas_pers_dist_plot = ""
             return
@@ -190,10 +230,10 @@ class AreaPersonalityDists(TextElement):
         fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols,
                                  figsize=(8, num_areas), sharex=True)
         axes_flat = axes.flatten() if hasattr(axes, "flatten") else [axes]
-        for ax, area in zip(axes_flat, model.areas):
-            p_dist = area.personality_distribution
-            num_agents = area.num_agents
-            heights = [int(val * num_agents) for val in p_dist]
+        for ax, area in zip(axes_flat, getattr(model, 'areas', [])):
+            p_dist = getattr(area, 'personality_distribution', [])
+            num_agents = getattr(area, 'num_agents', 0)
+            heights = [int(val * num_agents) for val in p_dist] if p_dist else []
             bars = ax.bar(range(num_personalities), heights, color='skyblue')
             max_height = max(heights) if heights else 1
             p_top_hight = max_height * 0.02
@@ -210,12 +250,12 @@ class AreaPersonalityDists(TextElement):
 
             ax.set_xlabel('"Personality" ID')
             ax.set_ylabel('Number of Agents')
-            ax.set_title(f'Area {area.unique_id}')
+            ax.set_title(f'Area {getattr(area, "unique_id", "?")}')
 
         plt.tight_layout()
         self.areas_pers_dist_plot = save_plot_to_base64(fig)
 
     def render(self, model):
-        if model.scheduler.steps == 0:
+        if getattr(model.scheduler, 'steps', 0) == 0:
             self.create_once(model)
-        return self.areas_pers_dist_plot
+        return self.areas_pers_dist_plot or ""

@@ -1,7 +1,6 @@
 from src.models.participation_model import ParticipationModel
 from src.model_setup import build_model_kwargs
 from src.config.loader import load_config
-from src.config.schema import AppConfig
 
 
 def create_test_model(**overrides) -> tuple[ParticipationModel, dict]:

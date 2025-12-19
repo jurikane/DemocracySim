@@ -31,7 +31,7 @@ IN THE SOFTWARE.
   @media screen and (min-width:60em){.md-sidebar--secondary{display:none}}
   @media screen and (min-width:76.25em){.md-sidebar--primary{display:none}}
   .mdx-hero__image img {
-    max-width: 90% !important;
+    max-width: 85% !important;
     height: auto !important;
     transform: translateY(+3%);
     transform: translateX(-1%);
@@ -46,14 +46,20 @@ IN THE SOFTWARE.
         <div class="mdx-hero__content">
           <h1>{{ config.site_name }}</h1>
             <p>{{ config.site_description }}</p>
-            <p>This project is kindly supported by <a href="https://www.openpetition.eu/">OpenPetition</a> and supervised by the <a href="https://siks.informatik.uni-leipzig.de">Swarm Intelligence and Complex Systems Group</a> at University Leipzig.</p>
+            <p>This thesis investigates how different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent simulation with adaptive agents.
+                Agents are heterogeneous in their preferences and resources and repeatedly decide whether to participate in elections that aggregate individual preferences into collective decisions with payoff consequences.
+                The environment is stationary and controlled, such that collective decisions affect outcome accuracy and the distribution of rewards among agents over time.
+                Agent behavior adapts via a fixed, explicit learning mechanism based on experienced outcomes, ensuring non-random, time-dependent dynamics.
+                The study compares a small set of canonical voting rules (2–4) while keeping all other model components constant.
+                Outcomes are evaluated primarily using participation rates and inequality measures (Gini index) as time-series, supported by descriptive statistics on collective outcomes.
+                The thesis explicitly excludes strategic voting, complex learning models, empirical validation, policy recommendations, and normative notions such as optimal democratic design.</p>
             <br>
-            <p>Select your preferred language from the top menu (limited availability).</p>
+            <p>This project is kindly supported by <a href="https://www.openpetition.eu/">OpenPetition</a> and supervised by the <a href="https://siks.informatik.uni-leipzig.de">Swarm Intelligence and Complex Systems Group</a> at University Leipzig.</p>
           <a href="{{ page.next_page.url | url }}" title="{{ page.next_page.title | e }}" class="md-button md-button--primary">
             Read
           </a>
           <a href="{{ 'https://github.com/jurikane/DemocracySim' | url }}" title="DemocracySim" class="md-button">
-            Participate
+            Explore Code
           </a>
         </div>
       </div>

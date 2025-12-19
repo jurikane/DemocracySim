@@ -47,7 +47,7 @@ def build_model_kwargs(model_cfg: ModelConfig) -> dict:
             hasattr(model_cfg, k)}
 
 
-def build_model_params(model_cfg: AppConfig) -> dict:
+def build_model_params(model_cfg: ModelConfig) -> dict:
     """
     Create Mesa UI sliders/params so the web UI shows controls.
     """
@@ -191,7 +191,7 @@ def build_model_params(model_cfg: AppConfig) -> dict:
     return params
 
 
-def make_model(cfg: ModelConfig) -> ParticipationModel:
+def make_model(cfg: AppConfig) -> ParticipationModel:
     """
     Instantiate the model using the loaded config (non-UI usage).
     """

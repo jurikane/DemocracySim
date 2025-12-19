@@ -76,11 +76,3 @@ class ColorCell(Agent):
         #
         # self._next_color = self.random.choice(tied_opinions)[0]
         pass
-
-    def advance(self):
-        """
-        Set the state of the agent to the next state.
-        TODO
-        """
-        # self._color = self._next_color
-        pass
