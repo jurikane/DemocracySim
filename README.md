@@ -5,45 +5,104 @@
 
 [//]: # ([![pytest dev]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml/badge.svg?branch=dev&#41;]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml&#41;)
 
-# DemocracySim: Multi-Agent Simulations to research democratic voting and participation
+# DemocracySim: Multi-Agent Simulation of Voting Rules, Participation, and Inequality
 
-Codebase of a simulation for the master thesis 
-"Influence of different voting rules on participation and welfare in a simulated multi-agent democracy" 
-at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de) 
+Codebase for the master thesis
+
+**"How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?"**
+
+conducted at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de) 
 at the [Faculty of Mathematics and Computer Science](https://www.mathcs.uni-leipzig.de/en)
 of [Leipzig University](https://www.uni-leipzig.de/en).
+
 This project is kindly supported by [OpenPetition](https://osd.foundation).
 
-### Documentation
+## Documentation
 
-For details see the [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-pages.
+Additional [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-pages.
+
+---
+
+## Thesis Scope
+
+The master thesis associated with this repository focuses on a *controlled subset* of the simulation framework.
+
+Specifically, the thesis investigates how different **voting rules** influence the **temporal evolution of participation rates and inequality** in a simple multi-agent simulation with adaptive agents. The analysis is based on time-series data generated under fixed environmental and behavioral assumptions, comparing outcomes across a small number of canonical voting rules.
+
+While the codebase supports additional agent behaviors, metrics, and normative evaluation criteria, these features are **explicitly out of scope for the thesis contribution** and are considered extensions for future research.
+
+---
 
 ## Overview
 
-**DemocracySim** is a multi-agent simulation framework designed to study democratic participation 
-and group decision-making in a dynamic, evolving environment. 
-Agents interact within a grid-based world, form beliefs about their surroundings, 
-and vote in elections that influence both their individual outcomes and the state of the system.
+**DemocracySim** is a multi-agent simulation framework designed to study democratic participation and collective decision-making in a controlled, evolving environment.
 
-The environment consists of a toroidal grid of colored fields, where neighboring cells form territories. 
+Agents are situated within a grid-based world and repeatedly participate in elections that aggregate individual preferences into collective decisions. 
+These decisions affect both the distribution of rewards among agents and the subsequent evolution of the environment, creating feedback between individual behavior and collective outcomes.
+
+The environment is implemented as a toroidal grid of colored fields, where neighboring groups of cells form territories. 
 Each territory holds regular elections in which agents vote on the observed color distribution. 
-The results of these elections not only influence how agents are rewarded 
-but also shape the environment itself through controlled mutation processes.
+Election outcomes influence agent rewards and drive controlled mutation processes that update the environment over time.
 
-Agents have limited resources and face decisions about whether to participate in elections, or remain inactive. 
-Each agent belongs to a personality type defined by preferences over the possible field colors, 
-with types distributed to create majority and minority dynamics. 
-During elections, agents face a strategic trade-off between voting for what benefits them personally 
-and voting for what they believe to be the most accurate representation of their territory—decisions 
-that impact both immediate rewards and the system’s future state.
+Agents have limited resources and heterogeneous preferences over current color distributions as well as possible election outcomes ("personalities"). 
+At each election, agents decide whether to participate or abstain, creating a participation dilemma. 
+When voting, agents face a trade-off between aligning with their personal preferences and contributing to collective accuracy, as collective decisions affect future rewards.
 
-The simulation tracks a range of metrics including participation rates, collective accuracy, 
-reward inequality (Gini index), and behavioral indicators such as altruism and diversity of expressed opinions. 
-**DemocracySim** also allows for the evaluation of group performance under different normative goals—utilitarian, 
-egalitarian, or Rawlsian—by comparing actual outcomes to theoretically optimal decisions.
+---
 
-By modeling participation dilemmas, reward mechanisms, and personality-driven behavior, 
-**DemocracySim** provides a controlled environment for investigating how democratic systems 
-respond to different institutional rules and individual incentives. 
-It is intended both as a research tool and as a foundation for future explorations into deliberation, representation, 
-and fairness in collective choice.
+## Agents
+
+Agents are heterogeneous and bounded in their decision-making capabilities. Each agent:
+
+- Possesses preferences over possible outcomes (personality types)
+- Has limited resources that evolve over time
+- Decides whether to participate in elections
+- Adapts its behavior based on experienced outcomes via a fixed learning mechanism
+
+Personality types are distributed across the population to induce majority–minority situations, but the thesis does not focus on group-specific optimization or strategic behavior.
+
+---
+
+## Elections and Voting Rules
+
+Elections aggregate individual agent inputs into collective decisions using predefined **voting rules**. 
+Voting rules are the primary experimental manipulation in the thesis.
+
+The thesis compares a small set of canonical voting rules while keeping all other model components constant. 
+Elections determine collective outcomes that influence reward allocation and environmental updates.
+
+---
+
+## Metrics and Data Collection
+
+The simulation infrastructure supports the collection of a wide range of behavioral and system-level metrics.
+
+The **core thesis analysis** focuses on:
+
+- **Participation rate**: the proportion of agents participating in elections over time
+- **Inequality**: measured using the Gini index over agent resources
+
+Additional metrics such as collective accuracy or average rewards may be logged for descriptive or explanatory purposes but are not the primary focus of the thesis analysis.
+
+---
+
+## Out of Scope (Thesis)
+
+The following aspects are explicitly **out of scope for the master thesis**, even if partially supported by the codebase:
+
+- Strategic voting or game-theoretic equilibrium analysis
+- Complex or multi-stage learning mechanisms
+- Empirical validation or real-world policy recommendations
+- Normative evaluation frameworks (e.g. utilitarian, egalitarian, Rawlsian optimization)
+- Claims about collective intelligence or optimal democratic design
+
+These aspects are considered directions for future research beyond the thesis.
+
+
+---
+
+## Project Vision (Beyond the Thesis)
+
+Beyond the scope of the master thesis, **DemocracySim** is intended as a flexible research platform for exploring more complex questions related to collective decision-making, participation, fairness, and democratic system design. 
+Potential future extensions include richer agent models, alternative decision-making mechanisms, and applications to real-world collaborative or political settings.
+
