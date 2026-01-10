@@ -35,7 +35,7 @@ class Area(Agent):
         self._voted_ordering = None
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
-        self._election_fee_pool: int = 0
+        self._election_fee_pool: float = 0
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -267,10 +267,10 @@ class Area(Agent):
             # Ensure participating agents pay at least 1 if they have assets.
             if cost == 0 and agent.assets >= 1 and not el_cost_rate == 0:
                 cost = 1
-            # Give agents their (new) known fields
-            agent.update_known_cells(area=self)
-            if agent.ask_for_participation(area=self):
+            if agent.ask_for_participation(area=self) and agent.assets > 0:
                 agent.num_elections_participated += 1
+                # Give agents their (new) known fields
+                agent.update_known_cells(area=self)
                 # Collect the participation fee into the area pool
                 agent.assets = agent.assets - cost
                 self._election_fee_pool += cost
