@@ -3,16 +3,91 @@ rebuild the model from the stored config/seed (if available) and apply
 saved grid snapshots to the model so callers can inspect or visualize them.
 
 Usage: python -m scripts.run_replay <run_dir>
+
+If <run_dir> is omitted, the script will list available runs under
+<project_root>/data/simulation_output and prompt for a selection.
 """
 import sys
 from pathlib import Path
 import yaml
 import json
 import numpy as np
+from typing import Optional
 
 from src.config.schema import AppConfig
 from src.model_setup import make_model
 from src.replay.replay_server import make_replay_server
+from src.config.loader import get_project_root
+
+
+def _default_runs_base_dir() -> Path:
+    return get_project_root() / "data" / "simulation_output"
+
+
+def _resolve_run_dir(arg: Optional[str]) -> Optional[Path]:
+    """Resolve the run directory passed by the user.
+
+    Resolution order for relative paths:
+      1) as provided relative to CWD (so explicit relative paths still work)
+      2) project-root-relative
+      3) under <project_root>/data/simulation_output/<arg>
+    """
+    if not arg:
+        return None
+
+    p = Path(arg)
+    if p.is_absolute():
+        return p
+
+    # 1) relative to CWD
+    if (Path.cwd() / p).exists():
+        return (Path.cwd() / p).resolve()
+
+    # 2) relative to project root
+    pr = get_project_root()
+    if (pr / p).exists():
+        return (pr / p).resolve()
+
+    # 3) relative to default runs base
+    base = _default_runs_base_dir()
+    if (base / p).exists():
+        return (base / p).resolve()
+
+    # Return the most reasonable candidate (project root) for error reporting
+    return (pr / p).resolve()
+
+
+def _pick_run_dir_interactive() -> Optional[Path]:
+    """Ask the user to pick a run directory from data/simulation_output."""
+    base = _default_runs_base_dir()
+    if not base.exists():
+        print("No simulation_output directory found at:", base)
+        return None
+
+    candidates = [p for p in base.iterdir() if p.is_dir()]
+    # Most recent first (folder names are timestamps, but mtime works too)
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if not candidates:
+        print("No runs found in:", base)
+        return None
+
+    print("No replay directory given. Which run do you want to replay?\n")
+    for i, p in enumerate(candidates, start=1):
+        print(f"  {i}) {p.name}")
+
+    while True:
+        raw = input("\nEnter number (or 'q' to quit): ").strip()
+        if raw.lower() in {"q", "quit", "exit"}:
+            return None
+        try:
+            idx = int(raw)
+        except ValueError:
+            print("Please enter a number.")
+            continue
+        if 1 <= idx <= len(candidates):
+            return candidates[idx - 1]
+        print(f"Please enter a number between 1 and {len(candidates)}.")
 
 
 def _apply_grid_to_model(model, arr: np.ndarray):
@@ -32,10 +107,15 @@ def _apply_grid_to_model(model, arr: np.ndarray):
 
 
 def main():
+    run_dir: Optional[Path]
     if len(sys.argv) < 2:
+        run_dir = _pick_run_dir_interactive()
+        if run_dir is None:
+            return
+    else:
+        run_dir = _resolve_run_dir(sys.argv[1])
+    if run_dir is None:
         print("Usage: python -m scripts.run_replay <run_dir>")
-        return
-    run_dir = Path(sys.argv[1])
     if not run_dir.exists():
         print("Run directory does not exist:", run_dir)
         return

@@ -5,7 +5,7 @@ import yaml
 import numpy as np
 from tqdm import tqdm
 
-from src.config.loader import load_config
+from src.config.loader import load_config, get_project_root
 from src.model_setup import build_model_kwargs, make_model
 from src.replay.replay_logger import ReplayLogger
 
@@ -88,6 +88,31 @@ def run_once(run_id: int, model_cfg, sim_cfg, out_dir: Path):
     rl.write_meta(config=model_cfg if hasattr(model_cfg, "model_dump") else model_cfg, seed=run_seed)
 
 
+def _resolve_output_base_dir(conf) -> Path:
+    """Return the base output folder for runs.
+
+    Rules:
+      - default: <project_root>/data/simulation_output
+      - if conf.output.directory is absolute: use as-is
+      - if conf.output.directory is relative: interpret relative to project root
+    """
+    project_root = get_project_root()
+    default_dir = project_root / "data" / "simulation_output"
+
+    output_cfg = getattr(conf, "output", None)
+    if output_cfg is None:
+        return default_dir
+
+    configured = getattr(output_cfg, "directory", None)
+    if configured is None:
+        return default_dir
+
+    candidate = Path(configured)
+    if candidate.is_absolute():
+        return candidate
+    return project_root / candidate
+
+
 def batch_run(config_file: str = None):
     conf = load_config(config_file)
     # conf is a pydantic AppConfig object
@@ -96,10 +121,7 @@ def batch_run(config_file: str = None):
     output_cfg = getattr(conf, "output", None)
     viz_cfg = conf.visualization
     # Determine base directory
-    if output_cfg is None:
-        base_dir = Path("data") / "simulation_output"
-    else:
-        base_dir = Path(getattr(output_cfg, "directory", Path("data") / "simulation_output"))
+    base_dir = _resolve_output_base_dir(conf)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_root = base_dir / ts
     run_root.mkdir(parents=True, exist_ok=True)

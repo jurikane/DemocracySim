@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
 
 class ModelConfig(BaseModel):
     """
@@ -45,6 +46,13 @@ class SimulationConfig(BaseModel):
     grid_interval: int    # Interval for storing grid state
     base_seed: Optional[int] = None    # Simulations base random seed
 
+
+class OutputConfig(BaseModel):
+    """Configuration for where run artifacts are written."""
+    # Absolute path is used as-is; relative paths are interpreted relative to project root.
+    directory: Path = Path("data") / "simulation_output"
+
+
 class AppConfig(BaseModel):
     """
     Top-level application configuration.
@@ -52,3 +60,4 @@ class AppConfig(BaseModel):
     model: ModelConfig
     visualization: VisualizationConfig
     simulation: SimulationConfig
+    output: Optional[OutputConfig] = None
