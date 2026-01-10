@@ -86,7 +86,6 @@ class ParticipationModel(mesa.Model):
         common_assets (int): Total resources to be distributed among all agents.
         av_area_color_dst (ndarray): Current (area)-average color distribution.
         election_costs (float): Cost associated with participating in elections.
-        max_reward (float): Maximum reward possible for an agent each election.
         known_cells (int): Number of cells each agent knows the color of.
         datacollector (mesa.DataCollector): A tool for collecting data
             (metrics and statistics) at each simulation step.
@@ -100,7 +99,7 @@ class ParticipationModel(mesa.Model):
                  mu, election_impact_on_mutation, common_assets, known_cells,
                  num_areas, av_area_height, av_area_width, area_size_variance,
                  patch_power, color_patches_steps, heterogeneity,
-                 rule_idx, distance_idx, election_costs, max_reward, seed=None,
+                 rule_idx, distance_idx, election_costs, seed=None,
                  max_steps: Optional[int] = None):
         super().__init__()
         if seed is not None:
@@ -128,7 +127,6 @@ class ParticipationModel(mesa.Model):
         self._av_area_color_dst = self._preset_color_dst
         # Elections
         self.election_costs = election_costs
-        self.max_reward = max_reward
         self.known_cells = known_cells  # Integer
         self.voting_rule = social_welfare_functions[rule_idx]
         self.distance_func = distance_functions[distance_idx]

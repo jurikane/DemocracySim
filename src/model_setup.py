@@ -33,7 +33,6 @@ _ALLOWED_KW = {
     "rule_idx",
     "distance_idx",
     "election_costs",
-    "max_reward",
     "seed",
 }
 
@@ -74,18 +73,11 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             step=1,
         ),
         "election_costs": mesa.visualization.Slider(
-            name="Election costs",
+            name="Election costs in %",
             value=model_cfg.election_costs,
             min_value=0,
-            max_value=100,
-            step=1,
-        ),
-        "max_reward": mesa.visualization.Slider(
-            name="Maximal reward",
-            value=model_cfg.max_reward,
-            min_value=0,
-            max_value=max(1, int(model_cfg.election_costs) * 100),
-            step=1,
+            max_value=1,
+            step=0.01,
         ),
         "mu": mesa.visualization.Slider(
             name="Mutation rate",
@@ -105,7 +97,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             name="# Agents",
             value=num_agents,
             min_value=10,
-            max_value=99999,
+            max_value=1500,
             step=10,
         ),
         "num_colors": mesa.visualization.Slider(

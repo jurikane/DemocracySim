@@ -95,6 +95,7 @@ class VoteAgent(Agent):
         # Election relevant variables
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
+        self.award_history: List[float] = []
         # Policy (behavior strategy)
         self.policy: Policy = policy if policy is not None else RandomParticipationPolicy()
 
@@ -153,6 +154,20 @@ class VoteAgent(Agent):
             if n_cells >= k
             else area.cells
         )
+
+    def reward_agent(self, reward: float):
+        """
+        Reward the agent by increasing/decreasing her assets.
+        And save the awarded amount in the agent's history.
+
+        Args:
+            reward (int): The amount to increase/decrease the assets by.
+        """
+        self.award_history.append(reward)
+        self.assets += reward
+        if self.assets < 0:
+            self.assets = 0  # Ensure assets don't go negative
+
 
     def ask_for_participation(self, area: Area) -> bool:
         """

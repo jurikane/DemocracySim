@@ -35,6 +35,7 @@ class Area(Agent):
         self._voted_ordering = None
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
+        self._election_fee_pool: int = 0
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -216,8 +217,7 @@ class Area(Agent):
         preference_profile = self._tally_votes()
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
-            # TODO: What to do in this case? Cease the simulation?
-            # Set to previous outcome but dont distribute rewards
+            # Set to previous outcome but don't distribute rewards as usual
             print("Area", self.unique_id, "no one participated in the election")
             # If no previous outcome, use the real distribution ordering
             real_color_ord = np.argsort(self.color_distribution)[::-1]
@@ -228,6 +228,9 @@ class Area(Agent):
                 real_color_ord, self._voted_ordering,
                 self.model.color_search_pairs
             )
+            # Slightly punish for non-participation
+            for a in self.agents:
+                a.reward_agent(-1)
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         aggregated = self.model.voting_rule(preference_profile)
@@ -245,7 +248,7 @@ class Area(Agent):
 
     def _tally_votes(self):
         """
-        Gathers votes from agents who choose to (and can afford to) participate.
+        Gathers votes from agents who choose to participate.
 
         Each participating agent contributes a vector of dissatisfaction values with
         respect to the available options. These values are combined into a NumPy array.
@@ -255,15 +258,22 @@ class Area(Agent):
                 participating agents. Each row corresponds to an agent's vote.
         """
         preference_profile = []
+        # Reset pool for this election step.
+        self._election_fee_pool = 0
+        el_cost_rate = self.model.election_costs
         for agent in self.agents:
-            el_costs = self.model.election_costs
+            # election_costs is treated as a percent (0..100) of current assets.
+            cost = int(agent.assets * el_cost_rate)
+            # Ensure participating agents pay at least 1 if they have assets.
+            if cost == 0 and agent.assets >= 1 and not el_cost_rate == 0:
+                cost = 1
             # Give agents their (new) known fields
             agent.update_known_cells(area=self)
-            if (agent.assets >= el_costs
-                    and agent.ask_for_participation(area=self)):
+            if agent.ask_for_participation(area=self):
                 agent.num_elections_participated += 1
-                # Collect the participation fee
-                agent.assets = agent.assets - el_costs
+                # Collect the participation fee into the area pool
+                agent.assets = agent.assets - cost
+                self._election_fee_pool += cost
                 # Ask the agent for her preference
                 preference_profile.append(agent.vote(area=self))
                 # agent.vote returns an array containing dissatisfaction values
@@ -277,23 +287,34 @@ class Area(Agent):
         The function measures the difference between the actual color distribution
         and the elected outcome using a distance metric. It then increments or reduces
         agent assets accordingly, ensuring assets do not fall below zero.
+        Rewards are budget-balanced around the fees collected from participants
+        in the same election step.
         """
         model = self.model
         # Calculate the distance to the real distribution using distance_func
         real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
         dist_func = model.distance_func
-        self._dist_to_reality = dist_func(real_color_ord, self.voted_ordering,
-                                          model.color_search_pairs)
-        # Calculate the rpa - rewards per agent (can be negative)
-        rpa = (0.5 - self.dist_to_reality) * model.max_reward  # TODO: change this (?)
-        # Distribute the two types of rewards
+        self._dist_to_reality = dist_func(
+            real_color_ord, self.voted_ordering, model.color_search_pairs
+        )
+        # Reward budget pool: collected election fees from participating agents
+        pool = self._election_fee_pool
+        if pool == 0:  # To avoid division by zero.
+            pool = 1  # In case election is free (non-participation handled earlier)
+        pool_share = pool / self.num_agents  # Equal share per agent
+        # Adjust pool to be budget-balanced
+        # Distribute the two types of rewards, the common component:
+        #   If dist_to_reality large (vote for change), society invests in change.
+        #   If it is small (vote for small/no change), society reaps returns.
+        common_component = (0.5 - self.dist_to_reality) * pool_share
         color_search_pairs = model.color_search_pairs
         for a in self.agents:
             # Personality-based reward factor
-            p = dist_func(a.personality, real_color_ord, color_search_pairs)
-            # + common reward (reward_pa) for all agents
-            pers_reward = (0.5 - p) * model.max_reward  # Personality-based reward
-            a.assets = max(0, int(a.assets + pers_reward + rpa))
+            #   the closer the elected outcome to the agents personality.
+            #   the higher the reward for the agent.
+            p = dist_func(a.personality, self.voted_ordering, color_search_pairs)
+            pers_component = (1 - p) * pool_share
+            a.reward_agent(pers_component + common_component)
 
     def _update_color_distribution(self) -> None:
         """

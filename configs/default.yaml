@@ -1,15 +1,14 @@
 model:
   # Elections
-  election_costs: 1
-  max_reward: 2
+  election_costs: 0.1  # In percent of common assets
   election_impact_on_mutation: 1.8
   mu: 0.05
   rule_idx: 1
   distance_idx: 1
 
   # Model parameters
-  num_agents: 800
-  common_assets: 40000
+  num_agents: 300
+  common_assets: 15000
   num_colors: 3
   color_patches_steps: 3
   patch_power: 1.0
@@ -36,7 +35,7 @@ visualization:
 
 simulation:
   runs: 3
-  num_steps: 3
+  num_steps: 200
   processes: 8
   store_grid: true
   grid_interval: 1
