@@ -1,18 +1,39 @@
+import numpy as np
+
 
 def get_grid_colors(model):
     """
-    Returns the current grid state as a list of rows.
-    Each row is a list of cell colors. Assumes that the cells were
-    created in row-major order and stored in model.color_cells.
+    Return the current grid state as an array of rows (row-major):
+      result[y][x] == color at position (x, y)
     """
-    grid = []
-    for row in range(model.height):
-        start = row * model.width
-        end = start + model.width
-        # Get the color for each cell in the row.
-        row_colors = [model.color_cells[i].color for i in range(start, end)]
-        grid.append(row_colors)
-    return grid
+    grid = getattr(model, "grid", None)
+    if grid is None:
+        return []
+
+    h, w = grid.height, grid.width
+    # Read in Mesa coord_iter() order (x-major), then reshape and transpose to (h, w)
+    flat = np.fromiter(
+        (cell.color if cell is not None else None for cell, _pos in grid.coord_iter()),
+        dtype=np.int64,
+        count=w * h,
+    )
+    grid_colors_arr = flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
+    return grid_colors_arr
+
+
+def get_area_border_grid(model):
+    """
+    Return the area borders grid state as an array of rows (row-major):
+      result[y][x] == is_border_cell at position (x, y)
+    """
+    grid = model.grid
+    h, w = grid.height, grid.width
+    flat = np.fromiter(
+        (getattr(cell, "is_border_cell", False) for cell, _pos in grid.coord_iter()),
+        dtype=bool,
+        count=w * h,
+    )
+    return flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
 
 
 def compute_collective_assets(model):
