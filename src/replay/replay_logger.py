@@ -64,32 +64,58 @@ class ReplayLogger:
             json.dump(static, f, indent=2)
 
     def append_step(self, step: int, model: Any, grid_snapshot: Optional[np.ndarray] = None) -> None:
-        """Append per-step data. Writes grid snapshot (if provided) and a small
-        json summary extracted from the model/datacollector.
+        """Append per-step data.
+
+        Contract:
+        - Always writes a small JSON in steps/step_XXXX.json with scalar reporters.
+        - Optionally writes grids/grid_XXXX.npy when store_grid=True and grid_snapshot is provided.
+
+        IMPORTANT: We intentionally *do not* store large grid-like reporters (e.g. "GridColors")
+        inside the JSON because it bloats disk usage and is redundant with the .npy snapshot.
         """
-        # Extract model scalars via datacollector if present
         step_data: dict = {"step": int(step)}
+
+        # Extract model scalars via datacollector if present
         try:
             if hasattr(model, "datacollector") and model.datacollector is not None:
-                # model_reporters returns a dict keyed by reporter name
                 mrep = model.datacollector.get_model_vars_dataframe()
-                # get last row
                 if len(mrep):
                     last = mrep.iloc[-1].to_dict()
-                    # Convert numpy types
+                    # Drop heavy / redundant fields
+                    for heavy_key in ("GridColors",):
+                        last.pop(heavy_key, None)
                     step_data.update({k: _to_python(v) for k, v in last.items()})
         except Exception:
-            # Be resilient: fall back to minimal info
             step_data.setdefault("note", "datacollector extract failed")
 
-        # Buffer the step and write immediately to avoid large memory use
+        # Include minimal per-area metrics if the model provides them (optional)
+        # This supports thesis outputs without relying on UI-only collectors.
+        try:
+            if hasattr(model, "areas") and model.areas is not None:
+                area_turnout = {}
+                area_gini = {}
+                for area in model.areas:
+                    aid = getattr(area, "unique_id", getattr(area, "id", None))
+                    if aid is None:
+                        continue
+                    if hasattr(area, "voter_turnout"):
+                        area_turnout[str(aid)] = _to_python(getattr(area, "voter_turnout"))
+                    if hasattr(area, "gini_index"):
+                        area_gini[str(aid)] = _to_python(getattr(area, "gini_index"))
+                if area_turnout:
+                    step_data.setdefault("areas", {})["turnout"] = area_turnout
+                if area_gini:
+                    step_data.setdefault("areas", {})["gini"] = area_gini
+        except Exception:
+            # optional
+            pass
+
         step_file = self._step_filename(step)
         with open(step_file, "w") as f:
             json.dump(step_data, f, indent=2)
 
         if self.store_grid and grid_snapshot is not None:
             grid_file = self._grid_filename(step)
-            # Ensure numpy array and write with np.save
             arr = np.asarray(grid_snapshot)
             # np.save will append .npy if not given; ensure path has that suffix
             np.save(str(grid_file), arr)
@@ -102,7 +128,11 @@ class ReplayLogger:
 
     def write_meta(self, config: dict, seed: Optional[int] = None) -> None:
         # Convert pydantic models or other objects to plain dicts
-        meta = {"config": _to_serializable(config), "seed": int(seed) if seed is not None else None}
+        meta = {
+            "format_version": 1,
+            "config": _to_serializable(config),
+            "seed": int(seed) if seed is not None else None,
+        }
         with open(self.out_dir / "meta.yaml", "w") as f:
             yaml.safe_dump(meta, f)
 

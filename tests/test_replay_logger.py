@@ -25,9 +25,22 @@ def test_replay_logger_smoke():
             grid = None
         rl.append_step(step, model, grid)
     rl.write_meta({'model': model_cfg, 'simulation': cfg.simulation}, seed=123)
+
     # check files
     assert (td / 'static.json').exists()
     assert (td / 'meta.yaml').exists()
-    assert any((td / 'steps').glob('step_*.json'))
-    assert any((td / 'grids').glob('grid_*.npy'))
+    assert (td / 'steps' / 'step_0000.json').exists()
+    assert (td / 'steps' / 'step_0001.json').exists()
+    assert (td / 'grids' / 'grid_0000.npy').exists()
+    assert (td / 'grids' / 'grid_0001.npy').exists()
 
+    # step json should NOT contain heavyweight grid keys
+    import json
+    d0 = json.loads((td / 'steps' / 'step_0000.json').read_text())
+    assert 'step' in d0
+    assert 'GridColors' not in d0
+
+    # meta should contain format_version
+    import yaml
+    meta = yaml.safe_load((td / 'meta.yaml').read_text())
+    assert meta.get('format_version') == 1

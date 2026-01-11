@@ -57,25 +57,19 @@ def _resolve_run_dir(arg: Optional[str]) -> Optional[Path]:
     return (pr / p).resolve()
 
 
-def _pick_run_dir_interactive() -> Optional[Path]:
-    """Ask the user to pick a run directory from data/simulation_output."""
-    base = _default_runs_base_dir()
-    if not base.exists():
-        print("No simulation_output directory found at:", base)
+def _list_runs_under_timestamp(ts_dir: Path) -> list[Path]:
+    """Return run directories (run_0, run_1, ...) under a timestamp folder."""
+    runs = [p for p in ts_dir.iterdir() if p.is_dir() and p.name.startswith("run_")]
+    runs.sort(key=lambda p: p.name)
+    return runs
+
+
+def _pick_from_list(prompt: str, items: list[Path]) -> Optional[Path]:
+    if not items:
         return None
-
-    candidates = [p for p in base.iterdir() if p.is_dir()]
-    # Most recent first (folder names are timestamps, but mtime works too)
-    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-
-    if not candidates:
-        print("No runs found in:", base)
-        return None
-
-    print("No replay directory given. Which run do you want to replay?\n")
-    for i, p in enumerate(candidates, start=1):
+    print(prompt)
+    for i, p in enumerate(items, start=1):
         print(f"  {i}) {p.name}")
-
     while True:
         raw = input("\nEnter number (or 'q' to quit): ").strip()
         if raw.lower() in {"q", "quit", "exit"}:
@@ -85,24 +79,97 @@ def _pick_run_dir_interactive() -> Optional[Path]:
         except ValueError:
             print("Please enter a number.")
             continue
-        if 1 <= idx <= len(candidates):
-            return candidates[idx - 1]
-        print(f"Please enter a number between 1 and {len(candidates)}.")
+        if 1 <= idx <= len(items):
+            return items[idx - 1]
+        print(f"Please enter a number between 1 and {len(items)}.")
+
+
+def _normalize_to_run_dir(path: Path) -> Path:
+    """Accept either a timestamp folder or a run_* folder and return a run_* folder.
+
+    - If `path` itself contains steps/grids -> treat as run dir.
+    - If it's a timestamp folder containing exactly one run_* -> return that.
+    - Otherwise return as-is (caller can handle interactive selection or error).
+    """
+    if (path / "steps").exists() and (path / "grids").exists():
+        return path
+
+    run_dirs = []
+    try:
+        run_dirs = _list_runs_under_timestamp(path)
+    except Exception:
+        run_dirs = []
+
+    if len(run_dirs) == 1:
+        return run_dirs[0]
+    return path
+
+
+def _pick_run_dir_interactive() -> Optional[Path]:
+    """Ask the user to pick a run directory from data/simulation_output.
+
+    Headless layout is:
+      data/simulation_output/<timestamp>/run_<i>/...
+
+    This picker first selects <timestamp>, then selects run_<i>.
+    """
+    base = _default_runs_base_dir()
+    if not base.exists():
+        print("No simulation_output directory found at:", base)
+        return None
+
+    timestamps = [p for p in base.iterdir() if p.is_dir()]
+    timestamps.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if not timestamps:
+        print("No runs found in:", base)
+        return None
+
+    ts_dir = _pick_from_list("No replay directory given. Which timestamp folder do you want to replay?\n", timestamps)
+    if ts_dir is None:
+        return None
+
+    run_dirs = _list_runs_under_timestamp(ts_dir)
+    if not run_dirs:
+        print("No run_* folders found in:", ts_dir)
+        return None
+    if len(run_dirs) == 1:
+        return run_dirs[0]
+
+    return _pick_from_list("\nWhich run do you want to replay?\n", run_dirs)
 
 
 def _apply_grid_to_model(model, arr: np.ndarray):
-    """Apply a HxW numpy array of color indices to model.color_cells in
-    the same row-major order used by the snapshot helper.
+    """Apply a recorded grid snapshot to the model's ColorCell agents.
+
+    Snapshot contract:
+      - `arr` has shape (height, width)
+      - `arr[y, x]` is the color at position (x, y)
+
+    We apply it using Mesa's `grid.coord_iter()` ordering so we don't depend
+    on `model.color_cells` list order.
     """
-    flat = arr.ravel()
-    cells = getattr(model, "color_cells", None)
-    if cells is None:
+    grid = getattr(model, "grid", None)
+    if grid is None:
         return
-    for i, cell in enumerate(cells):
+
+    try:
+        h, w = int(arr.shape[0]), int(arr.shape[1])
+    except Exception:
+        return
+
+    if int(getattr(grid, "width", 0)) != w or int(getattr(grid, "height", 0)) != h:
+        # best-effort: only apply when dimensions match
+        return
+
+    flat = arr.T.ravel()  # (h,w) -> (w,h) x-major flatten
+
+    for i, (cell, _pos) in enumerate(grid.coord_iter()):
+        if cell is None:
+            continue
         try:
             cell.color = int(flat[i])
         except Exception:
-            # best-effort
             pass
 
 
@@ -114,8 +181,24 @@ def main():
             return
     else:
         run_dir = _resolve_run_dir(sys.argv[1])
+
     if run_dir is None:
         print("Usage: python -m scripts.run_replay <run_dir>")
+        return
+
+    run_dir = _normalize_to_run_dir(run_dir)
+
+    # If user passed a timestamp folder with multiple run_* folders, ask which one.
+    if run_dir.exists() and run_dir.is_dir() and not (run_dir / "steps").exists():
+        run_dirs = _list_runs_under_timestamp(run_dir)
+        if len(run_dirs) > 1:
+            picked = _pick_from_list(f"Multiple runs found in {run_dir.name}. Pick one:\n", run_dirs)
+            if picked is None:
+                return
+            run_dir = picked
+        elif len(run_dirs) == 1:
+            run_dir = run_dirs[0]
+
     if not run_dir.exists():
         print("Run directory does not exist:", run_dir)
         return

@@ -11,12 +11,40 @@ from src.replay.replay_logger import ReplayLogger
 
 
 def _snapshot(model):
-    """Fast HxW uint8 color snapshot using model.color_cells list (row-major)."""
-    return np.fromiter(
-        (cell.color for cell in model.color_cells),
+    """Return a (height, width) uint8 grid of color indices.
+
+    We snapshot directly from Mesa's `SingleGrid` iteration order.
+
+    Mesa 2.3.0 `SingleGrid.coord_iter()` loops:
+
+        for x in range(width):
+            for y in range(height):
+                yield grid[x][y], (x, y)
+
+    So the flattened order is x-major. We reshape accordingly and then transpose
+    to the conventional (y, x) / (height, width) array layout used for replay.
+
+    This avoids relying on `model.color_cells` list ordering and avoids a Python
+    loop over all cells.
+    """
+    grid = getattr(model, "grid", None)
+    if grid is None:
+        return np.zeros((int(getattr(model, "height", 0)), int(getattr(model, "width", 0))), dtype=np.uint8)
+
+    w = int(getattr(grid, "width", 0))
+    h = int(getattr(grid, "height", 0))
+    if w <= 0 or h <= 0:
+        return np.zeros((max(h, 0), max(w, 0)), dtype=np.uint8)
+
+    # coord_iter yields (agent, (x,y)) where agent is the ColorCell (or None)
+    flat = np.fromiter(
+        (int(getattr(cell, "color", 0)) if cell is not None else 0 for cell, _pos in grid.coord_iter()),
         dtype=np.uint8,
-        count=model.height * model.width,
-    ).reshape(model.height, model.width)
+        count=w * h,
+    )
+
+    # x-major -> (w,h), then transpose -> (h,w)
+    return flat.reshape(w, h).T
 
 
 def _filter_model_kwargs(model_cfg: dict):
@@ -53,10 +81,21 @@ def run_once(run_id: int, model_cfg, sim_cfg, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     rl = ReplayLogger(out_dir=out_dir, run_id=run_id, store_grid=bool(_cfg_get(sim_cfg, "store_grid", True)))
 
+    # If model_cfg is a full AppConfig, set the seed on a copy so we don't mutate
+    # the shared config object across runs.
+    cfg_for_run = model_cfg
+    try:
+        if hasattr(model_cfg, "model_copy"):
+            cfg_for_run = model_cfg.model_copy(deep=True)
+            if hasattr(cfg_for_run, "model") and hasattr(cfg_for_run.model, "seed"):
+                cfg_for_run.model.seed = int(run_seed)
+    except Exception:
+        cfg_for_run = model_cfg
+
     # If model_cfg is a full AppConfig (has .model) prefer make_model
     try:
-        if hasattr(model_cfg, "model"):
-            model = make_model(model_cfg)
+        if hasattr(cfg_for_run, "model"):
+            model = make_model(cfg_for_run)
         else:
             model = None
     except Exception:
@@ -66,14 +105,12 @@ def run_once(run_id: int, model_cfg, sim_cfg, out_dir: Path):
         # fallback to building kwargs manually
         try:
             kwargs = build_model_kwargs(model_cfg)
+            kwargs["seed"] = int(run_seed)
             from src.models.participation_model import ParticipationModel
             model = ParticipationModel(**kwargs)
         except Exception as e:
             raise RuntimeError(f"Failed to instantiate model: {e}")
-    try:
-        model.random.seed(run_seed)
-    except Exception:
-        pass
+
     rl.write_static(model)
     n_steps = int(_cfg_get(sim_cfg, "num_steps", 100))
     grid_interval = max(1, int(_cfg_get(sim_cfg, "grid_interval", 1)))

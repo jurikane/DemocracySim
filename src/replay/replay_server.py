@@ -146,9 +146,33 @@ class ReplayModel(mesa.Model):
         self.scheduler.steps = step
 
     def _apply_grid(self, arr: np.ndarray) -> None:
-        # Update colors on all color cells (row-major order)
-        flat = arr.ravel()
-        for i, cell in enumerate(self.color_cells):
+        """Apply a recorded grid snapshot.
+
+        Snapshot contract:
+          - arr has shape (height, width)
+          - arr[y, x] is the color at (x, y)
+
+        Mesa's `SingleGrid.coord_iter()` iterates x-major (x in [0..w), y in [0..h)).
+        To update efficiently (and order-stably), we transpose to (w,h) and
+        flatten in C-order, matching coord_iter's order.
+        """
+        grid = getattr(self, "grid", None)
+        if grid is None:
+            return
+
+        try:
+            h, w = int(arr.shape[0]), int(arr.shape[1])
+        except Exception:
+            return
+
+        if int(getattr(grid, "width", 0)) != w or int(getattr(grid, "height", 0)) != h:
+            return
+
+        flat = arr.T.ravel()  # (h,w) -> (w,h) x-major flatten
+
+        for i, (cell, _pos) in enumerate(grid.coord_iter()):
+            if cell is None:
+                continue
             try:
                 cell.color = int(flat[i])
             except Exception:
