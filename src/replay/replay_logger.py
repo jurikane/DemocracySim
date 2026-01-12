@@ -54,28 +54,91 @@ class ReplayLogger:
         pickling the whole model.
         """
         static = {
+            "format_version": 1,
             "height": int(getattr(model, "height", None)),
             "width": int(getattr(model, "width", None)),
             "num_agents": int(getattr(model, "num_agents", None)),
             "num_colors": int(getattr(model, "num_colors", None)),
             "num_areas": int(getattr(model, "num_areas", None)),
+            # Step indexing convention:
+            # - step_0000.json is written AFTER the first model.step() (post-step state)
+            # - its embedded "step" will be 0
+            "step_indexing": {
+                "meaning": "post_step",
+                "first_recorded_step": 0,
+                "step_file": "step_%04d.json",
+                "grid_file": "grid_%04d.npy",
+            },
         }
         with open(self.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
 
+        # Also store static personality information once (used by UI elements)
+        self.write_personalities(model)
+
+    def write_personalities(self, model: Any) -> None:
+        """Write global + per-area personality distributions (static, step 0).
+
+        This is observables-first: replay does not reconstruct agents; it just
+        provides the same attributes the visualization expects.
+
+        File: personalities.json (Schema v1)
+        """
+        payload: dict[str, Any] = {
+            "format_version": 1,
+            "personalities": None,
+            "global_distribution": None,
+            "areas": {},
+        }
+
+        try:
+            pers = getattr(model, "personalities", None)
+            if pers is not None:
+                payload["personalities"] = _to_python(pers)
+        except Exception:
+            payload["personalities"] = None
+
+        try:
+            payload["global_distribution"] = _to_python(getattr(model, "personality_distribution", None))
+        except Exception:
+            payload["global_distribution"] = None
+
+        try:
+            areas = getattr(model, "areas", None) or []
+            for area in areas:
+                aid = getattr(area, "unique_id", getattr(area, "id", None))
+                if aid is None:
+                    continue
+                payload["areas"][str(aid)] = {
+                    "num_agents": _to_python(getattr(area, "num_agents", None)),
+                    "personality_distribution": _to_python(getattr(area, "personality_distribution", None)),
+                }
+        except Exception:
+            # optional
+            pass
+
+        with open(self.out_dir / "personalities.json", "w") as f:
+            json.dump(payload, f, indent=2)
+
     def append_step(self, step: int, model: Any, grid_snapshot: Optional[np.ndarray] = None) -> None:
         """Append per-step data.
 
-        Contract:
-        - Always writes a small JSON in steps/step_XXXX.json with scalar reporters.
-        - Optionally writes grids/grid_XXXX.npy when store_grid=True and grid_snapshot is provided.
+        Contract (Schema v1):
+        - steps/step_XXXX.json stores per-step model vars + area vars in a replay-friendly shape
+        - grids/grid_XXXX.npy (optional) stores HxW int array of colors
 
-        IMPORTANT: We intentionally *do not* store large grid-like reporters (e.g. "GridColors")
-        inside the JSON because it bloats disk usage and is redundant with the .npy snapshot.
+        IMPORTANT:
+        - We intentionally do not store large arrays in JSON (e.g. GridColors).
+        - Step indexing convention is defined in static.json.
         """
-        step_data: dict = {"step": int(step)}
+        step_data: dict = {
+            "format_version": 1,
+            "step": int(step),
+            "model": {},
+            "areas": {},
+        }
 
-        # Extract model scalars via datacollector if present
+        # --- Global model scalars (for charts) ---
         try:
             if hasattr(model, "datacollector") and model.datacollector is not None:
                 mrep = model.datacollector.get_model_vars_dataframe()
@@ -84,31 +147,48 @@ class ReplayLogger:
                     # Drop heavy / redundant fields
                     for heavy_key in ("GridColors",):
                         last.pop(heavy_key, None)
-                    step_data.update({k: _to_python(v) for k, v in last.items()})
+                    step_data["model"].update({k: _to_python(v) for k, v in last.items()})
         except Exception:
-            step_data.setdefault("note", "datacollector extract failed")
+            step_data["model"].setdefault("note", "datacollector extract failed")
 
-        # Include minimal per-area metrics if the model provides them (optional)
-        # This supports thesis outputs without relying on UI-only collectors.
+        # --- Per-area metrics (for overlays / matplotlib elements) ---
+        # Prefer datacollector agent vars to match UI expectations.
         try:
-            if hasattr(model, "areas") and model.areas is not None:
-                area_turnout = {}
-                area_gini = {}
-                for area in model.areas:
-                    aid = getattr(area, "unique_id", getattr(area, "id", None))
-                    if aid is None:
-                        continue
-                    if hasattr(area, "voter_turnout"):
-                        area_turnout[str(aid)] = _to_python(getattr(area, "voter_turnout"))
-                    if hasattr(area, "gini_index"):
-                        area_gini[str(aid)] = _to_python(getattr(area, "gini_index"))
-                if area_turnout:
-                    step_data.setdefault("areas", {})["turnout"] = area_turnout
-                if area_gini:
-                    step_data.setdefault("areas", {})["gini"] = area_gini
+            if hasattr(model, "datacollector") and model.datacollector is not None:
+                adf = model.datacollector.get_agent_vars_dataframe()
+                if adf is not None and len(adf) > 0:
+                    # Expected MultiIndex: (Step, AgentID) where AgentID is area.unique_id in our model
+                    # We only need the last step's area rows.
+                    try:
+                        last_step = adf.index.get_level_values(0).max()
+                        adf_step = adf.xs(last_step, level=0)
+                    except Exception:
+                        adf_step = adf
+
+                    for area_id, row in adf_step.iterrows():
+                        # row is a Series with keys: VoterTurnout, DistToReality, ColorDistribution, ElectionResults
+                        step_data["areas"][str(area_id)] = {
+                            "VoterTurnout": _to_python(row.get("VoterTurnout")),
+                            "DistToReality": _to_python(row.get("DistToReality")),
+                            "ColorDistribution": _to_python(row.get("ColorDistribution")),
+                            "ElectionResults": _to_python(row.get("ElectionResults")),
+                        }
         except Exception:
-            # optional
-            pass
+            # Fallback: best-effort from model.areas attrs
+            try:
+                if hasattr(model, "areas") and model.areas is not None:
+                    for area in model.areas:
+                        aid = getattr(area, "unique_id", getattr(area, "id", None))
+                        if aid is None:
+                            continue
+                        step_data["areas"][str(aid)] = {
+                            "VoterTurnout": _to_python(getattr(area, "voter_turnout", None)),
+                            "DistToReality": _to_python(getattr(area, "dist_to_reality", None)),
+                            "ColorDistribution": _to_python(getattr(area, "color_distribution", None)),
+                            "ElectionResults": _to_python(getattr(area, "voted_ordering", None)),
+                        }
+            except Exception:
+                pass
 
         step_file = self._step_filename(step)
         with open(step_file, "w") as f:
@@ -117,19 +197,20 @@ class ReplayLogger:
         if self.store_grid and grid_snapshot is not None:
             grid_file = self._grid_filename(step)
             arr = np.asarray(grid_snapshot)
-            # np.save will append .npy if not given; ensure path has that suffix
             np.save(str(grid_file), arr)
 
     def flush(self) -> None:
-        """Currently a no-op because we write per-step files immediately,
-        but provided for API compatibility.
+        """Provided for API compatibility.
         """
         return
 
     def write_meta(self, config: dict, seed: Optional[int] = None) -> None:
-        # Convert pydantic models or other objects to plain dicts
         meta = {
             "format_version": 1,
+            "schema": {
+                "name": "replay_schema_v1",
+                "step_indexing": "post_step",
+            },
             "config": _to_serializable(config),
             "seed": int(seed) if seed is not None else None,
         }

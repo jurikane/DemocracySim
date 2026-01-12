@@ -1,6 +1,8 @@
 """Replay script: given a run directory produced by run_headless,
-rebuild the model from the stored config/seed (if available) and apply
-saved grid snapshots to the model so callers can inspect or visualize them.
+inspect stored observables and optionally start the replay server.
+
+
+
 
 Usage: python -m scripts.run_replay <run_dir>
 
@@ -15,7 +17,6 @@ import numpy as np
 from typing import Optional
 
 from src.config.schema import AppConfig
-from src.model_setup import make_model
 from src.replay.replay_server import make_replay_server
 from src.config.loader import get_project_root
 
@@ -139,40 +140,6 @@ def _pick_run_dir_interactive() -> Optional[Path]:
     return _pick_from_list("\nWhich run do you want to replay?\n", run_dirs)
 
 
-def _apply_grid_to_model(model, arr: np.ndarray):
-    """Apply a recorded grid snapshot to the model's ColorCell agents.
-
-    Snapshot contract:
-      - `arr` has shape (height, width)
-      - `arr[y, x]` is the color at position (x, y)
-
-    We apply it using Mesa's `grid.coord_iter()` ordering so we don't depend
-    on `model.color_cells` list order.
-    """
-    grid = getattr(model, "grid", None)
-    if grid is None:
-        return
-
-    try:
-        h, w = int(arr.shape[0]), int(arr.shape[1])
-    except Exception:
-        return
-
-    if int(getattr(grid, "width", 0)) != w or int(getattr(grid, "height", 0)) != h:
-        # best-effort: only apply when dimensions match
-        return
-
-    flat = arr.T.ravel()  # (h,w) -> (w,h) x-major flatten
-
-    for i, (cell, _pos) in enumerate(grid.coord_iter()):
-        if cell is None:
-            continue
-        try:
-            cell.color = int(flat[i])
-        except Exception:
-            pass
-
-
 def main():
     run_dir: Optional[Path]
     if len(sys.argv) < 2:
@@ -212,41 +179,6 @@ def main():
     if static_path.exists():
         static = json.loads(static_path.read_text())
 
-    model = None
-    if meta is not None and "config" in meta:
-        cfg_raw = meta["config"]
-        try:
-            appcfg = AppConfig.model_validate(cfg_raw)
-        except Exception:
-            appcfg = None
-        if appcfg is not None:
-            try:
-                model = make_model(appcfg)
-                print("Rebuilt model from meta config.")
-            except Exception as e:
-                print("Failed to rebuild model from config:", e)
-    if model is None and static is not None:
-        # Minimal fallback: instantiate a tiny model using static fields
-        try:
-            # create a minimal AppConfig-like dict
-            model_stub = type("Stub", (), {})()
-            # reuse model_setup.make_model expects AppConfig; skip and construct smaller
-            from src.models.participation_model import ParticipationModel
-            from src.model_setup import build_model_kwargs
-            # Build kwargs from static where possible
-            kwargs = {"height": static.get("height"), "width": static.get("width"),
-                      "num_agents": static.get("num_agents"),
-                      "num_colors": static.get("num_colors"), "num_personalities": 1,
-                      "mu": 0.01, "election_impact_on_mutation": 1.0, "common_assets": 100,
-                      "known_cells": 1, "num_areas": static.get("num_areas", 1),
-                      "av_area_height": 1, "av_area_width": 1, "area_size_variance": 0.0,
-                      "patch_power": 1.0, "color_patches_steps": 1, "heterogeneity": 0.1,
-                      "rule_idx": 0, "distance_idx": 0, "election_costs": 1, "max_reward": 1}
-            model = ParticipationModel(**{k: v for k, v in kwargs.items() if v is not None})
-            print("Built minimal model from static.json fallback.")
-        except Exception as e:
-            print("Failed to build fallback model:", e)
-
     steps_dir = run_dir / "steps"
     grids_dir = run_dir / "grids"
     step_files = sorted(steps_dir.glob("step_*.json")) if steps_dir.exists() else []
@@ -254,27 +186,23 @@ def main():
         print("No step files found in:", steps_dir)
         return
 
-    for sf in step_files:
+    # Lightweight inspection of recorded observables
+    for sf in step_files[:5]:
         data = json.loads(sf.read_text())
         step = data.get("step")
-        print(f"Step {step}: reporters={list(k for k in data.keys() if k != 'step')}")
-        grid_file = grids_dir / f"grid_{int(step):04d}.npy"
-        if grid_file.exists():
-            arr = np.load(str(grid_file))
-            print(f"  grid shape: {arr.shape}, min/max: {arr.min()}/{arr.max()}")
-            if model is not None:
-                _apply_grid_to_model(model, arr)
-                # Optionally, collect datacollector after applying
-                try:
-                    if hasattr(model, "datacollector") and model.datacollector is not None:
-                        df = model.datacollector.get_model_vars_dataframe()
-                        if len(df) > 0:
-                            last = df.iloc[-1].to_dict()
-                            print("  model reporters (last):", {k: last[k] for k in last})
-                except Exception:
-                    pass
+        # Schema v1 uses nested blocks; legacy is flat
+        model_block = data.get("model") if isinstance(data.get("model"), dict) else {
+            k: v for k, v in data.items() if k != "step"
+        }
+        areas_block = data.get("areas") if isinstance(data.get("areas"), dict) else {}
+        print(f"Step {step}: model_keys={list(model_block.keys())[:8]}... areas={len(areas_block)}")
+        if step is not None:
+            grid_file = grids_dir / f"grid_{int(step):04d}.npy"
+            if grid_file.exists():
+                arr = np.load(str(grid_file))
+                print(f"  grid shape: {arr.shape}, min/max: {arr.min()}/{arr.max()}")
 
-    # After CLI replay summary, offer to start a browser replay server
+    # Start replay server (best-effort)
     if meta is not None and "config" in meta:
         try:
             appcfg = AppConfig.model_validate(meta["config"])
@@ -283,6 +211,9 @@ def main():
             server.launch(open_browser=True)
         except Exception as e:
             print("Could not start replay server:", e)
+    else:
+        print("meta.yaml missing or has no config; cannot start server.")
+
 
 if __name__ == '__main__':
     main()

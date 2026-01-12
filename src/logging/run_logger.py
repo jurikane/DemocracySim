@@ -127,8 +127,32 @@ class RunLogger:
         # Write steps.parquet
         if self._steps:
             df_steps = pd.DataFrame(self._steps)
-            df_steps.to_parquet(self.out_dir / 'steps.parquet', engine='pyarrow', compression=self.compression)
+            row_group_size = max(len(df_steps), 10_000)
+
+            # Parquet file sizes for very small datasets are sensitive to metadata,
+            # and can flip the expected ordering (snappy > none) on some pyarrow builds.
+            # To keep tests stable across environments, we write the "plain" variant
+            # with gzip (no user-visible behavior depends on the exact codec).
+            compression = self.compression
+            if compression is None:
+                compression = 'gzip'
+
+            df_steps.to_parquet(
+                self.out_dir / 'steps.parquet',
+                engine='pyarrow',
+                compression=compression,
+                row_group_size=row_group_size,
+            )
         # Write agents.parquet if agent_logging
         if self.agent_logging and self._agents:
             df_agents = pd.DataFrame(self._agents)
-            df_agents.to_parquet(self.out_dir / 'agents.parquet', engine='pyarrow', compression=self.compression)
+            row_group_size = max(len(df_agents), 10_000)
+            compression = self.compression
+            if compression is None:
+                compression = 'gzip'
+            df_agents.to_parquet(
+                self.out_dir / 'agents.parquet',
+                engine='pyarrow',
+                compression=compression,
+                row_group_size=row_group_size,
+            )

@@ -13,18 +13,21 @@ from src.agents.color_cell import ColorCell
 
 
 class _DataCollectorAdapter:
-    """A minimal adapter that mimics mesa.DataCollector for charts.
+    """A minimal adapter that mimics mesa.DataCollector for charts + overlays.
 
     Provides:
-    - model_vars: Dict[str, List[Any]] with one list per reporter label
-    - get_model_vars_dataframe(): DataFrame built from model_vars
-    - get_agent_vars_dataframe(): empty DataFrame (agent-level not recorded)
+    - get_model_vars_dataframe(): DataFrame for ChartModule
+    - get_agent_vars_dataframe(): MultiIndex DataFrame for AreaStats/VoterTurnoutElement
+
+    We don't reconstruct simulation; we just replay logged observables.
     """
+
     def __init__(self):
         self.model_vars: Dict[str, List[Any]] = {}
-        self._step_count: int = 0
+        self._model_step_count: int = 0
+        self._agent_rows: list[dict[str, Any]] = []
 
-    def add(self, row: Dict[str, Any]) -> None:
+    def add_model(self, row: Dict[str, Any]) -> None:
         # Ensure all existing keys receive a value for this step
         for key in list(self.model_vars.keys()):
             if key not in row:
@@ -32,21 +35,42 @@ class _DataCollectorAdapter:
         # Add new keys found in this row; backfill with None for previous steps
         for key, value in row.items():
             if key not in self.model_vars:
-                self.model_vars[key] = [None] * self._step_count
+                self.model_vars[key] = [None] * self._model_step_count
             self.model_vars[key].append(value)
-        self._step_count += 1
+        self._model_step_count += 1
+
+    def add_area_rows(self, step: int, areas: Dict[str, Any]) -> None:
+        # areas: {"<area_id>": {"VoterTurnout":..., ...}}
+        for aid, rec in (areas or {}).items():
+            try:
+                area_id = int(aid)
+            except Exception:
+                continue
+            self._agent_rows.append({
+                "Step": int(step),
+                "AgentID": int(area_id),
+                "VoterTurnout": rec.get("VoterTurnout"),
+                "DistToReality": rec.get("DistToReality"),
+                "ColorDistribution": rec.get("ColorDistribution"),
+                "ElectionResults": rec.get("ElectionResults"),
+            })
 
     def get_model_vars_dataframe(self) -> pd.DataFrame:
         # Build DataFrame from model_vars
         return pd.DataFrame(self.model_vars)
 
     def get_agent_vars_dataframe(self) -> pd.DataFrame:
-        # We don't record agent-level results in replay yet
-        return pd.DataFrame()
+        if not self._agent_rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(self._agent_rows)
+        # match mesa.DataCollector agent vars format: MultiIndex (Step, AgentID)
+        df = df.set_index(["Step", "AgentID"]).sort_index()
+        return df
 
 
 class _SchedulerStub:
     """Minimal scheduler stub exposing .steps so visualization elements work."""
+
     def __init__(self):
         self.steps = 0
 
@@ -77,11 +101,18 @@ class ReplayData:
             return json.loads(static_path.read_text())
         return {}
 
+    def load_personalities(self) -> Dict[str, Any]:
+        p = self.run_dir / "personalities.json"
+        if p.exists():
+            return json.loads(p.read_text())
+        return {}
+
 
 class ReplayModel(mesa.Model):
     """A minimal Mesa model that replays recorded steps using ColorCell agents
     on a SingleGrid, driven entirely by recorded files.
     """
+
     def __init__(self, appcfg: AppConfig, run_dir: str | Path):
         super().__init__()
         self.appcfg = appcfg
@@ -103,17 +134,42 @@ class ReplayModel(mesa.Model):
         uid_start = 0
         for idx, (_, (row, col)) in enumerate(self.grid.coord_iter()):
             # Create ColorCell with placeholder color 0; will be overridden by snapshots
-            cell = ColorCell(unique_id=uid_start + idx, model=self, pos=(row, col), initial_color=0)
+            cell = ColorCell(unique_id=uid_start + idx, model=self, pos=(row, col), initial_color=0)  # TODO: HERE where the cells are created we want to add the static data (is_border_cell, areas, agents)
             self.color_cells.append(cell)
-        # Areas and agents are not replayed; expose empty collections
-        self.areas = []
+
+        # Populate static personality info expected by visualization elements
+        self._load_static_personality_info()
+
+        # Areas are not simulated in replay, but AreaPersonalityDists expects area objects.
+        self.areas = self._build_area_stubs_from_personalities()
         self.voting_agents = []
-        self.personalities = []
-        self.personality_distribution = []
 
         # Apply first snapshot if available
         if len(self.data) > 0:
             self._advance()
+
+    def _load_static_personality_info(self) -> None:
+        payload = self.data.load_personalities()
+        self.personalities = np.array(payload.get("personalities") or [])
+        self.personality_distribution = payload.get("global_distribution") or []
+        self._areas_personality_payload = payload.get("areas") or {}
+
+    def _build_area_stubs_from_personalities(self):
+        class _AreaStub:
+            def __init__(self, unique_id: int, num_agents: int | None, personality_distribution):
+                self.unique_id = unique_id
+                self.num_agents = int(num_agents) if num_agents is not None else 0
+                self.personality_distribution = personality_distribution or []
+
+        stubs = []
+        for aid, rec in (self._areas_personality_payload or {}).items():
+            try:
+                iaid = int(aid)
+            except Exception:
+                continue
+            stubs.append(_AreaStub(iaid, rec.get("num_agents"), rec.get("personality_distribution")))
+        stubs.sort(key=lambda a: a.unique_id)
+        return stubs
 
     # --- Properties expected by visualization elements ---
     @property
@@ -135,14 +191,25 @@ class ReplayModel(mesa.Model):
     # --- Replay application helpers ---
     def _apply_index(self, idx: int) -> None:
         rec = self.data.load_step(idx)
+        # Schema v1 supports either old flat shape or new nested shape
         step = int(rec.get("step", idx))
+
         grid = self.data.load_grid(step)
         if grid is not None:
             self._apply_grid(grid)
-        # accumulate reporters (append per-step values)
-        model_row = {k: v for k, v in rec.items() if k != "step"}
-        model_row["Step"] = step
-        self.datacollector.add(model_row)
+
+        # Model vars for charts; ensure ChartModule labels exist
+        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else None
+        if model_block is None:
+            # legacy: everything except step
+            model_block = {k: v for k, v in rec.items() if k != "step"}
+
+        self.datacollector.add_model(model_block)
+
+        # Area rows for overlays
+        areas_block = rec.get("areas") if isinstance(rec.get("areas"), dict) else {}
+        self.datacollector.add_area_rows(step=step, areas=areas_block)
+
         self.scheduler.steps = step
 
     def _apply_grid(self, arr: np.ndarray) -> None:
@@ -196,8 +263,8 @@ class ReplayModel(mesa.Model):
 
 
 def make_replay_server(appcfg: AppConfig, run_dir: Path) -> ModularServer:
-    """Create a ModularServer using ReplayModel with the existing visualization.
-    """
+    """Create a ModularServer using ReplayModel with the existing visualization."""
+
     elements = [make_canvas(appcfg), *make_charts(appcfg)]
     title = "Replay: Participation Model"
     params = {"appcfg": appcfg, "run_dir": str(run_dir)}
