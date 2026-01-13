@@ -72,3 +72,22 @@ def get_voter_turnout(model):
     elif num_areas == 0:
         return 0
     return voter_turnout_sum / num_areas
+
+
+def get_agents_per_cell_grid(model) -> np.ndarray:
+    """Return an HxW int grid with the number of voting agents per cell.
+
+    Contract:
+      result[y][x] == number of agents in the ColorCell at position (x, y)
+
+    Implementation mirrors get_grid_colors/get_area_border_grid ordering.
+    """
+    grid = model.grid
+    h, w = grid.height, grid.width
+    flat = np.fromiter(
+        (len(cell.agents) if cell is not None else 0 for cell, _pos in grid.coord_iter()),
+        dtype=np.int32,
+        count=w * h,
+    )
+    return flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
+

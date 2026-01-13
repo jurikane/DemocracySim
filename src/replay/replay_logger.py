@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Optional, Any
 import numpy as np
 import os
+from src.utils.metrics import get_area_border_grid, get_agents_per_cell_grid
 
 
 class ReplayLogger:
@@ -47,6 +48,12 @@ class ReplayLogger:
     def _grid_filename(self, step: int) -> Path:
         return self.grids_dir / f"grid_{step:04d}.npy"
 
+    def _border_filename(self) -> Path:
+        return self.out_dir / "area_borders.npy"
+
+    def _agents_per_cell_filename(self) -> Path:
+        return self.out_dir / "agents_per_cell.npy"
+
     def write_static(self, model: Any) -> None:
         """Write static information about the model to disk.
 
@@ -57,21 +64,58 @@ class ReplayLogger:
             "format_version": 1,
             "height": int(getattr(model, "height", None)),
             "width": int(getattr(model, "width", None)),
+            "total_voters": int(len(getattr(model, "voting_agents", []) or [])),
             "num_agents": int(getattr(model, "num_agents", None)),
             "num_colors": int(getattr(model, "num_colors", None)),
             "num_areas": int(getattr(model, "num_areas", None)),
-            # Step indexing convention:
-            # - step_0000.json is written AFTER the first model.step() (post-step state)
-            # - its embedded "step" will be 0
+            "voters_per_area": {},
             "step_indexing": {
                 "meaning": "post_step",
                 "first_recorded_step": 0,
                 "step_file": "step_%04d.json",
                 "grid_file": "grid_%04d.npy",
             },
+            "artifacts": {
+                "area_borders": "area_borders.npy",
+                "agents_per_cell": "agents_per_cell.npy",
+            },
         }
+
+        # Compute voters_per_area from model areas (fast; no datacollector)
+        try:
+            areas = getattr(model, "areas", None) or []
+            for area in areas:
+                aid = getattr(area, "unique_id", None)
+                if aid is None:
+                    continue
+                static["voters_per_area"][str(int(aid))] = int(getattr(area, "num_agents", 0) or 0)
+        except Exception:
+            pass
+
+        # Optional global area id -1
+        try:
+            ga = getattr(model, "global_area", None)
+            if ga is not None:
+                static["voters_per_area"][str(int(getattr(ga, "unique_id", -1)))] = int(getattr(ga, "num_agents", 0) or 0)
+        except Exception:
+            pass
+
         with open(self.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
+
+        # Store area border grid (HxW bool) as .npy for fast load
+        try:
+            borders = get_area_border_grid(model)
+            np.save(str(self._border_filename()), np.asarray(borders, dtype=bool))
+        except Exception:
+            pass
+
+        # Store static agents-per-cell counts (HxW int)
+        try:
+            apc = get_agents_per_cell_grid(model)
+            np.save(str(self._agents_per_cell_filename()), np.asarray(apc, dtype=np.int32))
+        except Exception:
+            pass
 
         # Also store static personality information once (used by UI elements)
         self.write_personalities(model)

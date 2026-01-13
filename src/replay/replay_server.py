@@ -107,6 +107,30 @@ class ReplayData:
             return json.loads(p.read_text())
         return {}
 
+    def load_area_borders(self) -> Optional[np.ndarray]:
+        static = self.load_static() or {}
+        artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
+        fname = artifacts.get("area_borders", "area_borders.npy")
+        p = self.run_dir / fname
+        if p.exists():
+            try:
+                return np.load(str(p))
+            except Exception:
+                return None
+        return None
+
+    def load_agents_per_cell(self) -> Optional[np.ndarray]:
+        static = self.load_static() or {}
+        artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
+        fname = artifacts.get("agents_per_cell", "agents_per_cell.npy")
+        p = self.run_dir / fname
+        if p.exists():
+            try:
+                return np.load(str(p))
+            except Exception:
+                return None
+        return None
+
 
 class ReplayModel(mesa.Model):
     """A minimal Mesa model that replays recorded steps using ColorCell agents
@@ -129,13 +153,22 @@ class ReplayModel(mesa.Model):
         self._width = int(static.get("width", getattr(appcfg.model, "width", 1)))
         self._num_colors = int(static.get("num_colors", getattr(appcfg.model, "num_colors", 2)))
 
+        # Expose static voter counts for analysis/UI use
+        self.total_voters = int(static.get("total_voters", 0) or 0)
+        self.voters_per_area = static.get("voters_per_area", {}) if isinstance(static.get("voters_per_area"), dict) else {}
+
         self.grid = mesa.space.SingleGrid(height=self._height, width=self._width, torus=True)
         self.color_cells: list[ColorCell] = []
         uid_start = 0
         for idx, (_, (row, col)) in enumerate(self.grid.coord_iter()):
             # Create ColorCell with placeholder color 0; will be overridden by snapshots
-            cell = ColorCell(unique_id=uid_start + idx, model=self, pos=(row, col), initial_color=0)  # TODO: HERE where the cells are created we want to add the static data (is_border_cell, areas, agents)
+            cell = ColorCell(unique_id=uid_start + idx, model=self, pos=(row, col), initial_color=0)
             self.color_cells.append(cell)
+
+        # Apply static area borders (if present)
+        self._apply_static_borders()
+        # Apply static agents-per-cell counts (if present)
+        self._apply_static_agents_per_cell()
 
         # Populate static personality info expected by visualization elements
         self._load_static_personality_info()
@@ -147,6 +180,56 @@ class ReplayModel(mesa.Model):
         # Apply first snapshot if available
         if len(self.data) > 0:
             self._advance()
+
+    def _apply_static_borders(self) -> None:
+        arr = self.data.load_area_borders()
+        if arr is None:
+            return
+        try:
+            h, w = int(arr.shape[0]), int(arr.shape[1])
+        except Exception:
+            return
+        if h != self._height or w != self._width:
+            return
+
+        # Same coord mapping as colors: arr[y, x]
+        flat = np.asarray(arr, dtype=bool).T.ravel()
+        for i, (cell, _pos) in enumerate(self.grid.coord_iter()):
+            if cell is None:
+                continue
+            try:
+                cell.is_border_cell = bool(flat[i])
+            except Exception:
+                pass
+
+    def _apply_static_agents_per_cell(self) -> None:
+        """Populate ColorCell.agents with placeholders so the UI can show per-cell counts.
+
+        The visualization uses `len(cell.agents)` (via num_agents_in_cell).
+        We don't reconstruct real VoteAgents; placeholders are fine.
+        """
+        arr = self.data.load_agents_per_cell()
+        if arr is None:
+            return
+        try:
+            h, w = int(arr.shape[0]), int(arr.shape[1])
+        except Exception:
+            return
+        if h != self._height or w != self._width:
+            return
+
+        # Artifacts use arr[y, x]. Mesa stores pos as (x, y).
+        flat = np.asarray(arr, dtype=np.int32).T.ravel()
+
+        # Fill each cell.agents with placeholders
+        for i, (cell, _pos) in enumerate(self.grid.coord_iter()):
+            if cell is None:
+                continue
+            try:
+                n = int(flat[i])
+            except Exception:
+                n = 0
+            cell.agents = [None] * n if n > 0 else []
 
     def _load_static_personality_info(self) -> None:
         payload = self.data.load_personalities()
@@ -269,4 +352,3 @@ def make_replay_server(appcfg: AppConfig, run_dir: Path) -> ModularServer:
     title = "Replay: Participation Model"
     params = {"appcfg": appcfg, "run_dir": str(run_dir)}
     return ModularServer(ReplayModel, elements, title, params)
-

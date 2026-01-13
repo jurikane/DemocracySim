@@ -80,6 +80,8 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
 
         # Add agent info (tooltips)
         for voter in agent.agents:
+            if voter is None:
+                continue  # This is in replay - we currently don't save voters
             p[f"Agent {voter.unique_id}"] = \
                 f"personality: {voter.personality}, assets: {voter.assets}"
 
