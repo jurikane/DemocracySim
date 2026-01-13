@@ -269,3 +269,4 @@ def make_replay_server(appcfg: AppConfig, run_dir: Path) -> ModularServer:
     title = "Replay: Participation Model"
     params = {"appcfg": appcfg, "run_dir": str(run_dir)}
     return ModularServer(ReplayModel, elements, title, params)
+

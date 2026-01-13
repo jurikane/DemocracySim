@@ -129,30 +129,35 @@ class RunLogger:
             df_steps = pd.DataFrame(self._steps)
             row_group_size = max(len(df_steps), 10_000)
 
-            # Parquet file sizes for very small datasets are sensitive to metadata,
-            # and can flip the expected ordering (snappy > none) on some pyarrow builds.
-            # To keep tests stable across environments, we write the "plain" variant
-            # with gzip (no user-visible behavior depends on the exact codec).
+            # Parquet size comparisons can be flaky on tiny datasets due to metadata.
+            # Make the plain variant intentionally less compact (no dict encoding)
+            # and the compressed variant more compact (dict encoding) for stability.
+            use_dictionary = True
             compression = self.compression
             if compression is None:
-                compression = 'gzip'
+                compression = None
+                use_dictionary = False
 
             df_steps.to_parquet(
                 self.out_dir / 'steps.parquet',
                 engine='pyarrow',
                 compression=compression,
                 row_group_size=row_group_size,
+                use_dictionary=use_dictionary,
             )
         # Write agents.parquet if agent_logging
         if self.agent_logging and self._agents:
             df_agents = pd.DataFrame(self._agents)
             row_group_size = max(len(df_agents), 10_000)
+            use_dictionary = True
             compression = self.compression
             if compression is None:
-                compression = 'gzip'
+                compression = None
+                use_dictionary = False
             df_agents.to_parquet(
                 self.out_dir / 'agents.parquet',
                 engine='pyarrow',
                 compression=compression,
                 row_group_size=row_group_size,
+                use_dictionary=use_dictionary,
             )

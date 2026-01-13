@@ -151,42 +151,54 @@ class ReplayLogger:
         except Exception:
             step_data["model"].setdefault("note", "datacollector extract failed")
 
-        # --- Per-area metrics (for overlays / matplotlib elements) ---
-        # Prefer datacollector agent vars to match UI expectations.
         try:
-            if hasattr(model, "datacollector") and model.datacollector is not None:
-                adf = model.datacollector.get_agent_vars_dataframe()
-                if adf is not None and len(adf) > 0:
-                    # Expected MultiIndex: (Step, AgentID) where AgentID is area.unique_id in our model
-                    # We only need the last step's area rows.
-                    try:
-                        last_step = adf.index.get_level_values(0).max()
-                        adf_step = adf.xs(last_step, level=0)
-                    except Exception:
-                        adf_step = adf
-
-                    for area_id, row in adf_step.iterrows():
-                        # row is a Series with keys: VoterTurnout, DistToReality, ColorDistribution, ElectionResults
-                        step_data["areas"][str(area_id)] = {
-                            "VoterTurnout": _to_python(row.get("VoterTurnout")),
-                            "DistToReality": _to_python(row.get("DistToReality")),
-                            "ColorDistribution": _to_python(row.get("ColorDistribution")),
-                            "ElectionResults": _to_python(row.get("ElectionResults")),
-                        }
+            if model.areas is not None:
+                areas = model.areas
+                for area in areas:
+                    area_id = int(getattr(area, "unique_id"))
+                    step_data["areas"][str(area_id)] = {
+                        "VoterTurnout": _to_python(
+                            getattr(area, "voter_turnout", None)),
+                        "DistToReality": _to_python(
+                            getattr(area, "dist_to_reality", None)),
+                        "ColorDistribution": _to_python(
+                            getattr(area, "color_distribution", None)),
+                        "ElectionResults": _to_python(
+                            getattr(area, "voted_ordering", None)),
+                    }
         except Exception:
-            # Fallback: best-effort from model.areas attrs
+            # Fallback to Datacollector (slower):
+            # --- Per-area metrics ---
+            valid_area_ids = [area.unique_id for area in model.areas]
+            # allow optional global area id
+            valid_area_ids.append(-1)
             try:
-                if hasattr(model, "areas") and model.areas is not None:
-                    for area in model.areas:
-                        aid = getattr(area, "unique_id", getattr(area, "id", None))
-                        if aid is None:
-                            continue
-                        step_data["areas"][str(aid)] = {
-                            "VoterTurnout": _to_python(getattr(area, "voter_turnout", None)),
-                            "DistToReality": _to_python(getattr(area, "dist_to_reality", None)),
-                            "ColorDistribution": _to_python(getattr(area, "color_distribution", None)),
-                            "ElectionResults": _to_python(getattr(area, "voted_ordering", None)),
-                        }
+                if hasattr(model,
+                           "datacollector") and model.datacollector is not None:
+                    adf = model.datacollector.get_agent_vars_dataframe()
+                    if adf is not None and len(adf) > 0:
+                        # Expected MultiIndex: (Step, AgentID) where AgentID is area.unique_id in our model
+                        # We only need the last step's area rows.
+                        try:
+                            last_step = adf.index.get_level_values(0).max()
+                            adf_step = adf.xs(last_step, level=0)
+                        except Exception:
+                            adf_step = adf
+
+                        for aid, row in adf_step.iterrows():
+                            if aid not in valid_area_ids:
+                                continue
+                            # row is a Series with keys: VoterTurnout, DistToReality, ColorDistribution, ElectionResults
+                            step_data["areas"][str(aid)] = {
+                                "VoterTurnout": _to_python(
+                                    row.get("VoterTurnout")),
+                                "DistToReality": _to_python(
+                                    row.get("DistToReality")),
+                                "ColorDistribution": _to_python(
+                                    row.get("ColorDistribution")),
+                                "ElectionResults": _to_python(
+                                    row.get("ElectionResults")),
+                            }
             except Exception:
                 pass
 

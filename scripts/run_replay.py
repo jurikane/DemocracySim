@@ -191,11 +191,11 @@ def main():
         data = json.loads(sf.read_text())
         step = data.get("step")
         # Schema v1 uses nested blocks; legacy is flat
-        model_block = data.get("model") if isinstance(data.get("model"), dict) else {
-            k: v for k, v in data.items() if k != "step"
-        }
+        # model_block = data.get("model") if isinstance(data.get("model"), dict) else {
+        #     k: v for k, v in data.items() if k != "step"
+        # }
         areas_block = data.get("areas") if isinstance(data.get("areas"), dict) else {}
-        print(f"Step {step}: model_keys={list(model_block.keys())[:8]}... areas={len(areas_block)}")
+        # print(f"Step {step}: model_keys={list(model_block.keys())[:8]}... areas={len(areas_block)}")
         if step is not None:
             grid_file = grids_dir / f"grid_{int(step):04d}.npy"
             if grid_file.exists():

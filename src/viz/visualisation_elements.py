@@ -35,7 +35,13 @@ class AreaStats(TextElement):
         dist_to_reality = data['DistToReality'].dropna()
         election_results = data['ElectionResults'].dropna()
 
-        area_ids = color_distribution.index.get_level_values(1).unique()[1:]
+        # Do not drop area 0: only exclude the optional global area id (-1) if present.
+        try:
+            area_ids_all = list(color_distribution.index.get_level_values(1).unique())
+            area_ids = [aid for aid in area_ids_all if int(aid) != -1]
+        except Exception:
+            area_ids = color_distribution.index.get_level_values(1).unique()
+
         if len(color_distribution) == 0 or len(area_ids) == 0:
             return ""
 
