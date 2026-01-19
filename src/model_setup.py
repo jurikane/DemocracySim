@@ -1,6 +1,9 @@
 """
 Wires config -> ParticipationModel kwargs -> Mesa UI server.
 """
+import random
+import numpy as np
+
 from src.config.schema import AppConfig, ModelConfig
 from math import factorial
 import mesa
@@ -49,15 +52,12 @@ def build_model_kwargs(model_cfg: ModelConfig) -> dict:
 def build_model_params(model_cfg: ModelConfig) -> dict:
     """
     Create Mesa UI sliders/params so the web UI shows controls.
-    """
-    height = model_cfg.height
-    width = model_cfg.width
-    num_colors = model_cfg.num_colors
-    num_agents = model_cfg.num_agents
 
+    """
     params = {
-        "height": height,
-        "width": width,
+        "height": model_cfg.height,
+        "width": model_cfg.width,
+        "seed": getattr(model_cfg, "seed", None),  # Optional seed
         "rule_idx": mesa.visualization.Slider(
             name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
             value=model_cfg.rule_idx,
@@ -95,30 +95,30 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         ),
         "num_agents": mesa.visualization.Slider(
             name="# Agents",
-            value=num_agents,
+            value=model_cfg.num_agents,
             min_value=10,
             max_value=1500,
             step=10,
         ),
         "num_colors": mesa.visualization.Slider(
             name="# Colors",
-            value=num_colors,
+            value=model_cfg.num_colors,
             min_value=2,
-            max_value=max(2, num_colors),
+            max_value=max(2, model_cfg.num_colors),
             step=1,
         ),
         "num_personalities": mesa.visualization.Slider(
             name="# different personalities",
             value=model_cfg.num_personalities,
             min_value=1,
-            max_value=max(1, factorial(num_colors)),
+            max_value=max(1, factorial(model_cfg.num_colors)),
             step=1,
         ),
         "common_assets": mesa.visualization.Slider(
             name="Initial common assets",
             value=model_cfg.common_assets,
-            min_value=num_agents,
-            max_value=1000 * num_agents,
+            min_value=model_cfg.num_agents,
+            max_value=1000 * model_cfg.num_agents,
             step=10,
         ),
         "known_cells": mesa.visualization.Slider(
@@ -150,24 +150,24 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             step=0.1,
         ),
         "num_areas": mesa.visualization.Slider(
-            name=f"# Areas within the {height}x{width} world",
+            name=f"# Areas within the {model_cfg.height}x{model_cfg.width} world",
             value=model_cfg.num_areas,
             min_value=1,
-            max_value=max(1, min(width, height) // 2),
+            max_value=max(1, min(model_cfg.width, model_cfg.height) // 2),
             step=1,
         ),
         "av_area_height": mesa.visualization.Slider(
             name="Av. area height",
             value=model_cfg.av_area_height,
             min_value=2,
-            max_value=max(2, height // 2),
+            max_value=max(2, model_cfg.height // 2),
             step=1,
         ),
         "av_area_width": mesa.visualization.Slider(
             name="Av. area width",
             value=model_cfg.av_area_width,
             min_value=2,
-            max_value=max(2, width // 2),
+            max_value=max(2, model_cfg.width // 2),
             step=1,
         ),
         "area_size_variance": mesa.visualization.Slider(
@@ -178,16 +178,14 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             step=0.1,
         ),
     }
-    if model_cfg.seed is not None:
-        params["seed"] = model_cfg.seed
     return params
 
 
-def make_model(cfg: AppConfig) -> ParticipationModel:
+def make_model(model_cfg: ModelConfig) -> ParticipationModel:
     """
     Instantiate the model using the loaded config (non-UI usage).
     """
-    kwargs = build_model_kwargs(cfg.model)
+    kwargs = build_model_kwargs(model_cfg)
     return ParticipationModel(**kwargs)
 
 

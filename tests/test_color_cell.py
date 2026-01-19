@@ -16,12 +16,12 @@ class TestColorCell(unittest.TestCase):
         self.model = DummyModel()
 
     def test_initialization(self):
-        cell = ColorCell(unique_id=1, model=self.model, pos=(2, 3), initial_color=5)
+        cell = ColorCell(unique_id=1, model=self.model, pos=(3, 2), initial_color=5)
 
         self.assertEqual(cell.unique_id, 1)
         self.assertEqual(cell.row, 2)
         self.assertEqual(cell.col, 3)
-        self.assertEqual(cell.pos, (2, 3))
+        self.assertEqual(cell.pos, (3, 2))
         self.assertEqual(cell.color, 5)
         self.assertEqual(cell.num_agents_in_cell, 0)
         self.assertEqual(cell.agents, [])

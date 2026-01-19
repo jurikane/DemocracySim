@@ -36,7 +36,7 @@ def get_project_subfolder(*subfolders, create_if_missing=False) -> Path:
     if create_if_missing:
         path.mkdir(parents=True, exist_ok=True)
     elif not path.exists():
-        raise FileNotFoundError(f"Project subfolder does not exist: {path}")
+        raise FileNotFoundError(f"File or subfolder does not exist: {path}")
     return path
 
 
@@ -52,7 +52,7 @@ def load_config(config_file=None) -> AppConfig:
     """
     if config_file is None:
         config_file = os.environ.get("CONFIG_FILE", "default.yaml")
-
+    print(f"Loading config from: {config_file}")
     cfg_path = Path(config_file)
 
     # 1) Absolute path

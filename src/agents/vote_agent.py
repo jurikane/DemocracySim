@@ -68,7 +68,7 @@ class VoteAgent(Agent):
         Attributes:
             unique_id: The unique identifier of the agent.
             model: The simulation model of which the agent is part of.
-            pos: The position of the agent in the grid.
+            pos (int, int): The position of the agent in the grid (col, row).
             personality: Represents the agent's preferences among colors.
             personality_idx: Index of personality in model's personalities list.
             assets: The wealth/assets/motivation of the agent.
@@ -76,21 +76,21 @@ class VoteAgent(Agent):
         super().__init__(unique_id=unique_id, model=model)
         # The "pos" variable in mesa is special, so I avoid it here
         try:
-            row, col = pos
+            col, row = pos  # Mesa uses (col, row)
         except ValueError:
             raise ValueError("Position must be a tuple of two integers.")
-        self._position = row, col
+        self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = assets
         self._num_elections_participated = 0
         self.personality = personality
         self.personality_idx = personality_idx
-        self.cell = model.grid.get_cell_list_contents([(row, col)])[0]
+        self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
         # ColorCell objects the agent knows (knowledge)
         self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells
         # Add the agent to the models' agent list and the cell
         if add:
             model.voting_agents.append(self)
-            cell = model.grid.get_cell_list_contents([(row, col)])[0]
+            cell = model.grid.get_cell_list_contents([(col, row)])[0]
             cell.add_agent(self)
         # Election relevant variables
         self.est_real_dist = np.zeros(self.model.num_colors)
@@ -105,17 +105,18 @@ class VoteAgent(Agent):
 
     @property
     def position(self) -> tuple:
-        """Return the location of the agent."""
+        """Return the location of the agent.
+        Logic: (col, row), following Mesa conventions"""
         return self._position
-
-    @property
-    def row(self) -> int:
-        """Return the row location of the agent."""
-        return self._position[0]
 
     @property
     def col(self) -> int:
         """Return the col location of the agent."""
+        return self._position[0]
+
+    @property
+    def row(self) -> int:
+        """Return the row location of the agent."""
         return self._position[1]
 
     @property

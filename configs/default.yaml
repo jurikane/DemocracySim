@@ -3,7 +3,7 @@ model:
   election_costs: 0.1  # In percent of common assets
   election_impact_on_mutation: 1.8
   mu: 0.05
-  rule_idx: 1
+  rule_idx: 0
   distance_idx: 1
 
   # Model parameters
@@ -14,6 +14,7 @@ model:
   patch_power: 1.0
   heterogeneity: 0.3
   known_cells: 10
+  # seed: 42 (optional))
 
   # Voting Agents
   num_personalities: 4
@@ -31,12 +32,12 @@ model:
 visualization:
   cell_size: 10
   draw_borders: true
-  show_area_stats: true
+  show_area_stats: false
 
-simulation:
+simulation:  # Config for headless runs
   runs: 3
   num_steps: 200
   processes: 8
   store_grid: true
   grid_interval: 1
-  base_seed: 57
+  base_seed: 42  # Determines model seeds per run

@@ -16,7 +16,7 @@ def test_replay_can_iterate_all_steps(tmp_path: Path):
     cfg = load_config("toy.yaml")
     out_dir = tmp_path / "run"
 
-    run_once(0, cfg, cfg.simulation, out_dir=out_dir)
+    run_once(0, cfg, out_dir=out_dir)
 
     data = ReplayData(out_dir)
     assert len(data) > 0

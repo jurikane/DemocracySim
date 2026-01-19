@@ -63,7 +63,7 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
         # Mark area borders (except global area) as circles
         if draw_borders and agent.is_border_cell:
             p["Shape"] = "circle"
-            p["r"] = 0.9
+            p["r"] = 1
             if color_name == "LightGray":
                 p["Color"] = "Gainsboro"
 
@@ -80,8 +80,6 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
 
         # Add agent info (tooltips)
         for voter in agent.agents:
-            if voter is None:
-                continue  # This is in replay - we currently don't save voters
             p[f"Agent {voter.unique_id}"] = \
                 f"personality: {voter.personality}, assets: {voter.assets}"
 
@@ -118,20 +116,19 @@ def make_charts(cfg: AppConfig) -> list:
     )
 
     # Advanced matplotlib-based elements
-    #try:
     from src.viz.visualisation_elements import (
         PersonalityDistribution,
         AreaStats,
         VoterTurnoutElement,
+        AreaGiniElement,
         AreaPersonalityDists,
     )
     extras = [
         PersonalityDistribution(),
         AreaStats(),
         VoterTurnoutElement(),
+        AreaGiniElement(),
         AreaPersonalityDists(),
     ]
-    #except Exception:
-    #    extras = []
 
     return [color_distribution_chart, wealth_chart, voter_turnout, *extras]

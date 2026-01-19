@@ -9,44 +9,48 @@ class ColorCell(Agent):
         color (int): The color of the cell.
     """
 
-    def __init__(self, unique_id: int, model: Model, pos: tuple, initial_color: int):
+    def __init__(self, unique_id: int, model: Model, pos: tuple[int, int], initial_color: int):
         """
-        Initializes a ColorCell, at the given row, col position.
+        Initializes a ColorCell, at the given (x, y) = (col, row) position.
 
         Args:
             unique_id (int): The unique identifier of the cell.
             model (mesa.Model): The mesa model of which the cell is part of.
-            pos (Tuple[int, int]): The position of the cell in the grid.
+            pos (Tuple[int, int]): Mesas (col, row) positioning in the grid.
             initial_color (int): The initial color of the cell.
         """
         super().__init__(unique_id, model)
         # self.pos will be set by the grid when we place the agent
-        self._row = pos[0]
-        self._col = pos[1]
+        # Mesa grid uses (x, y) = (col, row)
+        self._col = pos[0]
+        self._row = pos[1]
         self.color = initial_color  # The cell's current color (int)
         self._next_color = None
         self.agents = []    # TODO change to using mesas AgentSet class!
         self.areas = []    # TODO change to using mesas AgentSet class!
         self.is_border_cell = False
         # Add it to the models grid
-        model.grid.place_agent(self, pos)
+        grid = getattr(model, "grid", None)
+        if grid is None:
+            raise ValueError("Model has no grid attribute.")
+        grid.place_agent(self, pos)
 
     def __str__(self):
         return (f"Cell ({self.unique_id}, pos={self.pos}, "
                 f"color={self.color}, num_agents={self.num_agents_in_cell})")
 
     @property
-    def row(self):
-        """The row location of this cell."""
+    def col(self) -> int:
+        """The column location of this cell."""
         return self.pos[0]
 
     @property
-    def col(self):
-        """The col location of this cell."""
+    def row(self) -> int:
+        """The row location of this cell."""
         return self.pos[1]
 
     @property
-    def num_agents_in_cell(self):
+    def num_agents_in_cell(self) -> int:
         """The number of agents in this cell."""
         return len(self.agents)
 

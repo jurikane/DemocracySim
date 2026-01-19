@@ -29,18 +29,18 @@ class AreaStats(TextElement):
         data = model.datacollector.get_agent_vars_dataframe()
         if data is None or len(data) == 0:
             return ""
-        if 'ColorDistribution' not in data.columns or 'DistToReality' not in data.columns or 'ElectionResults' not in data.columns:
+        if ('ColorDistribution' not in data.columns
+                or 'DistToReality' not in data.columns
+                or 'ElectionResults' not in data.columns):
             return ""
         color_distribution = data['ColorDistribution'].dropna()
         dist_to_reality = data['DistToReality'].dropna()
         election_results = data['ElectionResults'].dropna()
 
-        # Do not drop area 0: only exclude the optional global area id (-1) if present.
-        try:
-            area_ids_all = list(color_distribution.index.get_level_values(1).unique())
-            area_ids = [aid for aid in area_ids_all if int(aid) != -1]
-        except Exception:
-            area_ids = color_distribution.index.get_level_values(1).unique()
+        area_ids_all = list(color_distribution.index.get_level_values(1).unique())
+        area_ids = [aid for aid in area_ids_all if int(aid) != -1]
+        #except Exception:
+        #area_ids = color_distribution.index.get_level_values(1).unique()
 
         if len(color_distribution) == 0 or len(area_ids) == 0:
             return ""
@@ -141,42 +141,65 @@ class PersonalityDistribution(TextElement):
         return self.pers_dist_plot or ""
 
 
-class VoterTurnoutElement(TextElement):
+class _AreaTimeSeriesElement(TextElement):
+    """Base class for per-area time series plots backed by agent vars dataframe."""
+
+    series_column: str = ""
+    title: str = ""
+    ylabel: str = ""
+
+    def _get_series(self, model):
+        data = model.datacollector.get_agent_vars_dataframe()
+        if data is None or data.empty:
+            return None
+        if self.series_column not in data.columns:
+            return None
+        series = data[self.series_column].dropna()
+        return None if series.empty else series
+
+    @staticmethod
+    def _line_style(i: int) -> str:
+        if i < 10:
+            return "-"
+        if i < 20:
+            return ":"
+        return "--"
+
     def render(self, model):
-        step = getattr(model.scheduler, 'steps', 0)
-        if not show_area_stats or step == 0:
-            return ""
-        try:
-            data = model.datacollector.get_agent_vars_dataframe()
-            if data is None or len(data) == 0 or 'VoterTurnout' not in data.columns:
-                return ""
-            voter_turnout = data['VoterTurnout'].dropna()
-        except Exception:
-            return ""
-        if len(voter_turnout) == 0:
+        series = self._get_series(model)
+        if series is None:
             return ""
 
-        area_ids = voter_turnout.index.get_level_values(1).unique()
+        area_ids = series.index.get_level_values(1).unique()
         fig, ax = plt.subplots(figsize=(8, 6))
+
         for i, area_id in enumerate(area_ids):
-            try:
-                area_data = voter_turnout.xs(area_id, level=1)
-            except Exception:
-                continue
-            if i < 10:
-                line_style = '-'
-            elif i < 20:
-                line_style = ':'
-            else:
-                line_style = '--'
-            ax.plot(area_data.index, area_data.values, label=f'Area {area_id}',
-                    linestyle=line_style)
-        ax.set_title('Voter Turnout by Area Over Time')
-        ax.set_xlabel('Step')
-        ax.set_ylabel('Voter Turnout (%)')
+            # If index isn't a MultiIndex with that level, let it fail loudly.
+            area_data = series.xs(area_id, level=1)
+            ax.plot(
+                area_data.index,
+                area_data.values,
+                label=f"Area {area_id}",
+                linestyle=self._line_style(i),
+            )
+
+        ax.set_title(self.title)
+        ax.set_xlabel("Step")
+        ax.set_ylabel(self.ylabel)
         ax.legend()
         return save_plot_to_base64(fig)
 
+
+class VoterTurnoutElement(_AreaTimeSeriesElement):
+    series_column = "VoterTurnout"
+    title = "Voter Turnout by Area Over Time"
+    ylabel = "Voter Turnout (%)"
+
+
+class AreaGiniElement(_AreaTimeSeriesElement):
+    series_column = "GiniIndex"
+    title = "Gini Index by Area Over Time"
+    ylabel = "Gini Index (0-100)"
 
 class MatplotlibElement(TextElement):
     def render(self, model):

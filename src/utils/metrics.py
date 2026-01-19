@@ -1,4 +1,35 @@
 import numpy as np
+from typing import Sequence, Union
+
+
+def gini_index_0_100(values: Union[Sequence[float], np.ndarray, None]) -> int:
+    """Compute the Gini index (0-100) for a 1D sequence of non-negative values.
+
+    Edge cases:
+      - empty / 1 element -> 0
+      - all zeros -> 0
+    """
+    if values is None:
+        return 0
+    arr = np.asarray(values, dtype=np.float64).ravel()
+    n = int(arr.size)
+    if n <= 1:
+        return 0
+    total = float(arr.sum())
+    if total <= 0:
+        return 0
+
+    # Sort ascending (O(n log n)); n per-area is typically small.
+    s = np.sort(arr)
+    # Standard gini formula: (2*sum(i*x_i))/(n*sum(x)) - (n+1)/n
+    i = np.arange(1, n + 1, dtype=np.float64)
+    g = (2.0 * float((i * s).sum())) / (n * total) - (n + 1.0) / n
+    # Numerical safety
+    if g < 0:
+        g = 0.0
+    if g > 1:
+        g = 1.0
+    return int(g * 100)
 
 
 def get_grid_colors(model):
@@ -42,22 +73,8 @@ def compute_collective_assets(model):
 
 
 def compute_gini_index(model):
-    # TODO: separate to be able to calculate it zone-wise as well as globally
-    # TODO: Unit-test this function
-    # Extract the list of assets for all agents
     assets = [agent.assets for agent in model.voting_agents]
-    n = len(assets)
-    if n == 0:
-        return 0  # No agents, no inequality
-    # Sort the assets
-    sorted_assets = sorted(assets)
-    # Calculate the Gini Index
-    cumulative_sum = sum((i + 1) * sorted_assets[i] for i in range(n))
-    total_sum = sum(sorted_assets)
-    if total_sum == 0:
-        return 0  # No agent has any assets => view as total equality
-    gini_index = (2 * cumulative_sum) / (n * total_sum) - (n + 1) / n
-    return int(gini_index * 100)  # Return in "percent" (0-100)
+    return gini_index_0_100(assets)
 
 
 def get_voter_turnout(model):
@@ -91,3 +108,21 @@ def get_agents_per_cell_grid(model) -> np.ndarray:
     )
     return flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
 
+
+def get_agent_strings_per_cell_grid(model) -> np.ndarray:
+    """Return an HxW str grid with vote agent infos per cell.
+
+    Contract:
+      result[y][x] == str listing all vote agents in the ColorCell at (x, y)
+    """
+    grid = model.grid
+    h, w = grid.height, grid.width
+
+    def agents_to_str(agents) -> str:
+        return ", ".join(f"{a.unique_id}: {a.personality}" for a in agents)
+
+    flat = [
+        agents_to_str(cell.agents) if cell is not None else ""
+        for cell, _pos in grid.coord_iter()
+    ]
+    return np.asarray(flat, dtype=object).reshape((w, h)).T

@@ -1,3 +1,4 @@
+import random
 from typing import TYPE_CHECKING, cast, List, Optional, Callable
 import mesa
 import numpy as np
@@ -7,7 +8,8 @@ from src.utils.social_welfare_functions import majority_rule, approval_voting
 from src.utils.distance_functions import spearman, kendall_tau
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
-                               get_voter_turnout, get_grid_colors)
+                               get_voter_turnout, get_grid_colors,
+                               gini_index_0_100)
 
 
 # Voting rules to be accessible by index
@@ -105,7 +107,9 @@ class ParticipationModel(mesa.Model):
         if seed is not None:
             self.random.seed(seed)  # Mesa RNG (Pythons random.Random
             self.np_random = np.random.default_rng(seed)  # Central NumPy RNG
+            random.seed(seed)
             np.random.seed(seed)  # For any legacy/global Numpy calls
+            print(f"Set models random seed to {seed}")
         else:
             self.np_random = np.random.default_rng()
         # Step control
@@ -204,13 +208,13 @@ class ParticipationModel(mesa.Model):
             id_start (int): The starting ID to ensure unique IDs.
         """
         # Create a color cell for each cell in the grid
-        for idx, (_, (row, col)) in enumerate(self.grid.coord_iter()):
+        for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):
             # Assign unique ID after areas and agents
             unique_id = id_start + idx
             # The colors are chosen by a predefined color distribution
             color = self.color_by_dst(self._preset_color_dst)
             # Create the cell (skip ids for area and voting agents)
-            cell = ColorCell(unique_id, self, (row, col), color)
+            cell = ColorCell(unique_id, self, (col, row), color)
             # Add to the 'model.color_cells' list (for faster access)
             self.color_cells[idx] = cell  # TODO: change to using the grid(?)
 
@@ -395,8 +399,7 @@ class ParticipationModel(mesa.Model):
                 "DistToReality": get_area_dist_to_reality,
                 "ColorDistribution": get_area_color_distribution,
                 "ElectionResults": get_election_results,
-                # "Personality-Based Reward": get_area_personality_based_reward,
-                # "Gini Index": get_area_gini_index
+                "GiniIndex": get_area_gini_index,
             },
             # tables={
             #    "AreaData": ["Step", "AreaID", "ColorDistribution",
@@ -433,7 +436,7 @@ class ParticipationModel(mesa.Model):
         """
         cells = self.color_cells
         for _ in range(color_patches_steps):
-            print(f"Color adjustment step {_}")
+            # print(f"Color adjustment step {_}")
             self.random.shuffle(cells)
             for cell in cells:
                 most_common_color = self.color_patches(cell, patch_power)
@@ -447,13 +450,6 @@ class ParticipationModel(mesa.Model):
         Args:
             heterogeneity (float): Standard deviation for Gaussian sampling.
         """
-        #colors = range(self.num_colors)
-        #values = [abs(self.random.gauss(1, heterogeneity)) for _ in colors]
-        ## Normalize (with float division)
-        #total = sum(values)
-        #dst_array = [value / total for value in values]
-        #return np.array(dst_array, dtype=float)
-        #
         # Vectorized sampling: mean=1, std=heterogeneity, shape=(num_colors,)
         values = np.abs(
             self.np_random.normal(1.0, heterogeneity, self.num_colors))
@@ -486,7 +482,7 @@ class ParticipationModel(mesa.Model):
         if abs(self.random.gauss(0, patch_power)) < bias_factor:
             return self.color_by_dst(self._preset_color_dst)
         # Otherwise, apply the color patches logic
-        neighbor_cells = self.grid.get_neighbors((cell.row, cell.col),
+        neighbor_cells = self.grid.get_neighbors((cell.col, cell.row),
                                                  moore=True,
                                                  include_center=False)
         color_counts = {}  # Count neighbors' colors
@@ -625,9 +621,14 @@ def get_election_results(area: Area) -> Optional[list[int]]:
     return None
 
 
-def get_area_personality_based_reward(area: Area) -> Optional[float]:
-    return area.personality_based_reward if isinstance(area, Area) else None
+# def get_area_personality_based_reward(area: Area) -> Optional[float]:
+#     return area.personality_based_reward if isinstance(area, Area) else None
 
 
 def get_area_gini_index(area: Area) -> Optional[float]:
-    return area.gini_index if isinstance(area, Area) else None
+    """Per-area Gini index (0-100) computed from agents' assets.
+    """
+    if not isinstance(area, Area):
+        return None
+    assets = [a.assets for a in area.agents]
+    return float(gini_index_0_100(assets))
