@@ -25,7 +25,8 @@ import numpy as np
 from pandas import Series, Timestamp
 import os
 from src.utils.metrics import (get_area_border_grid, get_agents_per_cell_grid,
-                               gini_index_0_100, get_agent_strings_per_cell_grid)
+                               gini_index_0_100, get_area_strings_per_cell_grid,
+                               get_agent_strings_per_cell_grid)
 
 
 class ReplayLogger:
@@ -79,7 +80,6 @@ class ReplayLogger:
                 "personalities": personalities,
                 "areas": {},
             },
-            "voter_positions": {},
             "step_indexing": {
                 "meaning": "post_step",
                 "first_recorded_step": 0,
@@ -89,37 +89,43 @@ class ReplayLogger:
             "artifacts": {
                 "area_borders": "area_borders.npy",
                 "agents_per_cell": "agents_per_cell.npy",
+                "agent_strings_per_cell": "agent_strings_per_cell.npy",
+                "cell_areas": "area_strings_per_cell.npy",
             },
         }
 
         # --- Personality distributions (areas + global) ---
         # Count personalities globally via integer personality_idx (fast)
         voters = list(getattr(model, "voting_agents", []) or [])
-        if len(personalities) > 0 and len(voters) > 0:
-            p_idx = np.fromiter((int(v.personality_idx) for v in voters), dtype=np.int64, count=len(voters))
-            counts = np.bincount(p_idx, minlength=len(personalities))
-            denom = counts.sum()
-            static["personality_info"]["global_distribution"] = (counts / denom).tolist() if denom > 0 else [0.0] * len(personalities)
+        l_p = len(personalities)
+        if l_p > 0 and len(voters) > 0:
+            p_idx = np.fromiter((int(v.personality_idx) for v in voters),
+                                dtype=np.int64, count=len(voters))
+            counts = np.bincount(p_idx, minlength=l_p)
+            d = counts.sum()
+            static["personality_info"]["global_distribution"] = (
+                (counts / d).tolist()) if d > 0 else [0.0] * l_p
         else:
-            static["personality_info"]["global_distribution"] = [0.0] * len(personalities)
+            static["personality_info"]["global_distribution"] = [0.0] * l_p
 
-        # Save static voter numbers per area + per-area personality distributions
+        # Save static voter nums per area + per-area personality distributions
         for a in getattr(model, "areas", []) or []:
             aid = str(a.unique_id)
             n_agents = int(getattr(a, "num_agents", 0) or 0)
             static["num_voters_per_area"][aid] = n_agents
 
-            # Prefer precomputed distribution if present; otherwise compute from agents
+            # Prefer precomputed distribution; otherwise compute from agents
             dist = getattr(a, "personality_distribution", None)
             if dist is None:
                 agents = list(getattr(a, "agents", []) or [])
-                if len(personalities) > 0 and len(agents) > 0:
-                    a_idx = np.fromiter((int(ag.personality_idx) for ag in agents), dtype=np.int64, count=len(agents))
-                    a_counts = np.bincount(a_idx, minlength=len(personalities))
-                    denom = a_counts.sum()
-                    dist = (a_counts / denom).tolist() if denom > 0 else [0.0] * len(personalities)
+                if l_p > 0 and len(agents) > 0:
+                    a_idx = np.fromiter((int(a.personality_idx) for a in agents),
+                                        dtype=np.int64, count=len(agents))
+                    a_counts = np.bincount(a_idx, minlength=l_p)
+                    d = a_counts.sum()
+                    dist = (a_counts / d).tolist() if d > 0 else [0.0] * l_p
                 else:
-                    dist = [0.0] * len(personalities)
+                    dist = [0.0] * l_p
             else:
                 # Ensure JSON-serializable python list
                 dist = _to_python(dist)
@@ -133,7 +139,6 @@ class ReplayLogger:
         for voter in voters:
             v_id = str(voter.unique_id)
             static["voter_personalities"][v_id] = int(voter.personality_idx)
-            # static["voter_positions"][v_id] = str(voter.position)
 
         with open(self.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
@@ -149,17 +154,23 @@ class ReplayLogger:
         np.save(str(agents_per_cell_file), np.asarray(apc, dtype=np.int32))
 
         # Store static agent strings per cell (HxW str)
-        aspc = get_agent_strings_per_cell_grid(model)
+        as_pc = get_agent_strings_per_cell_grid(model)
         agent_strs_file = self.out_dir / "agent_strings_per_cell.npy"
-        np.save(str(agent_strs_file), np.asarray(aspc, dtype=str))
+        np.save(str(agent_strs_file), np.asarray(as_pc, dtype=str))
+
+        # Store static area strings per cell (HxW str)
+        area_strs = get_area_strings_per_cell_grid(model)
+        area_strs_file = self.out_dir / "area_strings_per_cell.npy"
+        np.save(str(area_strs_file), np.asarray(area_strs, dtype=str))
 
 
-    def append_step(self, step: int, model: Any, grid_snapshot: Optional[np.ndarray] = None) -> None:
+    def append_step(self, step: int, model: Any,
+                    grid_snapshot: Optional[np.ndarray] = None) -> None:
         """Append per-step data.
 
         Contract (Schema v1):
-        - steps/step_XXXX.json stores per-step model vars + area vars in a replay-friendly shape
-        - grids/grid_XXXX.npy (optional) stores HxW int array of colors
+        - steps/step_XXX.json stores per-step model vars + area vars in a replay-friendly shape
+        - grids/grid_XXX.npy (optional) stores HxW int array of colors
 
         IMPORTANT:
         - We intentionally do not store large arrays in JSON (e.g. GridColors).

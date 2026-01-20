@@ -126,3 +126,21 @@ def get_agent_strings_per_cell_grid(model) -> np.ndarray:
         for cell, _pos in grid.coord_iter()
     ]
     return np.asarray(flat, dtype=object).reshape((w, h)).T
+
+
+def get_area_strings_per_cell_grid(model) -> np.ndarray:
+    """Return an HxW str grid with area ids per cell.
+    Contract:
+      result[y][x] == str listing all area ids in the ColorCell at (x, y)
+      id-sting: "a1, a2, ..." (excluding global area with id -1)
+    """
+    grid = model.grid
+    h, w = grid.height, grid.width
+
+    def areas_to_str(areas) -> str:
+        return ", ".join(f"{a.unique_id}" for a in areas if a.unique_id != -1)
+    flat = [
+        areas_to_str(cell.areas) if cell is not None else ""
+        for cell, _pos in grid.coord_iter()
+    ]
+    return np.asarray(flat, dtype=object).reshape((w, h)).T

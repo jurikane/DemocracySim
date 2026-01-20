@@ -570,7 +570,7 @@ class ParticipationModel(mesa.Model):
         """
         if abs(sum(color_distribution) -1) > 1e-8:
             raise ValueError("The color_distribution array must sum to 1.")
-        r = np.random.random()  # Float betw. 0 and 1
+        r = np.random.random()  # Float between 0 and 1
         cumulative_sum = 0.0
         for color_idx, prob in enumerate(color_distribution):
             if prob < 0:

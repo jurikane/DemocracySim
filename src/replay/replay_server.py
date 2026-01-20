@@ -147,6 +147,15 @@ class ReplayData:
             return np.load(str(p))
         return None
 
+    def load_cell_areas(self) -> Optional[np.ndarray]:
+        static = self.load_static() or {}
+        artifacts = static.get("artifacts")
+        f_name = artifacts.get("cell_areas", "cell_areas.npy")
+        p = self.run_dir / f_name
+        if p.exists():
+            return np.load(str(p))
+        return None
+
     def __len__(self) -> int:
         return len(self.step_files)
 
@@ -172,6 +181,10 @@ class ReplayModel(mesa.Model):
         self._width = int(static.get("width", getattr(appcfg.model, "width", 1)))
         self._num_colors = int(static.get("num_colors", getattr(appcfg.model, "num_colors", 2)))
 
+        # Populate static personality info expected by visualization elements
+        # (must run before we build area stubs)
+        self._load_static_personality_info()
+
         # Expose static voter counts for analysis/UI use
         self.total_voters = int(static.get("total_voters", 0) or 0)
         self.num_voters_per_area = static.get("num_voters_per_area", {}) \
@@ -179,41 +192,61 @@ class ReplayModel(mesa.Model):
 
         self.grid = mesa.space.SingleGrid(height=self._height, width=self._width, torus=True)
         self.color_cells: list[ColorCell] = []
-        borders_arr = self.data.load_area_borders()
-        set_borders = False
-        if borders_arr is not None and borders_arr.shape == (self._height, self._width):
-            set_borders = True
-        apc_arr = self.data.load_agents_per_cell()
-        apc_str_arr = self.data.load_agent_strings_per_cell()
-        apply_apc = False
-        if apc_arr is not None and apc_arr.shape == (self._height, self._width):
-            apply_apc = True
-        for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):  # In Mesa, coord_iter() yields (contents, (x, y)), i.e. x is column and y is row
-            # Create ColorCell with placeholder color 0; will be overridden by snapshots
-            cell = ColorCell(unique_id=idx, model=self, pos=(col, row), initial_color=0)
-            # Apply static area borders (if present)
-            if set_borders:
-                cell.is_border_cell = borders_arr[row, col]
-            # Apply static agents-per-cell counts (if present)
-            if apply_apc:
-                n_agents = int(apc_arr[row, col])
-                if n_agents > 0:
-                    # Create the agents from str info as placeholders
-                    agents_str = apc_str_arr[row, col]
-                    vote_agents = self._build_agent_stubs(agents_str)
-                    cell.agents = vote_agents
-            self.color_cells.append(cell)
-
-        # Populate static personality info expected by visualization elements
-        self._load_static_personality_info()
 
         # Areas are not simulated in replay, but AreaPersonalityDists expects area objects.
         self.areas = self._build_area_stubs_from_personalities()
         self.voting_agents = []
 
+        # Load npy static data if present
+        borders_arr = self.data.load_area_borders()
+        set_borders = self._check_npy_arr(borders_arr)
+
+        # New static artifact: per-cell area assignments as comma-separated area ids.
+        cell_areas_arr = self.data.load_cell_areas()
+        set_cell_areas = self._check_npy_arr(cell_areas_arr)
+
+        apc_arr = self.data.load_agents_per_cell()
+        apply_apc = self._check_npy_arr(apc_arr)
+        apc_str_arr = self.data.load_agent_strings_per_cell()
+        set_a_strings = self._check_npy_arr(apc_str_arr)
+
+        for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):  # In Mesa, coord_iter() yields (contents, (x, y)), i.e. x is column and y is row
+            # Create ColorCell with placeholder color 0; will be overridden by snapshots
+            cell = ColorCell(unique_id=idx, model=self, pos=(col, row), initial_color=0)
+
+            # Apply static area borders (if present)
+            if set_borders:
+                cell.is_border_cell = borders_arr[row, col]
+
+            # Apply static agents-per-cell information (if present)
+            if apply_apc:
+                n_agents = int(apc_arr[row, col])
+                if n_agents > 0 and set_a_strings:
+                    # Create the agents from str info as placeholders
+                    agents_str = apc_str_arr[row, col]
+                    vote_agents = self._build_agent_stubs(agents_str)
+                    self.voting_agents.extend(vote_agents)
+                    cell.agents = vote_agents
+
+            # Apply static area assignments (if present)
+            if set_cell_areas:
+                area_str = str(cell_areas_arr[row, col] or "").strip()
+                try:
+                    area_ids = [int(i) for i in area_str.split(", ") if i != ""]
+                except ValueError:
+                    area_ids = []
+                cell.areas = [a for a in self.areas if a.unique_id in set(area_ids)]
+
+            self.color_cells.append(cell)
+
         # Apply first snapshot if available
         if len(self.data) > 0:
             self._advance()
+
+    def _check_npy_arr(self, arr) -> bool:
+        if arr is not None and arr.shape == (self._height, self._width):
+            return True
+        return False
 
     def _load_static_personality_info(self) -> None:
         payload = self.data.load_static().get("personality_info") or {}
@@ -227,6 +260,7 @@ class ReplayModel(mesa.Model):
                 self.unique_id = unique_id
                 self.num_agents = int(num_agents) if num_agents is not None else 0
                 self.personality_distribution = personality_distribution or []
+                self.color_distribution = []  # For tooltip compatibility
 
         stubs = []
         for aid, rec in (self._areas_personality_payload or {}).items():
