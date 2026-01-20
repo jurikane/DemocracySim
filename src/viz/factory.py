@@ -29,7 +29,7 @@ def get_vis_cfg() -> VisualizationConfig | None:
 def make_canvas(cfg: AppConfig) -> CanvasGrid:
     """
     Build a CanvasGrid using the current config.
-    Expects cfg like: { 'model': {...}, 'visualization': {...} }.
+    Expects cfg like: { 'model': {...}, 'visualization': {...}}.
     """
     global _VIS_CFG
     model_cfg = cfg.model

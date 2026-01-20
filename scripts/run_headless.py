@@ -32,8 +32,8 @@ def run_once(run_id: int, cfg, out_dir: Path):
         model_cfg_for_run = cfg_for_run.model
         model_cfg_for_run.seed = run_seed
         out_dir.mkdir(parents=True, exist_ok=True)
-        n = sim_cfg.num_steps
-        rl = ReplayLogger(out_dir=out_dir, num_steps=n, run_id=run_id, store_grid=store_grid)
+        n_steps = int(getattr(sim_cfg, "num_steps", 100))
+        rl = ReplayLogger(out_dir=out_dir, run_id=run_id, store_grid=store_grid, num_steps=n_steps)
         # Create model instance
         model = make_model(model_cfg_for_run)
     except Exception as e:

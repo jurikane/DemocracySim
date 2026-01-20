@@ -1,8 +1,6 @@
 """
 Wires config -> ParticipationModel kwargs -> Mesa UI server.
 """
-import random
-import numpy as np
 
 from src.config.schema import AppConfig, ModelConfig
 from math import factorial

@@ -9,7 +9,7 @@ Storage layout (under out_dir):
 - grids/grid_0000.npy -- optional grid snapshot (numpy array) per stored step
 
 API:
-- ReplayLogger(out_dir: Path, num_steps: int, run_id: int, store_grid: bool=True)
+- ReplayLogger(out_dir: Path, run_id: int, store_grid: bool=True)
 - write_static(model)
 - append_step(step: int, model, grid_snapshot: np.ndarray | None)
 - flush()
@@ -29,15 +29,17 @@ from src.utils.metrics import (get_area_border_grid, get_agents_per_cell_grid,
 
 
 class ReplayLogger:
-    def __init__(self, out_dir: Path, num_steps: int, run_id: int = 0,
-                 store_grid: bool = True):
+    def __init__(self, out_dir: Path, run_id: int = 0, store_grid: bool = True, num_steps: int | None = None):
         self.out_dir = Path(out_dir)
         self.run_id = int(run_id)
         self.store_grid = bool(store_grid)
         self.steps_dir = self.out_dir / "steps"
         self.grids_dir = self.out_dir / "grids"
-        self.num_steps = num_steps
-        self.pad = len(str(num_steps)) or 4
+
+        # Flexible naming: pad width based on expected number of steps.
+        # No minimum; if num_steps is unknown, fall back to 1 digit.
+        self.pad = len(str(int(num_steps))) if num_steps is not None else 3
+
         os.makedirs(self.steps_dir, exist_ok=True)
         if self.store_grid:
             os.makedirs(self.grids_dir, exist_ok=True)
@@ -195,33 +197,6 @@ class ReplayLogger:
                     "ElectionResults": _to_python(getattr(area, "voted_ordering", None)),
                     "GiniIndex": _to_python(gini_area),
                 }
-        # except Exception:
-        #     # Fallback to Datacollector (slower):
-        #     valid_area_ids = [area.unique_id for area in model.areas]
-        #     # allow optional global area id
-        #     valid_area_ids.append(-1)
-        #     try:
-        #         if hasattr(model, "datacollector") and model.datacollector is not None:
-        #             adf = model.datacollector.get_agent_vars_dataframe()
-        #             if adf is not None and len(adf) > 0:
-        #                 try:
-        #                     last_step = adf.index.get_level_values(0).max()
-        #                     adf_step = adf.xs(last_step, level=0)
-        #                 except Exception:
-        #                     adf_step = adf
-        #
-        #                 for aid, row in adf_step.iterrows():
-        #                     if aid not in valid_area_ids:
-        #                         continue
-        #                     step_data["areas"][str(aid)] = {
-        #                         "VoterTurnout": _to_python(row.get("VoterTurnout")),
-        #                         "DistToReality": _to_python(row.get("DistToReality")),
-        #                         "ColorDistribution": _to_python(row.get("ColorDistribution")),
-        #                         "ElectionResults": _to_python(row.get("ElectionResults")),
-        #                         "GiniIndex": _to_python(row.get("GiniIndex")),
-        #                     }
-        #     except Exception:
-        #         pass
 
         step_file = self._step_filename(step)
         with open(step_file, "w") as f:

@@ -78,20 +78,41 @@ class ReplayData:
         self.run_dir = Path(run_dir)
         self.steps_dir = self.run_dir / "steps"
         self.grids_dir = self.run_dir / "grids"
-        self.step_files = sorted(self.steps_dir.glob("step_*.json"))
 
-    def __len__(self):
-        return len(self.step_files)
+        # Load static early so we can honor filename patterns
+        self._static = self.load_static()
+        self._step_pattern = None
+        self._grid_pattern = None
+        step_indexing = self._static.get("step_indexing") if isinstance(self._static.get("step_indexing"), dict) else {}
+        if isinstance(step_indexing.get("step_file"), str):
+            self._step_pattern = step_indexing.get("step_file")
+        if isinstance(step_indexing.get("grid_file"), str):
+            self._grid_pattern = step_indexing.get("grid_file")
+
+        self.step_files = self._discover_step_files()
+
+    def _discover_step_files(self):
+        files = list(self.steps_dir.glob("step_*.json"))
+
+        def _step_idx(p: Path) -> int:
+            stem = p.stem
+            suffix = stem.rsplit("_", 1)[-1]
+            return int(suffix) if suffix.isdigit() else 10**18
+
+        return sorted(files, key=_step_idx)
+
+    def load_grid(self, step: int) -> Optional[np.ndarray]:
+        # Use pattern from static.json (required in replay schema).
+        if not self._grid_pattern:
+            return None
+        gf = self.grids_dir / (self._grid_pattern % int(step))
+        if gf.exists():
+            return np.load(str(gf))
+        return None
 
     def load_step(self, index: int) -> Dict[str, Any]:
         sf = self.step_files[index]
         return json.loads(sf.read_text())
-
-    def load_grid(self, step: int) -> Optional[np.ndarray]:
-        gf = self.grids_dir / f"grid_{step:04d}.npy"
-        if gf.exists():
-            return np.load(str(gf))
-        return None
 
     def load_static(self) -> Dict[str, Any]:
         static_path = self.run_dir / "static.json"
@@ -125,6 +146,9 @@ class ReplayData:
         if p.exists():
             return np.load(str(p))
         return None
+
+    def __len__(self) -> int:
+        return len(self.step_files)
 
 
 class ReplayModel(mesa.Model):
@@ -190,56 +214,6 @@ class ReplayModel(mesa.Model):
         # Apply first snapshot if available
         if len(self.data) > 0:
             self._advance()
-
-    # def _apply_static_borders(self) -> None:
-    #     arr = self.data.load_area_borders()
-    #     if arr is None:
-    #         return
-    #     try:
-    #         h, w = int(arr.shape[0]), int(arr.shape[1])
-    #     except Exception:
-    #         return
-    #     if h != self._height or w != self._width:
-    #         return
-    #
-    #     # Same coord mapping as colors: arr[y, x]
-    #     flat = np.asarray(arr, dtype=bool).T.ravel()
-    #     for i, (cell, _pos) in enumerate(self.grid.coord_iter()):
-    #         if cell is None:
-    #             continue
-    #         try:
-    #             cell.is_border_cell = bool(flat[i])
-    #         except Exception:
-    #             pass
-
-    # def _apply_static_agents_per_cell(self) -> None:
-    #     """Populate ColorCell.agents with placeholders so the UI can show per-cell counts.
-    #
-    #     The visualization uses `len(cell.agents)` (via num_agents_in_cell).
-    #     We don't reconstruct real VoteAgents; placeholders are fine.
-    #     """
-    #     arr = self.data.load_agents_per_cell()
-    #     if arr is None:
-    #         return
-    #     try:
-    #         h, w = int(arr.shape[0]), int(arr.shape[1])
-    #     except Exception:
-    #         return
-    #     if h != self._height or w != self._width:
-    #         return
-    #
-    #     # Artifacts use arr[y, x]. Mesa stores pos as (x, y).
-    #     flat = np.asarray(arr, dtype=np.int32).T.ravel()
-    #
-    #     # Fill each cell.agents with placeholders
-    #     for i, (cell, _pos) in enumerate(self.grid.coord_iter()):
-    #         if cell is None:
-    #             continue
-    #         try:
-    #             n = int(flat[i])
-    #         except Exception:
-    #             n = 0
-    #         cell.agents = [None] * n if n > 0 else []
 
     def _load_static_personality_info(self) -> None:
         payload = self.data.load_static().get("personality_info") or {}

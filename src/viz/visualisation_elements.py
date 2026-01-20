@@ -57,35 +57,24 @@ class AreaStats(TextElement):
         for i, area_id in enumerate(area_ids):
             row = i
             ax1 = axes[row][0]
-            try:
-                area_data = color_distribution.xs(area_id, level=1)
-                a_data = dist_to_reality.xs(area_id, level=1)
-            except Exception:
-                continue
+            area_data = color_distribution.xs(area_id, level=1)
+            a_data = dist_to_reality.xs(area_id, level=1)
             ax1.plot(a_data.index, a_data.values, color='Black', linestyle='--')
             for color_idx in range(num_colors):
-                try:
-                    cdata = area_data.apply(lambda x: x[color_idx])
-                    ax1.plot(cdata.index, cdata.values, color=COLORS[color_idx])
-                except Exception:
-                    continue
+                cdata = area_data.apply(lambda x: x[color_idx])
+                ax1.plot(cdata.index, cdata.values, color=COLORS[color_idx])
             ax1.set_title(f'Area {area_id} \n--- deviation from voted distribution')
             ax1.set_xlabel('Step')
             ax1.set_ylabel('Color Distribution')
-
             ax2 = axes[row][1]
-            try:
-                area_data = election_results.xs(area_id, level=1)
-            except Exception:
-                continue
+            area_data = election_results.xs(area_id, level=1)
+
             for color_id in range(num_colors):
-                try:
-                    cdata = area_data.apply(lambda x: list(x).index(color_id) if color_id in x else None)
-                    ax2.plot(cdata.index, cdata.values, marker='o',
-                             label=f'Color {color_id}', color=COLORS[color_id],
-                             linewidth=0.2)
-                except Exception:
-                    continue
+                cdata = area_data.apply(lambda x: list(x).index(color_id) if color_id in x else None)
+                ax2.plot(cdata.index, cdata.values, marker='o',
+                         label=f'Color {color_id}', color=COLORS[color_id],
+                         linewidth=0.2)
+
             ax2.set_title(f'Area {area_id} \n')
             ax2.set_xlabel('Step')
             ax2.set_ylabel('Elected ranking (rank values)')
@@ -111,7 +100,7 @@ class PersonalityDistribution(TextElement):
             num_agents = getattr(model, 'num_agents', 0)
             colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
             num_colors = len(personalities[0])
-        except Exception:
+        except(IndexError, TypeError):
             self.pers_dist_plot = ""
             return
 
@@ -209,7 +198,7 @@ class MatplotlibElement(TextElement):
         try:
             data = model.datacollector.get_model_vars_dataframe()
             collective_assets = data.get("Collective assets")
-        except Exception:
+        except AttributeError:
             collective_assets = None
         if collective_assets is None:
             return ""
@@ -246,7 +235,7 @@ class AreaPersonalityDists(TextElement):
             num_colors = len(personalities[0])
             num_personalities = personalities.shape[0]
             num_areas = len(getattr(model, 'areas', []))
-        except Exception:
+        except (TypeError, IndexError, AttributeError, ValueError):
             self.areas_pers_dist_plot = ""
             return
 
