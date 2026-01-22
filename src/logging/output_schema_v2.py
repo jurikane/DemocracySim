@@ -1,0 +1,432 @@
+"""Locked output schema v2 (contract).
+
+This module is the *single source of truth* for the on-disk output format
+produced by headless batch runs.
+
+Key rules:
+- Step indexing semantics: post-election, post-reward, **pre-mutation**.
+- Step-based data is stored in Parquet tables (no per-step JSON files).
+- Dense arrays (grids/overlays) remain in separate artifacts (e.g. in .npy).
+- No `run_id`. Every table includes:
+    - run_seed (int32): the concrete RNG seed used for this run
+    - rule_idx (int16): index of the voting rule used for this run
+
+Validators in this module are intentionally tolerant to safe upcasts
+(e.g., int16 -> int32, float32 -> float64) because Pandas/Arrow may widen
+integer/float dtypes during IO.
+
+This file is documentation + validation only. It must not perform any logging.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Final, Mapping, Iterable
+
+import numpy as np
+import pandas as pd
+
+
+SCHEMA_NAME: Final[str] = "output_schema_v2"
+SCHEMA_VERSION: Final[int] = 2
+
+# Indexing meaning for all step-based tables in this schema.
+# (Election has run, rewards distributed, mutation not applied yet.)
+STEP_INDEXING: Final[str] = "post_election_pre_mutation"
+
+
+@dataclass(frozen=True)
+class TableSchema:
+    """A Parquet table schema contract.
+
+    `dtypes` should use pandas/numpy dtype strings (e.g. "int32", "float32",
+    "boolean") and is used by validators.
+    """
+
+    name: str
+    primary_key: tuple[str, ...]
+    columns: tuple[str, ...]
+    dtypes: Mapping[str, str]
+
+
+def _expanded(prefix: str, n: int) -> tuple[str, ...]:
+    """Return (prefix_0, ..., prefix_{n-1})."""
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    return tuple(f"{prefix}_{i}" for i in range(n))
+
+
+def _dtypes_for_cols(cols: Iterable[str], dtype: str) -> dict[str, str]:
+    return {str(c): str(dtype) for c in cols}
+
+
+# Note: num_colors is model-config dependent.
+# We document and validate the *base columns* here. Expanded by writers/tests.
+COLOR_EXPANSION_NOTE: Final[str] = (
+    "Color vector columns are expanded in-file as *_0..*_{C-1} where C=num_colors"
+)
+
+
+# -----------------
+# steps.parquet
+# -----------------
+STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
+    "run_seed",
+    "rule_idx",
+    "step",
+    "collective_assets",
+    "gini_index",
+    "turnout",
+)
+
+STEPS_BASE_DTYPES: Final[dict[str, str]] = {
+    "run_seed": "int32",
+    "rule_idx": "int16",
+    "step": "int32",
+    "collective_assets": "int64",
+    "gini_index": "int16",
+    "turnout": "float32",
+    # Optional per-color model series: color_0...color_{C-1} float32
+}
+
+STEPS_TABLE: Final[TableSchema] = TableSchema(
+    name="steps",
+    primary_key=("run_seed", "rule_idx", "step"),
+    columns=STEPS_BASE_COLUMNS,
+    dtypes=STEPS_BASE_DTYPES,
+)
+
+
+# -----------------
+# area_steps.parquet
+# -----------------
+AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
+    "run_seed",
+    "rule_idx",
+    "step",
+    "area_id",
+    # Participation / costs
+    "eligible_voters",
+    "participants",
+    "turnout",
+    "election_cost_rate",
+    "fee_pool",
+    # Outcome
+    "winning_option_id",
+    # Vectors (expanded):
+    # - elected_color_0.. elected_color_{C-1} (int16)
+    # - area_color_0.. area_color_{C-1} (float32)
+    # Metrics
+    "dist_to_reality",
+    "gini_index",
+)
+
+AREA_STEPS_BASE_DTYPES: Final[dict[str, str]] = {
+    "run_seed": "int32",
+    "rule_idx": "int16",
+    "step": "int32",
+    "area_id": "int32",
+    "eligible_voters": "int32",
+    "participants": "int32",
+    "turnout": "float32",
+    "election_cost_rate": "float32",
+    # fee_pool must match simulation internal type; allow float.
+    "fee_pool": "float32",
+    "winning_option_id": "int32",
+    "dist_to_reality": "float32",
+    "gini_index": "int16",
+    # expanded vectors documented but validated dynamically
+}
+
+AREA_STEPS_TABLE: Final[TableSchema] = TableSchema(
+    name="area_steps",
+    primary_key=("run_seed", "rule_idx", "step", "area_id"),
+    columns=AREA_STEPS_BASE_COLUMNS,
+    dtypes=AREA_STEPS_BASE_DTYPES,
+)
+
+
+# -----------------
+# agents.parquet
+# -----------------
+AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
+    "run_seed",
+    "rule_idx",
+    "step",
+    "agent_id",
+    "area_id",
+    "row",
+    "col",
+    "assets",
+    "num_elections_participated",
+    "personality_idx",
+    "confidence",
+    # Vector (expanded): estim_dst_color_0..estim_dst_color_{C-1}
+)
+
+AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
+    "run_seed": "int32",
+    "rule_idx": "int16",
+    "step": "int32",
+    "agent_id": "int32",
+    "area_id": "int32",
+    "row": "int16",
+    "col": "int16",
+    # assets must match simulation internal type; allow float.
+    "assets": "float32",
+    "num_elections_participated": "int32",
+    "personality_idx": "int16",
+    "confidence": "float32",
+}
+
+AGENTS_TABLE: Final[TableSchema] = TableSchema(
+    name="agents",
+    primary_key=("run_seed", "rule_idx", "step", "agent_id"),
+    columns=AGENTS_BASE_COLUMNS,
+    dtypes=AGENTS_BASE_DTYPES,
+)
+
+
+# -----------------
+# votes_topk.parquet
+# -----------------
+VOTES_TOPK_BASE_COLUMNS: Final[tuple[str, ...]] = (
+    "run_seed",
+    "rule_idx",
+    "step",
+    "area_id",
+    "agent_id",
+    "rank",
+    "option_id",
+    "oppose_score",
+    "participated",
+    "confidence",
+)
+
+VOTES_TOPK_BASE_DTYPES: Final[dict[str, str]] = {
+    "run_seed": "int32",
+    "rule_idx": "int16",
+    "step": "int32",
+    "area_id": "int32",
+    "agent_id": "int32",
+    "rank": "int16",
+    "option_id": "int32",
+    "oppose_score": "float32",
+    "participated": "boolean",
+    "confidence": "float32",
+}
+
+VOTES_TOPK_TABLE: Final[TableSchema] = TableSchema(
+    name="votes_topk",
+    primary_key=("run_seed", "rule_idx", "step", "area_id", "agent_id", "rank"),
+    columns=VOTES_TOPK_BASE_COLUMNS,
+    dtypes=VOTES_TOPK_BASE_DTYPES,
+)
+
+
+def all_tables() -> tuple[TableSchema, ...]:
+    return STEPS_TABLE, AREA_STEPS_TABLE, AGENTS_TABLE, VOTES_TOPK_TABLE
+
+
+# -----------------
+# Validation helpers
+# -----------------
+
+class SchemaValidationError(ValueError):
+    pass
+
+
+def _normalize_pd_dtype(dtype: str) -> str:
+    """Map various pandas dtype strings to a canonical form."""
+    d = str(dtype)
+    # pandas may report 'Int64' for nullable integer; normalize to 'int64'
+    # but keep a label so we can allow it under the hood.
+    return d.lower()
+
+
+def _is_integer_kind(dtype: np.dtype) -> bool:
+    return np.issubdtype(dtype, np.integer)
+
+
+def _is_float_kind(dtype: np.dtype) -> bool:
+    return np.issubdtype(dtype, np.floating)
+
+
+def _is_bool_kind(dtype: np.dtype) -> bool:
+    # pandas BooleanDtype has kind 'b'? For safety, check both bool and pandas boolean.
+    return dtype == np.dtype(bool)
+
+
+def _allow_safe_cast(actual: np.dtype, expected: np.dtype) -> bool:
+    """Return True if `actual` is an acceptable dtype for `expected`.
+
+    Policy:
+    - exact match is ok
+    - integer upcasts are ok (int16 -> int32 -> int64)
+    - float upcasts are ok (float32 -> float64)
+    - integer -> float is ok (writer may store ints but pandas reads float)
+      NOTE: we allow this only if expected is float.
+    - pandas nullable boolean is acceptable for expected boolean
+    """
+    if actual == expected:
+        return True
+
+    # expected integer family
+    if _is_integer_kind(expected):
+        if _is_integer_kind(actual):
+            return np.can_cast(actual, expected, casting="safe") or np.can_cast(expected, actual, casting="safe")
+        # do NOT allow float as replacement for expected int
+        return False
+
+    # expected float family
+    if _is_float_kind(expected):
+        if _is_float_kind(actual):
+            return np.can_cast(actual, expected, casting="safe") or np.can_cast(expected, actual, casting="safe")
+        if _is_integer_kind(actual):
+            # int -> float is safe
+            return True
+        return False
+
+    # expected boolean
+    if expected == np.dtype(bool):
+        # pandas BooleanDtype arrives as 'boolean' extension; treat as acceptable
+        if actual == np.dtype(bool):
+            return True
+        return False
+
+    # fallback strict
+    return False
+
+
+def _expected_np_dtype(dtype_str: str) -> np.dtype:
+    d = _normalize_pd_dtype(dtype_str)
+    if d in {"boolean", "bool"}:
+        return np.dtype(bool)
+    # 'int16', 'int32', 'int64', 'float32', 'float64'
+    return np.dtype(d)
+
+
+def _validate_required_columns(df: pd.DataFrame, required: Iterable[str], table_name: str) -> None:
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise SchemaValidationError(
+            f"{table_name}: missing required columns: {missing}"
+        )
+
+
+def _validate_dtypes(df: pd.DataFrame, expected_dtypes: Mapping[str, str], table_name: str) -> None:
+    bad: dict[str, str] = {}
+    for col, exp in expected_dtypes.items():
+        if col not in df.columns:
+            continue
+        actual = df[col].dtype
+        # handle pandas extension dtypes
+        try:
+            actual_np = actual.numpy_dtype  # type: ignore[attr-defined]
+        except (TypeError, ValueError):
+            # Non-numpy/extension dtype (e.g., object/category/string)
+            actual_np = np.dtype(actual)
+
+        exp_np = _expected_np_dtype(exp)
+
+        # Special-case pandas BooleanDtype
+        if _normalize_pd_dtype(exp) in {"boolean", "bool"}:
+            if str(actual).lower() in {"boolean", "bool"}:
+                continue
+            if actual_np == np.dtype(bool):
+                continue
+            bad[col] = f"expected {exp} got {actual}"
+            continue
+
+        if not _allow_safe_cast(actual_np, exp_np):
+            bad[col] = f"expected {exp} got {actual}"
+
+    if bad:
+        msg = "; ".join(f"{k} ({v})" for k, v in bad.items())
+        raise SchemaValidationError(f"{table_name}: dtype mismatches: {msg}")
+
+
+def _validate_expanded_prefix(
+    df: pd.DataFrame,
+    prefix: str,
+    dtype: str,
+    table_name: str,
+) -> None:
+    """Validate expanded vector columns like prefix_0...prefix_{C-1}.
+
+    We require:
+    - at least one column exists (prefix_0)
+    - all columns with that prefix are consecutive indices starting at 0
+    - all present are of an acceptable dtype
+    """
+    cols = [c for c in df.columns if isinstance(c, str) and c.startswith(prefix + "_")]
+    if not cols:
+        raise SchemaValidationError(f"{table_name}: missing expanded vector columns for '{prefix}_0..' ")
+
+    # parse suffixes
+    idxs: list[int] = []
+    for c in cols:
+        suffix = c.split("_", 1)[1]
+        try:
+            idxs.append(int(suffix))
+        except ValueError:
+            raise SchemaValidationError(f"{table_name}: vector column has non-integer suffix: {c}")
+
+    idxs_sorted = sorted(idxs)
+    if idxs_sorted[0] != 0:
+        raise SchemaValidationError(f"{table_name}: vector columns for {prefix} must start at 0")
+    # must be contiguous
+    for a, b in zip(idxs_sorted, idxs_sorted[1:]):
+        if b != a + 1:
+            raise SchemaValidationError(
+                f"{table_name}: vector columns for {prefix} must be contiguous (found {idxs_sorted})"
+            )
+
+    expected_map = _dtypes_for_cols((f"{prefix}_{i}" for i in idxs_sorted), dtype)
+    _validate_dtypes(df, expected_map, table_name)
+
+
+# ---- Public validators ----
+
+def validate_steps_df(df: pd.DataFrame) -> None:
+    """Validate a DataFrame read from steps.parquet."""
+    table = STEPS_TABLE
+    _validate_required_columns(df, table.columns, table.name)
+    _validate_dtypes(df, table.dtypes, table.name)
+    # optional: allow color_0... columns if present; validate if they exist
+    color_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("color_")]
+    if color_cols:
+        _validate_expanded_prefix(df, prefix="color", dtype="float32", table_name=table.name)
+
+
+def validate_area_steps_df(df: pd.DataFrame) -> None:
+    """Validate a DataFrame read from area_steps.parquet."""
+    table = AREA_STEPS_TABLE
+    _validate_required_columns(df, table.columns, table.name)
+    _validate_dtypes(df, table.dtypes, table.name)
+    _validate_expanded_prefix(df, prefix="elected_color", dtype="int16", table_name=table.name)
+    _validate_expanded_prefix(df, prefix="area_color", dtype="float32", table_name=table.name)
+
+
+def validate_agents_df(df: pd.DataFrame) -> None:
+    """Validate a DataFrame read from agents.parquet."""
+    table = AGENTS_TABLE
+    _validate_required_columns(df, table.columns, table.name)
+    _validate_dtypes(df, table.dtypes, table.name)
+    _validate_expanded_prefix(df, prefix="estim_dst_color", dtype="float32", table_name=table.name)
+
+
+def validate_votes_topk_df(df: pd.DataFrame) -> None:
+    """Validate a DataFrame read from votes_topk.parquet."""
+    table = VOTES_TOPK_TABLE
+    _validate_required_columns(df, table.columns, table.name)
+    _validate_dtypes(df, table.dtypes, table.name)
+
+    # Extra semantic expectations (lightweight): rank should be positive.
+    if "rank" in df.columns:
+        try:
+            if (df["rank"] < 1).any():
+                raise SchemaValidationError(f"{table.name}: rank must be >= 1")
+        except TypeError:
+            # If dtype is object etc., dtype validator should have caught it.
+            pass
