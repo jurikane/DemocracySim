@@ -154,14 +154,11 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "rule_idx",
     "step",
     "agent_id",
-    "area_id",
     "row",
     "col",
     "assets",
     "num_elections_participated",
     "personality_idx",
-    "confidence",
-    # Vector (expanded): estim_dst_color_0..estim_dst_color_{C-1}
 )
 
 AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -169,14 +166,12 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "rule_idx": "int16",
     "step": "int32",
     "agent_id": "int32",
-    "area_id": "int32",
     "row": "int16",
     "col": "int16",
     # assets must match simulation internal type; allow float.
     "assets": "float32",
     "num_elections_participated": "int32",
     "personality_idx": "int16",
-    "confidence": "float32",
 }
 
 AGENTS_TABLE: Final[TableSchema] = TableSchema(
@@ -188,44 +183,54 @@ AGENTS_TABLE: Final[TableSchema] = TableSchema(
 
 
 # -----------------
-# votes_topk.parquet
+# votes.parquet
 # -----------------
-VOTES_TOPK_BASE_COLUMNS: Final[tuple[str, ...]] = (
+# One row per participating agent per area per step.
+VOTES_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "run_seed",
     "rule_idx",
     "step",
     "area_id",
     "agent_id",
-    "rank",
-    "option_id",
-    "oppose_score",
     "participated",
     "confidence",
+    # Vector (expanded): estim_dst_color_0..estim_dst_color_{C-1}
+    "rank_1_option_id",
+    "rank_1_oppose_score",
+    "rank_2_option_id",
+    "rank_2_oppose_score",
+    "rank_3_option_id",
+    "rank_3_oppose_score",
 )
 
-VOTES_TOPK_BASE_DTYPES: Final[dict[str, str]] = {
+VOTES_BASE_DTYPES: Final[dict[str, str]] = {
     "run_seed": "int32",
     "rule_idx": "int16",
     "step": "int32",
     "area_id": "int32",
     "agent_id": "int32",
-    "rank": "int16",
-    "option_id": "int32",
-    "oppose_score": "float32",
     "participated": "boolean",
     "confidence": "float32",
+    # estim_dst_color_* float32 validated dynamically
+    # Use nullable ints for option ids (so missing ranks can be NA).
+    "rank_1_option_id": "Int32",
+    "rank_1_oppose_score": "float32",
+    "rank_2_option_id": "Int32",
+    "rank_2_oppose_score": "float32",
+    "rank_3_option_id": "Int32",
+    "rank_3_oppose_score": "float32",
 }
 
-VOTES_TOPK_TABLE: Final[TableSchema] = TableSchema(
-    name="votes_topk",
-    primary_key=("run_seed", "rule_idx", "step", "area_id", "agent_id", "rank"),
-    columns=VOTES_TOPK_BASE_COLUMNS,
-    dtypes=VOTES_TOPK_BASE_DTYPES,
+VOTES_TABLE: Final[TableSchema] = TableSchema(
+    name="votes",
+    primary_key=("run_seed", "rule_idx", "step", "area_id", "agent_id"),
+    columns=VOTES_BASE_COLUMNS,
+    dtypes=VOTES_BASE_DTYPES,
 )
 
 
 def all_tables() -> tuple[TableSchema, ...]:
-    return STEPS_TABLE, AREA_STEPS_TABLE, AGENTS_TABLE, VOTES_TOPK_TABLE
+    return STEPS_TABLE, AREA_STEPS_TABLE, AGENTS_TABLE, VOTES_TABLE
 
 
 # -----------------
@@ -413,20 +418,22 @@ def validate_agents_df(df: pd.DataFrame) -> None:
     table = AGENTS_TABLE
     _validate_required_columns(df, table.columns, table.name)
     _validate_dtypes(df, table.dtypes, table.name)
-    _validate_expanded_prefix(df, prefix="estim_dst_color", dtype="float32", table_name=table.name)
 
 
-def validate_votes_topk_df(df: pd.DataFrame) -> None:
-    """Validate a DataFrame read from votes_topk.parquet."""
-    table = VOTES_TOPK_TABLE
+def validate_votes_df(df: pd.DataFrame) -> None:
+    """Validate a DataFrame read from votes.parquet."""
+    table = VOTES_TABLE
     _validate_required_columns(df, table.columns, table.name)
     _validate_dtypes(df, table.dtypes, table.name)
 
-    # Extra semantic expectations (lightweight): rank should be positive.
-    if "rank" in df.columns:
+    # Validate estim_dst_color_* expansion (must exist for vote context)
+    _validate_expanded_prefix(df, prefix="estim_dst_color", dtype="float32", table_name=table.name)
+
+    # Basic sanity: participated should be True for all rows (participants-only table).
+    if "participated" in df.columns:
         try:
-            if (df["rank"] < 1).any():
-                raise SchemaValidationError(f"{table.name}: rank must be >= 1")
-        except TypeError:
-            # If dtype is object etc., dtype validator should have caught it.
+            if (~df["participated"].fillna(False)).any():
+                raise SchemaValidationError(f"{table.name}: participated must be True for all rows")
+        except (TypeError, ValueError):
+            # dtype validator should catch wild types; keep runtime robust
             pass

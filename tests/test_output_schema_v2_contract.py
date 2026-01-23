@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,11 +11,11 @@ from src.logging.output_schema_v2 import (
     validate_steps_df,
     validate_area_steps_df,
     validate_agents_df,
-    validate_votes_topk_df,
+    validate_votes_df,
     STEPS_TABLE,
     AREA_STEPS_TABLE,
     AGENTS_TABLE,
-    VOTES_TOPK_TABLE,
+    VOTES_TABLE,
 )
 
 
@@ -59,7 +58,7 @@ def _schema_v2_missing_reason(run_dir: Path) -> str:
         run_dir / "steps.parquet",
         run_dir / "area_steps.parquet",
         run_dir / "agents.parquet",
-        run_dir / "votes_topk.parquet",
+        run_dir / "votes.parquet",
     ]
     missing = [p.name for p in required if not p.exists()]
     if missing:
@@ -84,7 +83,7 @@ def test_schema_v2_required_artifacts_exist(v2_run_dir: Path) -> None:
     assert (v2_run_dir / "steps.parquet").exists(), "steps.parquet missing"
     assert (v2_run_dir / "area_steps.parquet").exists(), "area_steps.parquet missing"
     assert (v2_run_dir / "agents.parquet").exists(), "agents.parquet missing"
-    assert (v2_run_dir / "votes_topk.parquet").exists(), "votes_topk.parquet missing"
+    assert (v2_run_dir / "votes.parquet").exists(), "votes.parquet missing"
 
     # Required grids
     grids_dir = v2_run_dir / "grids"
@@ -106,22 +105,23 @@ def test_schema_v2_parquets_validate_and_keys_unique(v2_run_dir: Path) -> None:
     steps = pd.read_parquet(v2_run_dir / "steps.parquet")
     area_steps = pd.read_parquet(v2_run_dir / "area_steps.parquet")
     agents = pd.read_parquet(v2_run_dir / "agents.parquet")
-    votes = pd.read_parquet(v2_run_dir / "votes_topk.parquet")
+    votes = pd.read_parquet(v2_run_dir / "votes.parquet")
 
     validate_steps_df(steps)
     validate_area_steps_df(area_steps)
     validate_agents_df(agents)
-    validate_votes_topk_df(votes)
+    validate_votes_df(votes)
 
     _assert_pk_unique(steps, STEPS_TABLE.primary_key, "steps")
     _assert_pk_unique(area_steps, AREA_STEPS_TABLE.primary_key, "area_steps")
     _assert_pk_unique(agents, AGENTS_TABLE.primary_key, "agents")
-    _assert_pk_unique(votes, VOTES_TOPK_TABLE.primary_key, "votes_topk")
+    _assert_pk_unique(votes, VOTES_TABLE.primary_key, "votes")
 
 
-def test_votes_topk_rank_within_bounds(v2_run_dir: Path) -> None:
-    """Contract: votes_topk.rank is within 1...k.
-    If k is known from config use it, otherwise assume k=3.
+def test_votes_has_fixed_rank_columns(v2_run_dir: Path) -> None:
+    """Contract: votes contains exactly the fixed 3-rank columns.
+
+    This schema uses a wide layout to reduce row counts.
 
     Marked xfail until schema v2 logging is implemented.
     """
@@ -129,17 +129,22 @@ def test_votes_topk_rank_within_bounds(v2_run_dir: Path) -> None:
     if reason:
         pytest.xfail(reason)
 
-    votes = pd.read_parquet(v2_run_dir / "votes_topk.parquet")
+    votes = pd.read_parquet(v2_run_dir / "votes.parquet")
 
-    # If no explicit k exists in config, default to 3 (project contract).
-    cfg = load_config("toy.yaml")
-    k = int(getattr(getattr(cfg, "simulation", None), "k", 3) or 3)
-    if k <= 0:
-        k = 3
+    expected = {
+        "rank_1_option_id",
+        "rank_1_oppose_score",
+        "rank_2_option_id",
+        "rank_2_oppose_score",
+        "rank_3_option_id",
+        "rank_3_oppose_score",
+    }
+    missing = expected - set(votes.columns)
+    assert not missing, f"Missing expected rank columns: {missing}"
 
-    assert "rank" in votes.columns
-    assert votes["rank"].min() >= 1
-    assert votes["rank"].max() <= k
+    # Basic sanity: if option_id is present, oppose_score should be present.
+    # (We don't enforce non-nullness because option space can be <3 in edge cases.)
+    assert "rank_1_option_id" in votes.columns and "rank_1_oppose_score" in votes.columns
 
 
 def test_grids_are_loadable_numpy_arrays(v2_run_dir: Path) -> None:

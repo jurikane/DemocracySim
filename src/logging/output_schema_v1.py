@@ -95,4 +95,4 @@ VOTES_TABLE: Final[TableSchema] = TableSchema(
 
 
 def all_tables() -> Iterable[TableSchema]:
-    return (STEPS_TABLE, AREAS_TABLE, VOTES_TABLE)
+    return STEPS_TABLE, AREAS_TABLE, VOTES_TABLE

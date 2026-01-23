@@ -15,7 +15,7 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `steps.parquet`
 - `area_steps.parquet`
 - `agents.parquet`
-- `votes_topk.parquet`
+- `votes.parquet`
 - `grids/grid_0000.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots)
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
@@ -76,43 +76,52 @@ Merged area-state + election table.
 
 ### `agents.parquet`
 
-Agent snapshot table.
+Agent snapshot table (**agent state only**).
 
 **Primary key:** `(run_seed, rule_idx, step, agent_id)`
 
-| column                                   |   dtype | notes                              |
-|------------------------------------------|--------:|------------------------------------|
-| run_seed                                 |   int32 |                                    |
-| rule_idx                                 |   int16 |                                    |
-| step                                     |   int32 |                                    |
-| agent_id                                 |   int32 |                                    |
-| area_id                                  |   int32 | disjoint thesis runs               |
-| row                                      |   int16 |                                    |
-| col                                      |   int16 |                                    |
-| assets                                   | float32 | matches simulation internal type   |
-| num_elections_participated               |   int32 |                                    |
-| personality_idx                          |   int16 |                                    |
-| confidence                               | float32 |                                    |
-| estim_dst_color_0..estim_dst_color_{C-1} | float32 | estimated real color distributions |
+| column                     |   dtype | notes                                        |
+|----------------------------|--------:|----------------------------------------------|
+| run_seed                   |   int32 |                                              |
+| rule_idx                   |   int16 |                                              |
+| step                       |   int32 |                                              |
+| agent_id                   |   int32 |                                              |
+| row                        |   int16 |                                              |
+| col                        |   int16 |                                              |
+| assets                     | float32 | matches simulation internal type             |
+| num_elections_participated |   int32 | cumulative counter across all areas/steps    |
+| personality_idx            |   int16 |                                              |
 
-### `votes_topk.parquet`
+**Semantics:** the row for step `t` represents the agent’s final state after it
+participated in all elections it was eligible for during step `t`.
 
-Top-k vote signal table (participants only).
+### `votes.parquet`
 
-**Primary key:** `(run_seed, rule_idx, step, area_id, agent_id, rank)`
+Vote signal table (participants only). This is the single source of
+**election-contextual** agent values (belief/confidence).
 
-| column       |   dtype | notes                                    |
-|--------------|--------:|------------------------------------------|
-| run_seed     |   int32 |                                          |
-| rule_idx     |   int16 |                                          |
-| step         |   int32 |                                          |
-| area_id      |   int32 |                                          |
-| agent_id     |   int32 |                                          |
-| rank         |   int16 | 1..k                                     |
-| option_id    |   int32 | option row index                         |
-| oppose_score | float32 | raw dissatisfaction (lower = better)     |
-| participated | boolean | always true (rows only for participants) |
-| confidence   | float32 | agent confidence at vote time            |
+**Primary key:** `(run_seed, rule_idx, step, area_id, agent_id)`
+
+| column                                   |   dtype | notes                                          |
+|------------------------------------------|--------:|------------------------------------------------|
+| run_seed                                 |   int32 |                                                |
+| rule_idx                                 |   int16 |                                                |
+| step                                     |   int32 |                                                |
+| area_id                                  |   int32 | disambiguates overlapping areas                |
+| agent_id                                 |   int32 |                                                |
+| participated                             | boolean | always true (rows only for participants)       |
+| confidence                               | float32 | agent confidence at vote time **in this area** |
+| estim_dst_color_0..estim_dst_color_{C-1} | float32 | estimated area color distribution at vote time |
+| rank_1_option_id                         |   Int32 | option row index into `model.options`          |
+| rank_1_oppose_score                      | float32 | lower = better                                 |
+| rank_2_option_id                         |   Int32 |                                                |
+| rank_2_oppose_score                      | float32 |                                                |
+| rank_3_option_id                         |   Int32 |                                                |
+| rank_3_oppose_score                      | float32 |                                                |
+
+**Notes:**
+- `votes.parquet` uses a fixed 3-rank wide layout to reduce row counts.
+- If fewer than 3 options exist, remaining rank_* fields should be null.
 
 ## Notes
 

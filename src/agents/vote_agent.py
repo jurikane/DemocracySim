@@ -30,7 +30,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.agents.area import Area
 
 
-def combine_and_normalize(arr_1: np.array, arr_2: np.array, factor: float):
+def combine_and_normalize(arr_1: np.ndarray, arr_2: np.ndarray, factor: float):
     """
     Combine two arrays weighted by a factor favoring arr_1.
     The first array is to be the estimated real distribution.
@@ -198,7 +198,7 @@ class VoteAgent(Agent):
         a_factor = self.policy.decide_altruism(self, area)
         return a_factor
 
-    def compute_assumed_opt_dist(self, area: Area) -> np.array:
+    def compute_assumed_opt_dist(self, area: Area) -> np.ndarray:
         """
         Computes a color distribution that the agent assumes to be an optimal
         choice in any election (regardless of whether it exists as a real option
@@ -238,7 +238,7 @@ class VoteAgent(Agent):
         ranking = self.policy.rank_options(self, area, options)
         return ranking
 
-    def estimate_real_distribution(self, area: Area) -> tuple[np.array, float]:
+    def estimate_real_distribution(self, area: Area) -> tuple[np.ndarray, float]:
         """
         The agent estimates the real color distribution in the area based on
         her own knowledge (self.known_cells).
