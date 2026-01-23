@@ -325,20 +325,25 @@ def _validate_dtypes(df: pd.DataFrame, expected_dtypes: Mapping[str, str], table
         if col not in df.columns:
             continue
         actual = df[col].dtype
-        # handle pandas extension dtypes
-        try:
-            actual_np = actual.numpy_dtype  # type: ignore[attr-defined]
-        except (TypeError, ValueError):
-            # Non-numpy/extension dtype (e.g., object/category/string)
+
+        # Normalize pandas dtypes to numpy dtype where possible.
+        # Pandas extension dtypes (Int32Dtype, BooleanDtype) don't always expose
+        # a .numpy_dtype attribute across versions.
+        actual_str = str(actual).lower()
+        if actual_str in {"boolean", "bool"}:
+            actual_np = np.dtype(bool)
+        elif actual_str.startswith("int") or actual_str.startswith("uint") or actual_str.startswith("float"):
+            # covers both numpy dtypes and pandas extension dtypes like "Int32"
+            actual_np = np.dtype(actual_str)
+        else:
+            # object/category/string/etc.
             actual_np = np.dtype(actual)
 
         exp_np = _expected_np_dtype(exp)
 
-        # Special-case pandas BooleanDtype
+        # Special-case boolean
         if _normalize_pd_dtype(exp) in {"boolean", "bool"}:
-            if str(actual).lower() in {"boolean", "bool"}:
-                continue
-            if actual_np == np.dtype(bool):
+            if actual_str in {"boolean", "bool"} or actual_np == np.dtype(bool):
                 continue
             bad[col] = f"expected {exp} got {actual}"
             continue
@@ -364,14 +369,15 @@ def _validate_expanded_prefix(
     - all columns with that prefix are consecutive indices starting at 0
     - all present are of an acceptable dtype
     """
-    cols = [c for c in df.columns if isinstance(c, str) and c.startswith(prefix + "_")]
+    prefix_with_sep = prefix + "_"
+    cols = [c for c in df.columns if isinstance(c, str) and c.startswith(prefix_with_sep)]
     if not cols:
         raise SchemaValidationError(f"{table_name}: missing expanded vector columns for '{prefix}_0..' ")
 
     # parse suffixes
     idxs: list[int] = []
     for c in cols:
-        suffix = c.split("_", 1)[1]
+        suffix = c[len(prefix_with_sep):]
         try:
             idxs.append(int(suffix))
         except ValueError:

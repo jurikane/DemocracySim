@@ -9,6 +9,7 @@ from src.config.loader import load_config, get_project_root
 from src.model_setup import make_model
 from src.replay.replay_logger import ReplayLogger
 from src.utils.metrics import get_grid_colors
+from src.logging.run_logger_v2 import RunLoggerV2
 
 
 def run_once(run_id: int, cfg, out_dir: Path):
@@ -33,24 +34,39 @@ def run_once(run_id: int, cfg, out_dir: Path):
         model_cfg_for_run.seed = run_seed
         out_dir.mkdir(parents=True, exist_ok=True)
         n_steps = int(getattr(sim_cfg, "num_steps", 100))
-        rl = ReplayLogger(out_dir=out_dir, run_id=run_id, store_grid=store_grid, num_steps=n_steps)
+
         # Create model instance
         model = make_model(model_cfg_for_run)
+
+        # Keep ReplayLogger for static overlays and grid naming/padding (Batch 1.0)
+        rl = ReplayLogger(out_dir=out_dir, run_id=run_id, store_grid=store_grid, num_steps=n_steps)
+        rl.write_static(model)
+
+        # Schema v2 logger (Batch 1.0: steps/area_steps/agents only)
+        rule_idx = int(getattr(model_cfg_for_run, "rule_idx", 0) or 0)
+        v2 = RunLoggerV2(out_dir=out_dir, run_seed=run_seed, rule_idx=rule_idx, num_steps=n_steps, store_grid=store_grid)
+        v2.write_static(model)
+        v2.write_meta(cfg_for_run)
+
     except Exception as e:
         raise RuntimeError(f"Failed to instantiate model: {e}")
 
-    rl.write_static(model)
-    n_steps = int(getattr(sim_cfg, "num_steps", 100))
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
         model.step()
         grid_snapshot = None
         if store_grid and (step % grid_interval == 0):
             grid_snapshot = get_grid_colors(model)
+        # Keep grid snapshots via ReplayLogger for now
         rl.append_step(step=step, model=model, grid_snapshot=grid_snapshot)
+        # Write schema v2 tables (no votes yet)
+        v2.log_step(step=step, model=model)
+
     rl.flush()
-    # Write full model-run config for robust replay
-    rl.write_meta(config=cfg_for_run)
+    v2.finalize()
+
+    # NOTE: ReplayLogger meta is legacy schema v1, but contract requires meta.yaml for schema v2.
+    # We already wrote schema v2 meta.yaml above, so do not overwrite it here.
 
 
 def _resolve_output_base_dir(conf) -> Path:

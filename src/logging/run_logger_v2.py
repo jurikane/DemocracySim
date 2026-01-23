@@ -1,0 +1,328 @@
+"""RunLoggerV2
+
+Phase: schema v2 migration (Batch 1.0)
+
+Responsibilities (Batch 1.0 only):
+- Write schema v2 run metadata files: meta.yaml, static.json
+- Write Parquet tables with real rows:
+  - steps.parquet
+  - area_steps.parquet
+  - agents.parquet
+
+Not implemented yet (future batches):
+- votes.parquet
+- pre-mutation snapshot hooks
+
+This module intentionally keeps core model logic unchanged and reads values from the
+model/areas/agents after each model.step().
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+import yaml
+
+from src.logging.output_schema_v2 import (
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    STEP_INDEXING,
+    validate_steps_df,
+    validate_area_steps_df,
+    validate_agents_df,
+)
+
+
+@dataclass(frozen=True)
+class RunContextV2:
+    out_dir: Path
+    run_seed: int
+    rule_idx: int
+
+
+class RunLoggerV2:
+    def __init__(
+        self,
+        out_dir: Path,
+        run_seed: int,
+        rule_idx: int,
+        num_steps: int,
+        store_grid: bool = True,
+        compression: Optional[str] = "snappy",
+    ) -> None:
+        self.ctx = RunContextV2(out_dir=Path(out_dir), run_seed=int(run_seed), rule_idx=int(rule_idx))
+        self.num_steps = int(num_steps)
+        self.store_grid = bool(store_grid)
+        self.compression = compression
+
+        self.ctx.out_dir.mkdir(parents=True, exist_ok=True)
+
+        self._steps_rows: List[Dict[str, Any]] = []
+        self._area_steps_rows: List[Dict[str, Any]] = []
+        self._agent_rows: List[Dict[str, Any]] = []
+
+    # -----------------
+    # Metadata
+    # -----------------
+    def write_meta(self, config: Any) -> None:
+        """Write meta.yaml with schema identifier and config dump."""
+        meta = {
+            "schema": {
+                "name": SCHEMA_NAME,
+                "version": SCHEMA_VERSION,
+                "step_indexing": STEP_INDEXING,
+            },
+            "run": {
+                "run_seed": int(self.ctx.run_seed),
+                "rule_idx": int(self.ctx.rule_idx),
+            },
+            "config": _safe_config_dump(config),
+        }
+        with open(self.ctx.out_dir / "meta.yaml", "w") as f:
+            yaml.safe_dump(meta, f)
+
+    def write_static(self, model: Any) -> None:
+        """Write static_v2.json (schema v2 metadata).
+
+        NOTE: During incremental migration we keep ReplayLogger's legacy
+        static.json intact for existing replay tests.
+        """
+        height = int(getattr(model, "height", 0) or 0)
+        width = int(getattr(model, "width", 0) or 0)
+        num_colors = int(getattr(model, "num_colors", 0) or 0)
+        num_areas = int(getattr(model, "num_areas", 0) or 0)
+        num_agents = int(getattr(model, "num_agents", 0) or 0)
+
+        static = {
+            "schema": {
+                "name": SCHEMA_NAME,
+                "version": SCHEMA_VERSION,
+            },
+            "height": height,
+            "width": width,
+            "num_colors": num_colors,
+            "num_areas": num_areas,
+            "num_agents": num_agents,
+            "step_indexing": {
+                "meaning": STEP_INDEXING,
+                "first_recorded_step": 0,
+                "grid_file": _grid_pattern(self.num_steps),
+            },
+            "artifacts": {
+                "steps": "steps.parquet",
+                "area_steps": "area_steps.parquet",
+                "agents": "agents.parquet",
+                "votes": "votes.parquet",
+                "area_borders": "area_borders.npy",
+                "agents_per_cell": "agents_per_cell.npy",
+                "agent_strings_per_cell": "agent_strings_per_cell.npy",
+                "cell_areas": "area_strings_per_cell.npy",
+            },
+        }
+
+        # Optional: personality metadata if present (useful for replay UI)
+        raw_personalities = getattr(model, "personalities", None)
+        if raw_personalities is not None:
+            static["personality_info"] = {
+                "personalities": _to_python(np.asarray(raw_personalities)),
+                "global_distribution": _to_python(getattr(model, "personality_distribution", None)),
+            }
+
+        import json
+
+        with open(self.ctx.out_dir / "static_v2.json", "w") as f:
+            json.dump(static, f, indent=2)
+
+    # -----------------
+    # Logging
+    # -----------------
+    def log_step(self, step: int, model: Any) -> None:
+        """Append schema-v2 rows for this step (Batch 1.0: no votes)."""
+        s = int(step)
+        self._steps_rows.append(self._extract_steps_row(s, model))
+        self._area_steps_rows.extend(self._extract_area_steps_rows(s, model))
+        self._agent_rows.extend(self._extract_agent_rows(s, model))
+
+    def finalize(self) -> None:
+        """Write Parquet artifacts (steps/area_steps/agents).
+
+        NOTE: votes.parquet is intentionally not produced in Batch 1.0.
+        """
+        steps_df = pd.DataFrame(self._steps_rows)
+        area_steps_df = pd.DataFrame(self._area_steps_rows)
+        agents_df = pd.DataFrame(self._agent_rows)
+
+        # Validate before writing (helps fail fast during development)
+        validate_steps_df(steps_df)
+        validate_area_steps_df(area_steps_df)
+        validate_agents_df(agents_df)
+
+        steps_df.to_parquet(self.ctx.out_dir / "steps.parquet", engine="pyarrow", compression=self.compression)
+        area_steps_df.to_parquet(self.ctx.out_dir / "area_steps.parquet", engine="pyarrow", compression=self.compression)
+        agents_df.to_parquet(self.ctx.out_dir / "agents.parquet", engine="pyarrow", compression=self.compression)
+
+    # -----------------
+    # Extraction helpers
+    # -----------------
+    def _extract_steps_row(self, step: int, model: Any) -> Dict[str, Any]:
+        row: Dict[str, Any] = {
+            "run_seed": np.int32(self.ctx.run_seed),
+            "rule_idx": np.int16(self.ctx.rule_idx),
+            "step": np.int32(step),
+            "collective_assets": np.int64(0),
+            "gini_index": np.int16(0),
+            "turnout": np.float32(0.0),
+        }
+
+        dc = getattr(model, "datacollector", None)
+        if dc is None:
+            return row
+
+        df = dc.get_model_vars_dataframe()
+        if df is None or len(df) == 0:
+            return row
+
+        last = df.iloc[-1].to_dict()
+        # Map known names -> schema v2 snake_case
+        if "Collective assets" in last:
+            row["collective_assets"] = np.int64(last["Collective assets"])
+        if "Gini Index (0-100)" in last:
+            row["gini_index"] = np.int16(last["Gini Index (0-100)"])
+        if "Voter turnout globally (in percent)" in last:
+            row["turnout"] = np.float32(last["Voter turnout globally (in percent)"])
+
+        # Optional per-color series: Color 0..Color {C-1}
+        for k, v in last.items():
+            if isinstance(k, str) and k.startswith("Color "):
+                parts = k.split(" ")
+                if len(parts) == 2 and parts[1].isdigit():
+                    idx = int(parts[1])
+                    row[f"color_{idx}"] = np.float32(v)
+
+        return row
+
+    def _extract_area_steps_rows(self, step: int, model: Any) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        areas = list(getattr(model, "areas", []) or [])
+        num_colors = int(getattr(model, "num_colors", 0) or 0)
+
+        options = getattr(model, "options", None)
+        if options is not None:
+            options = np.asarray(options)
+
+        for area in areas:
+            if area is None:
+                continue
+            area_id = int(getattr(area, "unique_id", -1))
+
+            # Base row
+            r: Dict[str, Any] = {
+                "run_seed": np.int32(self.ctx.run_seed),
+                "rule_idx": np.int16(self.ctx.rule_idx),
+                "step": np.int32(step),
+                "area_id": np.int32(area_id),
+                "eligible_voters": np.int32(int(getattr(area, "num_agents", 0) or 0)),
+                # Not available without tally hook yet; fill 0 in Batch 1.0
+                "participants": np.int32(0),
+                "turnout": np.float32(float(getattr(area, "voter_turnout", 0.0) or 0.0) / 100.0)
+                if float(getattr(area, "voter_turnout", 0.0) or 0.0) > 1.0
+                else np.float32(float(getattr(area, "voter_turnout", 0.0) or 0.0)),
+                "election_cost_rate": np.float32(float(getattr(model, "election_costs", 0.0) or 0.0)),
+                "fee_pool": np.float32(float(getattr(area, "_election_fee_pool", 0.0) or 0.0)),
+                "winning_option_id": np.int32(-1),
+                "dist_to_reality": np.float32(float(getattr(area, "dist_to_reality", 0.0) or 0.0)),
+                "gini_index": np.int16(0),
+            }
+
+            # elected_color_* from area.voted_ordering if present
+            voted_ordering = getattr(area, "voted_ordering", None)
+            if voted_ordering is not None:
+                vo = np.asarray(voted_ordering, dtype=np.int16).tolist()
+                for i in range(num_colors):
+                    r[f"elected_color_{i}"] = np.int16(vo[i])
+                # winning_option_id = row index in model.options (if possible)
+                if options is not None:
+                    try:
+                        matches = np.nonzero((options == np.asarray(voted_ordering)).all(axis=1))[0]
+                        if len(matches) > 0:
+                            r["winning_option_id"] = np.int32(int(matches[0]))
+                    except (ValueError, IndexError, TypeError):
+                        pass
+
+            # area_color_* from area.color_distribution
+            cd = getattr(area, "color_distribution", None)
+            if cd is not None:
+                cdv = np.asarray(cd, dtype=np.float32)
+                for i in range(num_colors):
+                    r[f"area_color_{i}"] = np.float32(cdv[i])
+
+            # area gini from agents' assets (same as old replay logger)
+            agents = list(getattr(area, "agents", []) or [])
+            if agents:
+                assets = [float(getattr(a, "assets", 0.0) or 0.0) for a in agents]
+                # reuse metric helper indirectly: gini_index_0_100 exists in utils.metrics
+                from src.utils.metrics import gini_index_0_100
+
+                r["gini_index"] = np.int16(int(gini_index_0_100(assets)))
+
+            rows.append(r)
+
+        return rows
+
+    def _extract_agent_rows(self, step: int, model: Any) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        agents = list(getattr(model, "voting_agents", []) or [])
+        for a in agents:
+            if a is None:
+                continue
+            rows.append(
+                {
+                    "run_seed": np.int32(self.ctx.run_seed),
+                    "rule_idx": np.int16(self.ctx.rule_idx),
+                    "step": np.int32(step),
+                    "agent_id": np.int32(int(getattr(a, "unique_id", -1))),
+                    "row": np.int16(int(getattr(a, "row", 0) or 0)),
+                    "col": np.int16(int(getattr(a, "col", 0) or 0)),
+                    "assets": np.float32(float(getattr(a, "assets", 0.0) or 0.0)),
+                    "num_elections_participated": np.int32(int(getattr(a, "num_elections_participated", 0) or 0)),
+                    "personality_idx": np.int16(int(getattr(a, "personality_idx", -1) or -1)),
+                }
+            )
+        return rows
+
+
+def _grid_pattern(num_steps: int) -> str:
+    pad = len(str(int(num_steps))) if num_steps is not None else 3
+    return f"grid_%0{pad}d.npy"
+
+
+def _to_python(obj: Any) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, (int, float, str, bool)):
+        return obj
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
+def _safe_config_dump(config: Any) -> Dict[str, Any]:
+    # Pydantic v2
+    if hasattr(config, "model_dump"):
+        try:
+            return config.model_dump()
+        except (TypeError, ValueError):
+            return {}
+    # Pydantic v1
+    if hasattr(config, "dict"):
+        try:
+            return config.dict()
+        except (TypeError, ValueError):
+            return {}
+    return {}
