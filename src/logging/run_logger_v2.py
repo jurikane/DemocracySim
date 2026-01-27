@@ -22,7 +22,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 import numpy as np
 import pandas as pd
 import yaml
@@ -34,7 +33,11 @@ from src.logging.output_schema_v2 import (
     validate_steps_df,
     validate_area_steps_df,
     validate_agents_df,
+    validate_votes_df,
 )
+from src.agents.area import Area
+from src.agents.vote_agent import VoteAgent
+from src.models.participation_model import ParticipationModel as Model
 
 
 @dataclass(frozen=True)
@@ -64,6 +67,8 @@ class RunLoggerV2:
         self._steps_rows: List[Dict[str, Any]] = []
         self._area_steps_rows: List[Dict[str, Any]] = []
         self._agent_rows: List[Dict[str, Any]] = []
+        self._votes_rows: List[Dict[str, Any]] = []
+        self._current_step: Optional[int] = None
 
     # -----------------
     # Metadata
@@ -85,7 +90,7 @@ class RunLoggerV2:
         with open(self.ctx.out_dir / "meta.yaml", "w") as f:
             yaml.safe_dump(meta, f)
 
-    def write_static(self, model: Any) -> None:
+    def write_static(self, model: Model) -> None:
         """Write static_v2.json (schema v2 metadata).
 
         NOTE: During incremental migration we keep ReplayLogger's legacy
@@ -140,35 +145,77 @@ class RunLoggerV2:
     # -----------------
     # Logging
     # -----------------
-    def log_step(self, step: int, model: Any) -> None:
-        """Append schema-v2 rows for this step (Batch 1.0: no votes)."""
+    def attach_to_model(self, model: Model) -> None:
+        """Attach a schema-v2 vote sink to the model.
+
+        This is a lightweight hook used by Area._tally_votes()
+        to emit per-participant vote rows.
+        """
+        setattr(model, "_schema_v2_vote_sink", self._on_vote)
+
+    def detach_from_model(self, model: Model) -> None:
+        """Detach the schema-v2 vote sink from the model."""
+        if getattr(model, "_schema_v2_vote_sink", None) is self._on_vote:
+            delattr(model, "_schema_v2_vote_sink")
+
+    def log_step(self, step: int, model: Model) -> None:
+        """Append schema-v2 rows for this step."""
         s = int(step)
+        self._current_step = s
         self._steps_rows.append(self._extract_steps_row(s, model))
         self._area_steps_rows.extend(self._extract_area_steps_rows(s, model))
         self._agent_rows.extend(self._extract_agent_rows(s, model))
 
-    def finalize(self) -> None:
-        """Write Parquet artifacts (steps/area_steps/agents).
+    def begin_step(self, step: int) -> None:
+        """Set the current step used by vote sink callbacks."""
+        self._current_step = int(step)
 
-        NOTE: votes.parquet is intentionally not produced in Batch 1.0.
-        """
+    def end_step(self) -> None:
+        """Clear current step after finishing a model step."""
+        self._current_step = None
+
+    def finalize(self) -> None:
+        """Write Parquet artifacts (steps/area_steps/agents/votes)."""
         steps_df = pd.DataFrame(self._steps_rows)
         area_steps_df = pd.DataFrame(self._area_steps_rows)
         agents_df = pd.DataFrame(self._agent_rows)
+
+        votes_df = pd.DataFrame(self._votes_rows)
+        if votes_df.empty:
+            # Create an empty frame with required columns so schema validation passes
+            votes_df = pd.DataFrame(
+                columns=[
+                    "run_seed",
+                    "rule_idx",
+                    "step",
+                    "area_id",
+                    "agent_id",
+                    "participated",
+                    "confidence",
+                    "rank_1_option_id",
+                    "rank_1_oppose_score",
+                    "rank_2_option_id",
+                    "rank_2_oppose_score",
+                    "rank_3_option_id",
+                    "rank_3_oppose_score",
+                ]
+            )
 
         # Validate before writing (helps fail fast during development)
         validate_steps_df(steps_df)
         validate_area_steps_df(area_steps_df)
         validate_agents_df(agents_df)
+        validate_votes_df(votes_df)
 
         steps_df.to_parquet(self.ctx.out_dir / "steps.parquet", engine="pyarrow", compression=self.compression)
         area_steps_df.to_parquet(self.ctx.out_dir / "area_steps.parquet", engine="pyarrow", compression=self.compression)
         agents_df.to_parquet(self.ctx.out_dir / "agents.parquet", engine="pyarrow", compression=self.compression)
+        votes_df.to_parquet(self.ctx.out_dir / "votes.parquet", engine="pyarrow", compression=self.compression)
 
     # -----------------
     # Extraction helpers
     # -----------------
-    def _extract_steps_row(self, step: int, model: Any) -> Dict[str, Any]:
+    def _extract_steps_row(self, step: int, model: Model) -> Dict[str, Any]:
         row: Dict[str, Any] = {
             "run_seed": np.int32(self.ctx.run_seed),
             "rule_idx": np.int16(self.ctx.rule_idx),
@@ -205,7 +252,7 @@ class RunLoggerV2:
 
         return row
 
-    def _extract_area_steps_rows(self, step: int, model: Any) -> List[Dict[str, Any]]:
+    def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         areas = list(getattr(model, "areas", []) or [])
         num_colors = int(getattr(model, "num_colors", 0) or 0)
@@ -273,7 +320,7 @@ class RunLoggerV2:
 
         return rows
 
-    def _extract_agent_rows(self, step: int, model: Any) -> List[Dict[str, Any]]:
+    def _extract_agent_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         agents = list(getattr(model, "voting_agents", []) or [])
         for a in agents:
@@ -293,6 +340,55 @@ class RunLoggerV2:
                 }
             )
         return rows
+
+    def _on_vote(self, *, area: Area, agent: VoteAgent, oppose_scores: np.ndarray,
+        est_dist: np.ndarray, confidence: float) -> None:
+        """Receive one participant vote and append a schema v2 vote row."""
+        if self._current_step is None:
+            return
+        step = int(self._current_step)
+        area_id = area.unique_id
+        agent_id = agent.unique_id
+
+        scores = np.asarray(oppose_scores, dtype=np.float32)
+        if scores.ndim != 1:
+            return
+
+        # Pick the 3 best (lowest oppose score) options.
+        # For ties, use a stable secondary sort by option id for determinism.
+        order = np.lexsort((agent.model.option_vec, scores))
+        top = order[:3].tolist()
+
+        row: Dict[str, Any] = {
+            "run_seed": np.int32(self.ctx.run_seed),
+            "rule_idx": np.int16(self.ctx.rule_idx),
+            "step": np.int32(step),
+            "area_id": np.int32(area_id),
+            "agent_id": np.int32(agent_id),
+            "participated": True,
+            "confidence": np.float32(0.0 if confidence is None else float(confidence)),
+            "rank_1_option_id": pd.NA,
+            "rank_1_oppose_score": np.float32(np.nan),
+            "rank_2_option_id": pd.NA,
+            "rank_2_oppose_score": np.float32(np.nan),
+            "rank_3_option_id": pd.NA,
+            "rank_3_oppose_score": np.float32(np.nan),
+        }
+
+        for i, opt in enumerate(top, start=1):
+            row[f"rank_{i}_option_id"] = np.int32(int(opt))
+            row[f"rank_{i}_oppose_score"] = np.float32(float(scores[int(opt)]))
+
+        # estim_dst_color_* expanded columns
+        dist = np.asarray(est_dist, dtype=np.float32) if est_dist is not None else None
+        if dist is None or dist.ndim != 1:
+            # Emit zeros to satisfy contract (will be refined later if needed)
+            num_colors = int(agent.model.num_colors)
+            dist = np.zeros(num_colors, dtype=np.float32)
+        for i in range(dist.shape[0]):
+            row[f"estim_dst_color_{i}"] = np.float32(dist[i])
+
+        self._votes_rows.append(row)
 
 
 def _grid_pattern(num_steps: int) -> str:

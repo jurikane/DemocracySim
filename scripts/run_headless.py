@@ -47,23 +47,27 @@ def run_once(run_id: int, cfg, out_dir: Path):
         v2 = RunLoggerV2(out_dir=out_dir, run_seed=run_seed, rule_idx=rule_idx, num_steps=n_steps, store_grid=store_grid)
         v2.write_static(model)
         v2.write_meta(cfg_for_run)
+        v2.attach_to_model(model)
 
     except Exception as e:
         raise RuntimeError(f"Failed to instantiate model: {e}")
 
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
+        v2.begin_step(step)
         model.step()
         grid_snapshot = None
         if store_grid and (step % grid_interval == 0):
             grid_snapshot = get_grid_colors(model)
         # Keep grid snapshots via ReplayLogger for now
         rl.append_step(step=step, model=model, grid_snapshot=grid_snapshot)
-        # Write schema v2 tables (no votes yet)
+        # Write schema v2 tables
         v2.log_step(step=step, model=model)
+        v2.end_step()
 
     rl.flush()
     v2.finalize()
+    v2.detach_from_model(model)
 
     # NOTE: ReplayLogger meta is legacy schema v1, but contract requires meta.yaml for schema v2.
     # We already wrote schema v2 meta.yaml above, so do not overwrite it here.

@@ -261,6 +261,10 @@ class Area(Agent):
         # Reset pool for this election step.
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_costs
+
+        # Optional schema-v2 vote sink (Batch 2): logger attaches a callable here.
+        vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
+
         for agent in self.agents:
             # election_costs is treated as a percent (0..100) of current assets.
             cost = int(agent.assets * el_cost_rate)
@@ -275,7 +279,18 @@ class Area(Agent):
                 agent.assets = agent.assets - cost
                 self._election_fee_pool += cost
                 # Ask the agent for her preference
-                preference_profile.append(agent.vote(area=self))
+                ranking = agent.vote(area=self)
+                preference_profile.append(ranking)
+
+                # Emit participant vote context if a sink is configured.
+                if vote_sink is not None:
+                    vote_sink(
+                        area=self,
+                        agent=agent,
+                        oppose_scores=ranking,
+                        est_dist=getattr(agent, "est_real_dist", None),
+                        confidence=getattr(agent, "confidence", None),
+                    )
                 # agent.vote returns an array containing dissatisfaction values
                 # between 0 and 1 for each option, interpretable as rank values.
         return np.array(preference_profile)
