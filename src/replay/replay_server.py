@@ -15,11 +15,9 @@ from src.agents.color_cell import ColorCell
 class _DataCollectorAdapter:
     """A minimal adapter that mimics mesa.DataCollector for charts + overlays.
 
-    Provides:
-    - get_model_vars_dataframe(): DataFrame for ChartModule
-    - get_agent_vars_dataframe(): MultiIndex DataFrame for AreaStats/VoterTurnoutElement
-
-    We don't reconstruct simulation; we just replay logged observables.
+    Schema rules (Batch 4):
+    - Internally snake_case column names.
+    - Visualization elements must query snake_case.
     """
 
     def __init__(self):
@@ -39,19 +37,26 @@ class _DataCollectorAdapter:
             self.model_vars[key].append(value)
         self._model_step_count += 1
 
-    def add_area_rows(self, step: int, areas: Dict[str, Any]) -> None:
-        # areas: {"<area_id>": {"VoterTurnout":..., ...}}
-        for aid, rec in (areas or {}).items():
-            area_id = int(aid)
-            self._agent_rows.append({
-                "Step": int(step),
-                "AgentID": int(area_id),
-                "VoterTurnout": rec.get("VoterTurnout"),
-                "DistToReality": rec.get("DistToReality"),
-                "ColorDistribution": rec.get("ColorDistribution"),
-                "ElectionResults": rec.get("ElectionResults"),
-                "GiniIndex": rec.get("GiniIndex"),
-            })
+    def add_area_rows(self, step: int, areas: Dict[int, Dict[str, Any]]) -> None:
+        """Append per-area rows for a specific step.
+
+        `areas` is keyed by area_id (int).
+        Values are expected to use snake_case keys.
+        """
+        for area_id, rec in (areas or {}).items():
+            self._agent_rows.append(
+                {
+                    "step": int(step),
+                    "agent_id": int(area_id),
+                    "turnout": rec.get("turnout"),
+                    "dist_to_reality": rec.get("dist_to_reality"),
+                    # expanded vector columns are stored separately in parquet, but
+                    # the adapter stores pre-packed vectors for viz.
+                    "area_color_distribution": rec.get("area_color_distribution"),
+                    "elected_color": rec.get("elected_color"),
+                    "gini_index": rec.get("gini_index"),
+                }
+            )
 
     def get_model_vars_dataframe(self) -> pd.DataFrame:
         # Build DataFrame from model_vars
@@ -62,7 +67,7 @@ class _DataCollectorAdapter:
             return pd.DataFrame()
         df = pd.DataFrame(self._agent_rows)
         # match mesa.DataCollector agent vars format: MultiIndex (Step, AgentID)
-        df = df.set_index(["Step", "AgentID"]).sort_index()
+        df = df.set_index(["step", "agent_id"]).sort_index()
         return df
 
 
@@ -79,6 +84,9 @@ class ReplayData:
         self.steps_dir = self.run_dir / "steps"
         self.grids_dir = self.run_dir / "grids"
 
+        # Detect schema via meta.yaml (v2 runs use parquet + static_v2.json)
+        self._schema = self._detect_schema()
+
         # Load static early so we can honor filename patterns
         self._static = self.load_static()
         self._step_pattern = None
@@ -89,8 +97,48 @@ class ReplayData:
         if isinstance(step_indexing.get("grid_file"), str):
             self._grid_pattern = step_indexing.get("grid_file")
 
-        self.step_files = self._discover_step_files()
+        # Legacy schema uses step JSON discovery; schema v2 uses parquet length.
+        self.step_files = self._discover_step_files() if self._schema != "v2" else []
+        self._steps_df: Optional[pd.DataFrame] = None
+        self._area_steps_df: Optional[pd.DataFrame] = None
+        if self._schema == "v2":
+            self._load_parquet_tables()
 
+    # -----------------
+    # Schema detection
+    # -----------------
+    def _detect_schema(self) -> str:
+        """Return 'v2' if meta.yaml indicates output_schema_v2, else 'legacy'."""
+        meta_path = self.run_dir / "meta.yaml"
+        if not meta_path.exists():
+            return "legacy"
+        try:
+            import yaml
+            meta = yaml.safe_load(meta_path.read_text()) or {}
+        except (OSError, ValueError, TypeError):
+            return "legacy"
+        schema = meta.get("schema") if isinstance(meta.get("schema"), dict) else {}
+        name = schema.get("name")
+        version = schema.get("version")
+        if name == "output_schema_v2" and int(version or 0) == 2:
+            return "v2"
+        return "legacy"
+
+    def _load_parquet_tables(self) -> None:
+        steps_path = self.run_dir / "steps.parquet"
+        area_steps_path = self.run_dir / "area_steps.parquet"
+        if steps_path.exists():
+            self._steps_df = pd.read_parquet(steps_path)
+        else:
+            self._steps_df = pd.DataFrame()
+        if area_steps_path.exists():
+            self._area_steps_df = pd.read_parquet(area_steps_path)
+        else:
+            self._area_steps_df = pd.DataFrame()
+
+    # -----------------
+    # Legacy JSON support
+    # -----------------
     def _discover_step_files(self):
         files = list(self.steps_dir.glob("step_*.json"))
 
@@ -102,7 +150,7 @@ class ReplayData:
         return sorted(files, key=_step_idx)
 
     def load_grid(self, step: int) -> Optional[np.ndarray]:
-        # Use pattern from static.json (required in replay schema).
+        # Use pattern from static.json/static_v2.json.
         if not self._grid_pattern:
             return None
         gf = self.grids_dir / (self._grid_pattern % int(step))
@@ -111,10 +159,93 @@ class ReplayData:
         return None
 
     def load_step(self, index: int) -> Dict[str, Any]:
+        """Load one step record.
+
+        Returns a unified payload with:
+        - step (int)
+        - model (dict, snake_case)
+        - areas (dict[int, dict], snake_case)
+        """
+        if self._schema == "v2":
+            return self._load_step_v2(index)
+
+        # legacy JSON
         sf = self.step_files[index]
-        return json.loads(sf.read_text())
+        rec = json.loads(sf.read_text())
+        # Legacy shape: either nested {'model':..., 'areas':...} or flat.
+        step = int(rec.get("step", index))
+        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else None
+        if model_block is None:
+            model_block = {k: v for k, v in rec.items() if k != "step"}
+        areas_block = rec.get("areas") if isinstance(rec.get("areas"), dict) else {}
+
+        # Normalize legacy model_block keys to snake_case
+        model_block = {
+            k.replace("Collective assets", "collective_assets")
+             .replace("Voter turnout globally (in percent)", "turnout")
+             .replace("Gini Index (0-100)", "gini_index")
+             .replace("Color ", "color_"): v
+            for k, v in model_block.items()
+        }
+
+        # Keep legacy columns as-is; viz will not use them once migrated.
+        return {"step": step, "model": model_block, "areas": areas_block}
+
+    def _load_step_v2(self, index: int) -> Dict[str, Any]:
+        steps_df = self._steps_df if self._steps_df is not None else pd.DataFrame()
+        area_steps_df = self._area_steps_df if self._area_steps_df is not None else pd.DataFrame()
+        if steps_df.empty:
+            return {"step": int(index), "model": {}, "areas": {}}
+
+        # Treat 'index' as the sequential step order.
+        # steps.parquet is keyed by step, but contract test uses contiguous 0..N-1.
+        step = int(steps_df.iloc[index]["step"]) if "step" in steps_df.columns else int(index)
+        model_row = steps_df.iloc[index].to_dict()
+        model_row.pop("run_seed", None)
+        model_row.pop("rule_idx", None)
+
+        areas: Dict[int, Dict[str, Any]] = {}
+        if not area_steps_df.empty and "step" in area_steps_df.columns:
+            sdf = area_steps_df[area_steps_df["step"].astype(int) == step]
+            if not sdf.empty:
+                for _, r in sdf.iterrows():
+                    aid = int(r.get("area_id", -1))
+                    # Pack expanded vectors into python lists for viz convenience
+                    area_color = [
+                        float(r.get(f"area_color_{i}"))
+                        for i in _expanded_range(r, prefix="area_color")
+                    ]
+                    # Normalize elected_color to snake_case for schema v2
+                    if self._schema == "v2":
+                        elected_color = [
+                            int(r.get(f"elected_color_{i}"))
+                            for i in _expanded_range(r, prefix="elected_color")
+                        ]
+                    else:  # Legacy normalization
+                        elected_color = [
+                            int(r.get(f"Elected Color {i}"))
+                            for i in _expanded_range(r, prefix="Elected Color")
+                        ]
+
+                    areas[aid] = {
+                        "turnout": float(r.get("turnout", 0.0) or 0.0),
+                        "dist_to_reality": float(r.get("dist_to_reality", 0.0) or 0.0),
+                        "gini_index": int(r.get("gini_index", 0) or 0),
+                        "area_color_distribution": area_color,
+                        "elected_color": elected_color,
+                    }
+
+        return {"step": step, "model": model_row, "areas": areas}
 
     def load_static(self) -> Dict[str, Any]:
+        # schema v2: static_v2.json
+        if self._schema == "v2":
+            p = self.run_dir / "static_v2.json"
+            if p.exists():
+                return json.loads(p.read_text())
+            return {}
+
+        # legacy
         static_path = self.run_dir / "static.json"
         if static_path.exists():
             return json.loads(static_path.read_text())
@@ -157,7 +288,24 @@ class ReplayData:
         return None
 
     def __len__(self) -> int:
+        if self._schema == "v2":
+            return 0 if self._steps_df is None else int(len(self._steps_df))
         return len(self.step_files)
+
+
+def _expanded_range(row: pd.Series, prefix: str) -> List[int]:
+    """Return contiguous indices i for which prefix_i exists in the row."""
+    cols = [c for c in row.index if isinstance(c, str) and c.startswith(prefix + "_")]
+    idxs: List[int] = []
+    for c in cols:
+        suf = c.split("_", 1)[1]
+        try:
+            idxs.append(int(suf))
+        except ValueError:
+            continue
+    if not idxs:
+        return []
+    return list(range(0, max(idxs) + 1))
 
 
 class ReplayModel(mesa.Model):
@@ -301,24 +449,29 @@ class ReplayModel(mesa.Model):
     # --- Replay application helpers ---
     def _apply_index(self, idx: int) -> None:
         rec = self.data.load_step(idx)
-        # Schema v1 supports either old flat shape or new nested shape
         step = int(rec.get("step", idx))
 
         grid = self.data.load_grid(step)
         if grid is not None:
             self._apply_grid(grid)
 
-        # Model vars for charts; ensure ChartModule labels exist
-        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else None
-        if model_block is None:
-            # legacy: everything except step
-            model_block = {k: v for k, v in rec.items() if k != "step"}
-
+        # Model vars for charts (snake_case)
+        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else {}
         self.datacollector.add_model(model_block)
 
-        # Area rows for overlays
-        areas_block = rec.get("areas") if isinstance(rec.get("areas"), dict) else {}
-        self.datacollector.add_area_rows(step=step, areas=areas_block)
+        # Area rows for viz
+        areas_block = rec.get("areas")
+        if isinstance(areas_block, dict):
+            # For legacy runs, areas_block may be keyed by str; adapter supports int keys.
+            if areas_block and all(isinstance(k, str) for k in areas_block.keys()):
+                try:
+                    coerced = {int(k): v for k, v in areas_block.items()}
+                except ValueError:
+                    coerced = {}
+                # Legacy uses different keys; keep as-is.
+                self.datacollector.add_area_rows(step=step, areas=coerced)
+            else:
+                self.datacollector.add_area_rows(step=step, areas=areas_block)
 
         self.scheduler.steps = step
 

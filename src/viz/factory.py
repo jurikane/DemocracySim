@@ -96,21 +96,21 @@ def make_charts(cfg: AppConfig) -> list:
     num_colors = int(model_cfg["num_colors"])
 
     color_distribution_chart = ChartModule(
-        [{"Label": f"Color {i}",
+        [{"Label": f"color_{i}",
           "Color": ("LightGrey" if COLORS[i] == "LightGray" else COLORS[i])}
          for i in range(num_colors)],
         data_collector_name="datacollector",
     )
 
     wealth_chart = ChartModule(
-        [{"Label": "Collective assets", "Color": "Black"}],
+        [{"Label": "collective_assets", "Color": "Black"}],
         data_collector_name="datacollector",
     )
 
     voter_turnout = ChartModule(
         [
-            {"Label": "Voter turnout globally (in percent)", "Color": "Black"},
-            {"Label": "Gini Index (0-100)", "Color": "Red"},
+            {"Label": "turnout", "Color": "Black"},
+            {"Label": "gini_index", "Color": "Red"},
         ],
         data_collector_name="datacollector",
     )

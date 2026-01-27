@@ -11,17 +11,17 @@ from src.replay.replay_server import ReplayModel
 
 
 def test_replay_logs_and_exposes_area_giniindex(tmp_path):
-    """End-to-end: headless logging writes per-area GiniIndex and replay exposes it in agent vars."""
+    """End-to-end: headless logging writes per-area GiniIndex and replay exposes it in agent vars.
+
+    Replay UI plumbing now uses snake_case internally.
+    """
     conf = load_config('configs/toy.yaml')
 
     sim_cfg = conf.simulation
-    try:
-        sim_cfg = sim_cfg.model_copy(deep=True)
-        sim_cfg.num_steps = 2
-        sim_cfg.grid_interval = 1
-        sim_cfg.store_grid = True
-    except Exception:
-        pass
+    sim_cfg = sim_cfg.model_copy(deep=True)
+    sim_cfg.num_steps = 2
+    sim_cfg.grid_interval = 1
+    sim_cfg.store_grid = True
 
     run_dir = tmp_path / 'run_0'
     run_once(0, conf, out_dir=run_dir)
@@ -40,4 +40,4 @@ def test_replay_logs_and_exposes_area_giniindex(tmp_path):
     m.step()
 
     df = m.datacollector.get_agent_vars_dataframe()
-    assert 'GiniIndex' in df.columns
+    assert 'gini_index' in df.columns

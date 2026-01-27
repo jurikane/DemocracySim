@@ -29,18 +29,16 @@ class AreaStats(TextElement):
         data = model.datacollector.get_agent_vars_dataframe()
         if data is None or len(data) == 0:
             return ""
-        if ('ColorDistribution' not in data.columns
-                or 'DistToReality' not in data.columns
-                or 'ElectionResults' not in data.columns):
+        if ('area_color_distribution' not in data.columns
+                or 'dist_to_reality' not in data.columns
+                or 'elected_color' not in data.columns):
             return ""
-        color_distribution = data['ColorDistribution'].dropna()
-        dist_to_reality = data['DistToReality'].dropna()
-        election_results = data['ElectionResults'].dropna()
+        color_distribution = data['area_color_distribution'].dropna()
+        dist_to_reality = data['dist_to_reality'].dropna()
+        election_results = data['elected_color'].dropna()
 
         area_ids_all = list(color_distribution.index.get_level_values(1).unique())
         area_ids = [aid for aid in area_ids_all if int(aid) != -1]
-        #except Exception:
-        #area_ids = color_distribution.index.get_level_values(1).unique()
 
         if len(color_distribution) == 0 or len(area_ids) == 0:
             return ""
@@ -180,13 +178,13 @@ class _AreaTimeSeriesElement(TextElement):
 
 
 class VoterTurnoutElement(_AreaTimeSeriesElement):
-    series_column = "VoterTurnout"
+    series_column = "turnout"
     title = "Voter Turnout by Area Over Time"
     ylabel = "Voter Turnout (%)"
 
 
 class AreaGiniElement(_AreaTimeSeriesElement):
-    series_column = "GiniIndex"
+    series_column = "gini_index"
     title = "Gini Index by Area Over Time"
     ylabel = "Gini Index (0-100)"
 
@@ -197,7 +195,7 @@ class MatplotlibElement(TextElement):
             return ""
         try:
             data = model.datacollector.get_model_vars_dataframe()
-            collective_assets = data.get("Collective assets")
+            collective_assets = data.get("collective_assets")
         except AttributeError:
             collective_assets = None
         if collective_assets is None:
