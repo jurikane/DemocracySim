@@ -36,6 +36,7 @@ class Area(Agent):
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
+        self._num_agents_participated_last = None  # For statistics
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -105,6 +106,14 @@ class Area(Agent):
     @property
     def idx_field(self):
         return self._idx_field
+
+    @property
+    def num_agents_participated_last(self):
+        return self._num_agents_participated_last
+
+    @num_agents_participated_last.setter
+    def num_agents_participated_last(self, n: int):
+        self._num_agents_participated_last = n
 
     @idx_field.setter
     def idx_field(self, pos: tuple):
@@ -244,6 +253,7 @@ class Area(Agent):
         #  in any way with the election process
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
+        self.num_agents_participated_last = n
         return int((n / self.num_agents) * 100) # Voter turnout in percent
 
     def _tally_votes(self):
@@ -371,6 +381,28 @@ class Area(Agent):
         self._voter_turnout = self._conduct_election()  # The main election logic!
         if self.voter_turnout == 0:
             return  # TODO: What to do if no agent participated..?
+
+        # --- schema v2 hook: snapshot right before mutation (post-election, pre-mutation)
+        area_snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
+        if area_snapshot_sink is not None:
+            # Emit a minimal snapshot dict. The logger is responsible for
+            # completing/normalizing schema columns.
+            area_snapshot_sink(
+                area=self,
+                snapshot={
+                    "election_cost_rate": float(self.model.election_costs),
+                    "fee_pool": float(getattr(self, "_election_fee_pool", 0.0)),
+                    "eligible_voters": int(self.num_agents),
+                    "participants": int(self.num_agents_participated_last),
+                    "turnout": float(self.voter_turnout),
+                    "dist_to_reality": float(self.dist_to_reality),
+                    # Should be the distribution used by reward logic (pre-mutation).
+                    "area_color": np.asarray(self.color_distribution)
+                    if self.color_distribution is not None else None,
+                    "elected_color": np.asarray(self.voted_ordering)
+                    if self.voted_ordering is not None else None,
+                },
+            )
 
         # Mutate colors in cells
         # Take some number of cells to mutate (i.e., 5 %)
