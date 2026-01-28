@@ -65,7 +65,11 @@ class RunLogger:
         return h
 
     def _extract_step_metrics(self, model) -> Dict[str, Any]:
-        """Map datacollector names to expected columns."""
+        """Map datacollector names to expected columns.
+
+        Supports both legacy DataCollector keys ("Collective assets", "Color 0", ...)
+        and schema-v2-style snake_case keys ("collective_assets", "color_0", ...).
+        """
         row: Dict[str, Any] = {
             'run_id': self.run_id,
         }
@@ -75,26 +79,46 @@ class RunLogger:
                 df = dc.get_model_vars_dataframe()
                 if len(df) > 0:
                     last = df.iloc[-1].to_dict()
-                    # Map keys
+
+                    # Scalars
                     if 'Collective assets' in last:
                         row['collective_assets'] = int(last['Collective assets'])
+                    elif 'collective_assets' in last:
+                        row['collective_assets'] = int(last['collective_assets'])
+
                     if 'Gini Index (0-100)' in last:
                         row['gini_index'] = float(last['Gini Index (0-100)'])
+                    elif 'gini_index' in last:
+                        row['gini_index'] = float(last['gini_index'])
+
                     if 'Voter turnout globally (in percent)' in last:
                         row['turnout'] = float(last['Voter turnout globally (in percent)'])
+                    elif 'turnout' in last:
+                        row['turnout'] = float(last['turnout'])
+
                     # Colors
                     if self.preset in {'standard', 'full'}:
-                        # Find Color i columns
+                        # Legacy: "Color {i}"
                         for k, v in last.items():
                             if isinstance(k, str) and k.startswith('Color '):
                                 try:
                                     idx = int(k.split(' ')[1])
-                                except Exception:
+                                except ValueError:
+                                    continue
+                                row[f'color_{idx}'] = float(v)
+                        # New: "color_{i}"
+                        for k, v in last.items():
+                            if isinstance(k, str) and k.startswith('color_'):
+                                suf = k.rsplit('_', 1)[-1]
+                                try:
+                                    idx = int(suf)
+                                except ValueError:
                                     continue
                                 row[f'color_{idx}'] = float(v)
             except Exception:
                 # minimal resilience
                 pass
+
         # Defaults if missing
         row.setdefault('collective_assets', 0)
         row.setdefault('gini_index', 0.0)

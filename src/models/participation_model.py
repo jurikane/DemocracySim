@@ -35,6 +35,21 @@ class CustomScheduler(mesa.time.BaseScheduler):
         self.steps += 1
         self.time += 1
 
+    @property
+    def agents(self):
+        model = self.model
+        if TYPE_CHECKING:
+            model = cast(ParticipationModel, model)
+        # Return all area agents
+        return model.areas
+
+    @property
+    def global_area(self) -> Area:
+        model = self.model
+        if TYPE_CHECKING:
+            model = cast(ParticipationModel, model)
+        return model.global_area
+
 
 class ParticipationModel(mesa.Model):
     """
@@ -380,31 +395,24 @@ class ParticipationModel(mesa.Model):
 
 
     def initialize_datacollector(self) -> mesa.DataCollector:
-        color_data = {f"Color {i}": get_color_distribution_function(i) for i in
-                      range(self.num_colors)}
+        # Live (run.py) visualization expects snake_case keys.
+        color_data = {f"color_{i}": get_color_distribution_function(i) for i in range(self.num_colors)}
         return mesa.DataCollector(
             model_reporters={
-                "Collective assets": compute_collective_assets,
-                "Gini Index (0-100)": compute_gini_index,
-                "Voter turnout globally (in percent)": get_voter_turnout,
+                "collective_assets": compute_collective_assets,
+                "gini_index": compute_gini_index,
+                "turnout": get_voter_turnout,
                 **color_data,
-                "GridColors": get_grid_colors
+                "grid_colors": get_grid_colors,
             },
             agent_reporters={
-                # "Voter Turnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
-                # "Color Distribution": lambda a: a.color_distribution if isinstance(a, Area) else None,
-                #
-                #"VoterTurnout": lambda a: a.voter_turnout if isinstance(a, Area) else None,
-                "VoterTurnout": get_area_voter_turnout,
-                "DistToReality": get_area_dist_to_reality,
-                "ColorDistribution": get_area_color_distribution,
-                "ElectionResults": get_election_results,
-                "GiniIndex": get_area_gini_index,
+                # These are collected for all Mesa agents, but only Area agents return values.
+                "turnout": get_area_voter_turnout,
+                "dist_to_reality": get_area_dist_to_reality,
+                "area_color_distribution": get_area_color_distribution,
+                "elected_color": get_election_results,
+                "gini_index": get_area_gini_index,
             },
-            # tables={
-            #    "AreaData": ["Step", "AreaID", "ColorDistribution",
-            #                 "VoterTurnout"]
-            # }
         )
 
 
