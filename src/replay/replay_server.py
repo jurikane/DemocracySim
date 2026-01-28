@@ -215,17 +215,11 @@ class ReplayData:
                         float(r.get(f"area_color_{i}"))
                         for i in _expanded_range(r, prefix="area_color")
                     ]
-                    # Normalize elected_color to snake_case for schema v2
-                    if self._schema == "v2":
-                        elected_color = [
-                            int(r.get(f"elected_color_{i}"))
-                            for i in _expanded_range(r, prefix="elected_color")
-                        ]
-                    else:  # Legacy normalization
-                        elected_color = [
-                            int(r.get(f"Elected Color {i}"))
-                            for i in _expanded_range(r, prefix="Elected Color")
-                        ]
+                    # Schema v2 stores elected_color_* columns.
+                    elected_color = [
+                        int(r.get(f"elected_color_{i}"))
+                        for i in _expanded_range(r, prefix="elected_color")
+                    ]
 
                     areas[aid] = {
                         "turnout": float(r.get("turnout", 0.0) or 0.0),
@@ -294,11 +288,14 @@ class ReplayData:
 
 
 def _expanded_range(row: pd.Series, prefix: str) -> List[int]:
-    """Return contiguous indices i for which prefix_i exists in the row."""
+    """Return contiguous indices i for which prefix_i exists in the row.
+
+    Example: prefix='area_color' matches columns ['area_color_0', 'area_color_1', ...].
+    """
     cols = [c for c in row.index if isinstance(c, str) and c.startswith(prefix + "_")]
     idxs: List[int] = []
     for c in cols:
-        suf = c.split("_", 1)[1]
+        suf = c.rsplit("_", 1)[-1]
         try:
             idxs.append(int(suf))
         except ValueError:
