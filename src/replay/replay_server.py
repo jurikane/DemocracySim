@@ -141,13 +141,13 @@ class ReplayData:
         return self._load_step_v2(index)
 
     def load_static(self) -> Dict[str, Any]:
-        p = self.run_dir / "static_v2.json"
+        p = self.run_dir / "static.json"
         if p.exists():
             return json.loads(p.read_text())
         return {}
 
     def load_grid(self, step: int) -> Optional[np.ndarray]:
-        # Use pattern from static.json/static_v2.json.
+        # Use pattern from static.json.
         if not self._grid_pattern:
             return None
         gf = self.grids_dir / (self._grid_pattern % int(step))

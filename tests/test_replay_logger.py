@@ -39,7 +39,7 @@ def test_run_logger_v2_smoke():
     v2.detach_from_model(model)
 
     # check files
-    assert (td / 'static_v2.json').exists()
+    assert (td / 'static.json').exists()
     assert (td / 'meta.yaml').exists()
     assert (td / 'steps.parquet').exists()
     assert (td / 'area_steps.parquet').exists()

@@ -1,8 +1,8 @@
-# Output schema v2 
+# Output schema v2
 
 **Schema name:** `output_schema_v2`  
 **Schema version:** `2`  
-**Step indexing:** `post_election_pre_mutation`
+**Step indexing meaning:** `post_election_pre_mutation`
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
@@ -16,18 +16,25 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `area_steps.parquet`
 - `agents.parquet`
 - `votes.parquet`
-- `grids/grid_0000.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots)
+- `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience)
+- `grids/grid_0001.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots)
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
 ## Timing semantics (important)
 
 All Parquet tables are indexed as **post election + post reward, pre mutation**.
 
-Meaning for step `t`:
+Meaning for step `t` (where **t starts at 1**):
 - The election in each area has been conducted.
 - Rewards and participation costs have been applied.
 - **No color-cell mutation has been applied yet.**
 - `area_color_*` in `area_steps.parquet` is the *real* area color distribution used at election time and by the reward logic.
+
+### Replay step 0
+
+Replay starts in a **grid-only step 0** state:
+- It loads `grids/grid_0000.npy` (if present) and shows it as the initial grid.
+- It does **not** populate model/area time series until the first replay `step()` call.
 
 ## Shared identifiers
 
@@ -45,7 +52,7 @@ All Parquet tables include:
 |----------------------|--------:|----------------------------|
 | run_seed             |   int32 | run identifier (seed)      |
 | rule_idx             |   int16 | voting rule index          |
-| step                 |   int32 | 0..S-1                     |
+| step                 |   int32 | **1..S**                   |
 | collective_assets    |   int64 | model sum of assets        |
 | gini_index           |   int16 | 0–100                      |
 | turnout              | float32 | global average turnout (%) |

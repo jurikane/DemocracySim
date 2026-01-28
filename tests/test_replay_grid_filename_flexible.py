@@ -16,7 +16,7 @@ def test_replay_loads_grid_with_flexible_filenames(tmp_path):
       - Headless run writes grid snapshots using pad=len(str(num_steps)).
       - First recorded *election* grid is step=1 (grid_0001.npy).
       - An optional initial pre-election grid_0000.npy may exist for UI purposes.
-      - ReplayModel loads grids by honoring static_v2.json step_indexing.grid_file.
+      - ReplayModel loads grids by honoring static.json step_indexing.grid_file.
     """
     cfg = load_config("configs/toy.yaml")
     cfg.simulation = cfg.simulation.model_copy(deep=True)

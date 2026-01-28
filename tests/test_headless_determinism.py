@@ -33,7 +33,7 @@ def test_headless_same_seed_produces_identical_first_steps(tmp_path: Path):
     run_once(0, cfg, out_dir=out_b)
 
     for rel in [
-        Path("static_v2.json"),
+        Path("static.json"),
         Path("meta.yaml"),
         Path("steps.parquet"),
         Path("area_steps.parquet"),

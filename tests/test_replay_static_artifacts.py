@@ -32,7 +32,7 @@ def test_replay_static_includes_borders_and_voter_counts(tmp_path):
 
     run_once(0, conf, out_dir=run_dir)
 
-    static = json.loads((run_dir / 'static_v2.json').read_text())
+    static = json.loads((run_dir / 'static.json').read_text())
     schema = static.get('schema', {})
     assert schema.get('name') == 'output_schema_v2'
     assert int(schema.get('version', 0) or 0) == 2

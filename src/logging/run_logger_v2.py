@@ -99,7 +99,7 @@ class RunLoggerV2:
             yaml.safe_dump(meta, f)
 
     def write_static(self, model: Model) -> None:
-        """Write static_v2.json (schema v2 metadata) and static overlay artifacts."""
+        """Write static.json (schema v2 metadata) and static overlay artifacts."""
 
         height = int(getattr(model, "height", 0) or 0)
         width = int(getattr(model, "width", 0) or 0)
@@ -144,7 +144,7 @@ class RunLoggerV2:
 
         import json
 
-        with open(self.ctx.out_dir / "static_v2.json", "w") as f:
+        with open(self.ctx.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
 
         # --- Static overlay artifacts for replay ---
