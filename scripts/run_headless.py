@@ -7,7 +7,6 @@ import argparse
 
 from src.config.loader import load_config, get_project_root
 from src.model_setup import make_model
-from src.replay.replay_logger import ReplayLogger
 from src.utils.metrics import get_grid_colors
 from src.logging.run_logger_v2 import RunLoggerV2
 
@@ -38,39 +37,42 @@ def run_once(run_id: int, cfg, out_dir: Path):
         # Create model instance
         model = make_model(model_cfg_for_run)
 
-        # Keep ReplayLogger for static overlays and grid naming/padding (Batch 1.0)
-        rl = ReplayLogger(out_dir=out_dir, run_id=run_id, store_grid=store_grid, num_steps=n_steps)
-        rl.write_static(model)
-
-        # Schema v2 logger (Batch 1.0: steps/area_steps/agents only)
+        # Schema v2 logger (v2-only)
         rule_idx = int(getattr(model_cfg_for_run, "rule_idx", 0) or 0)
         v2 = RunLoggerV2(out_dir=out_dir, run_seed=run_seed, rule_idx=rule_idx, num_steps=n_steps, store_grid=store_grid)
         v2.write_static(model)
         v2.write_meta(cfg_for_run)
         v2.attach_to_model(model)
 
+        # Write initial (pre-election) grid snapshot for UI convenience.
+        # This is NOT part of schema v2 step indexing (parquet remains 1...N).
+        if store_grid:
+            (out_dir / "grids").mkdir(parents=True, exist_ok=True)
+            pad = len(str(int(n_steps)))
+            initial_grid = get_grid_colors(model)
+            import numpy as np
+            np.save(str(out_dir / "grids" / f"grid_{0:0{pad}d}.npy"), np.asarray(initial_grid))
+
     except Exception as e:
         raise RuntimeError(f"Failed to instantiate model: {e}")
 
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
-        v2.begin_step(step)
+        # Schema v2 uses 1-based step indexing for recorded post-election snapshots.
+        v2_step = step + 1
+        v2.begin_step(v2_step)
         model.step()
         grid_snapshot = None
         if store_grid and (step % grid_interval == 0):
             grid_snapshot = get_grid_colors(model)
-        # Keep grid snapshots via ReplayLogger for now
-        rl.append_step(step=step, model=model, grid_snapshot=grid_snapshot)
-        # Write schema v2 tables
-        v2.log_step(step=step, model=model)
+        # Schema v2 tables + grids (1-based)
+        v2.log_step(step=v2_step, model=model, grid_snapshot=grid_snapshot)
         v2.end_step()
 
-    rl.flush()
     v2.finalize()
     v2.detach_from_model(model)
 
-    # NOTE: ReplayLogger meta is legacy schema v1, but contract requires meta.yaml for schema v2.
-    # We already wrote schema v2 meta.yaml above, so do not overwrite it here.
+    # NOTE: schema v2 meta.yaml has already been written above.
 
 
 def _resolve_output_base_dir(conf) -> Path:

@@ -160,3 +160,45 @@ def test_grids_are_loadable_numpy_arrays(v2_run_dir: Path) -> None:
     arr0 = np.load(str(files[0]))
     assert isinstance(arr0, np.ndarray)
     assert arr0.ndim == 2
+
+
+def test_schema_v2_step_indexing_is_one_based(v2_run_dir: Path) -> None:
+    """Schema v2 must use 1-based step indexing for recorded (post-election) snapshots.
+
+    Note: a pre-election grid snapshot at step=0 is allowed for UI convenience.
+    Parquet tables remain strictly 1-based.
+    """
+    reason = _schema_v2_missing_reason(v2_run_dir)
+    if reason:
+        pytest.xfail(reason)
+
+    steps = pd.read_parquet(v2_run_dir / "steps.parquet")
+    assert not steps.empty
+    assert int(steps["step"].min()) == 1
+
+    area_steps = pd.read_parquet(v2_run_dir / "area_steps.parquet")
+    assert not area_steps.empty
+    assert int(area_steps["step"].min()) == 1
+
+    agents = pd.read_parquet(v2_run_dir / "agents.parquet")
+    assert not agents.empty
+    assert int(agents["step"].min()) == 1
+
+    votes_path = v2_run_dir / "votes.parquet"
+    assert votes_path.exists()
+    votes = pd.read_parquet(votes_path)
+    if not votes.empty:
+        assert int(votes["step"].min()) == 1
+
+    # Grid snapshots: if present, first recorded election snapshot idx must be 1.
+    grids_dir = v2_run_dir / "grids"
+    if grids_dir.exists():
+        files = sorted(grids_dir.glob("grid_*.npy"))
+        if files:
+            def _idx(p: Path) -> int:
+                suf = p.stem.rsplit("_", 1)[-1]
+                return int(suf) if suf.isdigit() else 10**18
+
+            idxs = sorted(_idx(p) for p in files)
+            assert 1 in idxs, "v2 must write a grid snapshot for step=1"
+            assert min([i for i in idxs if i >= 1]) == 1

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 
@@ -10,14 +9,13 @@ from src.config.loader import load_config
 
 
 def test_replay_static_includes_borders_and_voter_counts(tmp_path):
-    """Schema v1 completeness regression:
+    """Schema v2 completeness regression.
 
     New runs must write static artifacts needed for replay + analysis:
-      - static.json includes total_voters + num_voters_per_area
+      - static.json exists and declares schema v2
       - area_borders.npy exists and has shape (H, W)
 
-    This test generates a tiny run to avoid depending on checked-in sample data
-    that may have been produced before these fields existed.
+    This test generates a tiny run to avoid depending on checked-in sample data.
     """
     conf = load_config('configs/toy.yaml')
     sim_cfg = conf.simulation
@@ -34,12 +32,10 @@ def test_replay_static_includes_borders_and_voter_counts(tmp_path):
 
     run_once(0, conf, out_dir=run_dir)
 
-    static = json.loads((run_dir / 'static.json').read_text())
-    assert static.get('format_version') == 1
-    assert 'total_voters' in static
-    assert isinstance(static['total_voters'], int)
-    assert 'num_voters_per_area' in static
-    assert isinstance(static['num_voters_per_area'], dict)
+    static = json.loads((run_dir / 'static_v2.json').read_text())
+    schema = static.get('schema', {})
+    assert schema.get('name') == 'output_schema_v2'
+    assert int(schema.get('version', 0) or 0) == 2
 
     borders_path = run_dir / 'area_borders.npy'
     assert borders_path.exists()

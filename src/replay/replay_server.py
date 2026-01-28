@@ -84,25 +84,22 @@ class ReplayData:
         self.steps_dir = self.run_dir / "steps"
         self.grids_dir = self.run_dir / "grids"
 
-        # Detect schema via meta.yaml (v2 runs use parquet + static_v2.json)
+        # v2-only hard cut: require schema v2
         self._schema = self._detect_schema()
+        if self._schema != "v2":
+            raise ValueError(f"Replay now requires schema v2 runs; run_dir={self.run_dir}")
 
         # Load static early so we can honor filename patterns
         self._static = self.load_static()
-        self._step_pattern = None
         self._grid_pattern = None
         step_indexing = self._static.get("step_indexing") if isinstance(self._static.get("step_indexing"), dict) else {}
-        if isinstance(step_indexing.get("step_file"), str):
-            self._step_pattern = step_indexing.get("step_file")
         if isinstance(step_indexing.get("grid_file"), str):
             self._grid_pattern = step_indexing.get("grid_file")
 
-        # Legacy schema uses step JSON discovery; schema v2 uses parquet length.
-        self.step_files = self._discover_step_files() if self._schema != "v2" else []
+        self.step_files = []
         self._steps_df: Optional[pd.DataFrame] = None
         self._area_steps_df: Optional[pd.DataFrame] = None
-        if self._schema == "v2":
-            self._load_parquet_tables()
+        self._load_parquet_tables()
 
     # -----------------
     # Schema detection
@@ -139,15 +136,15 @@ class ReplayData:
     # -----------------
     # Legacy JSON support
     # -----------------
-    def _discover_step_files(self):
-        files = list(self.steps_dir.glob("step_*.json"))
+    def load_step(self, index: int) -> Dict[str, Any]:
+        """Load one step record (v2-only)."""
+        return self._load_step_v2(index)
 
-        def _step_idx(p: Path) -> int:
-            stem = p.stem
-            suffix = stem.rsplit("_", 1)[-1]
-            return int(suffix) if suffix.isdigit() else 10**18
-
-        return sorted(files, key=_step_idx)
+    def load_static(self) -> Dict[str, Any]:
+        p = self.run_dir / "static_v2.json"
+        if p.exists():
+            return json.loads(p.read_text())
+        return {}
 
     def load_grid(self, step: int) -> Optional[np.ndarray]:
         # Use pattern from static.json/static_v2.json.
@@ -158,49 +155,17 @@ class ReplayData:
             return np.load(str(gf))
         return None
 
-    def load_step(self, index: int) -> Dict[str, Any]:
-        """Load one step record.
-
-        Returns a unified payload with:
-        - step (int)
-        - model (dict, snake_case)
-        - areas (dict[int, dict], snake_case)
-        """
-        if self._schema == "v2":
-            return self._load_step_v2(index)
-
-        # legacy JSON
-        sf = self.step_files[index]
-        rec = json.loads(sf.read_text())
-        # Legacy shape: either nested {'model':..., 'areas':...} or flat.
-        step = int(rec.get("step", index))
-        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else None
-        if model_block is None:
-            model_block = {k: v for k, v in rec.items() if k != "step"}
-        areas_block = rec.get("areas") if isinstance(rec.get("areas"), dict) else {}
-
-        # Normalize legacy model_block keys to snake_case
-        model_block = {
-            k.replace("Collective assets", "collective_assets")
-             .replace("Voter turnout globally (in percent)", "turnout")
-             .replace("Gini Index (0-100)", "gini_index")
-             .replace("Color ", "color_"): v
-            for k, v in model_block.items()
-        }
-
-        # Keep legacy columns as-is; viz will not use them once migrated.
-        return {"step": step, "model": model_block, "areas": areas_block}
-
     def _load_step_v2(self, index: int) -> Dict[str, Any]:
         steps_df = self._steps_df if self._steps_df is not None else pd.DataFrame()
         area_steps_df = self._area_steps_df if self._area_steps_df is not None else pd.DataFrame()
         if steps_df.empty:
             return {"step": int(index), "model": {}, "areas": {}}
 
-        # Treat 'index' as the sequential step order.
-        # steps.parquet is keyed by step, but contract test uses contiguous 0..N-1.
-        step = int(steps_df.iloc[index]["step"]) if "step" in steps_df.columns else int(index)
-        model_row = steps_df.iloc[index].to_dict()
+        # 'index' is the sequential position (0..len-1). The recorded 'step' value
+        # is taken from parquet (schema v2 is 1-based).
+        model_row_series = steps_df.iloc[int(index)]
+        step = int(model_row_series["step"]) if "step" in steps_df.columns else int(index)
+        model_row = model_row_series.to_dict()
         model_row.pop("run_seed", None)
         model_row.pop("rule_idx", None)
 
@@ -230,20 +195,6 @@ class ReplayData:
                     }
 
         return {"step": step, "model": model_row, "areas": areas}
-
-    def load_static(self) -> Dict[str, Any]:
-        # schema v2: static_v2.json
-        if self._schema == "v2":
-            p = self.run_dir / "static_v2.json"
-            if p.exists():
-                return json.loads(p.read_text())
-            return {}
-
-        # legacy
-        static_path = self.run_dir / "static.json"
-        if static_path.exists():
-            return json.loads(static_path.read_text())
-        return {}
 
     def load_area_borders(self) -> Optional[np.ndarray]:
         static = self.load_static() or {}
@@ -319,6 +270,7 @@ class ReplayModel(mesa.Model):
         self.data = ReplayData(self.run_dir)
         self._idx = -1
         self.finished = False
+        self._initialized_with_grid0: bool = False
 
         # Build grid and color cells from static info
         static = self.data.load_static()
@@ -384,9 +336,16 @@ class ReplayModel(mesa.Model):
 
             self.color_cells.append(cell)
 
-        # Apply first snapshot if available
-        if len(self.data) > 0:
-            self._advance()
+        # Apply initial pre-election grid snapshot (grid_0000.npy) if available,
+        # without advancing recorded step series. This keeps scheduler.steps==0 so
+        # UI shows 'Current Step: 0' while the grid matches the true initial state.
+        g0 = self.data.load_grid(0)
+        if g0 is not None:
+            self._apply_grid(g0)
+            self._initialized_with_grid0 = True
+
+        # Do NOT auto-advance recorded steps here. The first call to step() will
+        # advance to the first recorded step (step=1).
 
     def _check_npy_arr(self, arr) -> bool:
         if arr is not None and arr.shape == (self._height, self._width):
@@ -512,7 +471,8 @@ class ReplayModel(mesa.Model):
             self.finished = True
 
     def step(self) -> None:
-        # Advance to next recorded step if available; do nothing when finished
+        # Advance to next recorded step if available; do nothing when finished.
+        # The initial state (step 0) is the pre-election grid snapshot only.
         self._advance()
 
 

@@ -38,6 +38,12 @@ from src.logging.output_schema_v2 import (
 from src.agents.area import Area
 from src.agents.vote_agent import VoteAgent
 from src.models.participation_model import ParticipationModel as Model
+from src.utils.metrics import (
+    get_area_border_grid,
+    get_agents_per_cell_grid,
+    get_agent_strings_per_cell_grid,
+    get_area_strings_per_cell_grid,
+)
 
 
 @dataclass(frozen=True)
@@ -93,11 +99,8 @@ class RunLoggerV2:
             yaml.safe_dump(meta, f)
 
     def write_static(self, model: Model) -> None:
-        """Write static_v2.json (schema v2 metadata).
+        """Write static_v2.json (schema v2 metadata) and static overlay artifacts."""
 
-        NOTE: During incremental migration we keep ReplayLogger's legacy
-        static.json intact for existing replay tests.
-        """
         height = int(getattr(model, "height", 0) or 0)
         width = int(getattr(model, "width", 0) or 0)
         num_colors = int(getattr(model, "num_colors", 0) or 0)
@@ -116,7 +119,7 @@ class RunLoggerV2:
             "num_agents": num_agents,
             "step_indexing": {
                 "meaning": STEP_INDEXING,
-                "first_recorded_step": 0,
+                "first_recorded_step": 1,
                 "grid_file": _grid_pattern(self.num_steps),
             },
             "artifacts": {
@@ -144,6 +147,19 @@ class RunLoggerV2:
         with open(self.ctx.out_dir / "static_v2.json", "w") as f:
             json.dump(static, f, indent=2)
 
+        # --- Static overlay artifacts for replay ---
+        borders = get_area_border_grid(model)
+        np.save(str(self.ctx.out_dir / "area_borders.npy"), np.asarray(borders, dtype=bool))
+
+        apc = get_agents_per_cell_grid(model)
+        np.save(str(self.ctx.out_dir / "agents_per_cell.npy"), np.asarray(apc, dtype=np.int32))
+
+        as_pc = get_agent_strings_per_cell_grid(model)
+        np.save(str(self.ctx.out_dir / "agent_strings_per_cell.npy"), np.asarray(as_pc, dtype=str))
+
+        area_strs = get_area_strings_per_cell_grid(model)
+        np.save(str(self.ctx.out_dir / "area_strings_per_cell.npy"), np.asarray(area_strs, dtype=str))
+
     # -----------------
     # Logging
     # -----------------
@@ -164,13 +180,22 @@ class RunLoggerV2:
         if getattr(model, "_schema_v2_area_snapshot_sink", None) is self._on_area_snapshot:
             delattr(model, "_schema_v2_area_snapshot_sink")
 
-    def log_step(self, step: int, model: Model) -> None:
-        """Append schema-v2 rows for this step."""
+    def log_step(self, step: int, model: Model, grid_snapshot: Optional[np.ndarray] = None) -> None:
+        """Append schema-v2 rows for this step.
+
+        Args:
+            step: Recorded step number (schema v2 is 1-based).
+            model: The ParticipationModel.
+            grid_snapshot: Optional HxW array to write to grids/ (1-based).
+        """
         s = int(step)
         self._current_step = s
         self._steps_rows.append(self._extract_steps_row(s, model))
         self._area_steps_rows.extend(self._extract_area_steps_rows(s, model))
         self._agent_rows.extend(self._extract_agent_rows(s, model))
+
+        if self.store_grid and grid_snapshot is not None:
+            self._write_grid_snapshot(step=s, grid_snapshot=np.asarray(grid_snapshot))
 
     def begin_step(self, step: int) -> None:
         """Set the current step used by sink callbacks."""
@@ -240,15 +265,31 @@ class RunLoggerV2:
             return row
 
         last = df.iloc[-1].to_dict()
-        # Map known names -> schema v2 snake_case
-        if "Collective assets" in last:
+
+        # Prefer snake_case (live + replay v2 use this)
+        if "collective_assets" in last:
+            row["collective_assets"] = np.int64(last["collective_assets"])
+        elif "Collective assets" in last:
             row["collective_assets"] = np.int64(last["Collective assets"])
-        if "Gini Index (0-100)" in last:
+
+        if "gini_index" in last:
+            row["gini_index"] = np.int16(last["gini_index"])
+        elif "Gini Index (0-100)" in last:
             row["gini_index"] = np.int16(last["Gini Index (0-100)"])
-        if "Voter turnout globally (in percent)" in last:
+
+        if "turnout" in last:
+            row["turnout"] = np.float32(last["turnout"])
+        elif "Voter turnout globally (in percent)" in last:
             row["turnout"] = np.float32(last["Voter turnout globally (in percent)"])
 
-        # Optional per-color series: Color 0..Color {C-1}
+        # Optional per-color series: snake_case color_0..color_{C-1} (preferred)
+        for k, v in last.items():
+            if isinstance(k, str) and k.startswith("color_"):
+                suf = k.split("_", 1)[1]
+                if suf.isdigit():
+                    row[k] = np.float32(v)
+
+        # Legacy fallback: "Color 0".."Color {C-1}"
         for k, v in last.items():
             if isinstance(k, str) and k.startswith("Color "):
                 parts = k.split(" ")
@@ -440,6 +481,15 @@ class RunLoggerV2:
         step = int(self._current_step)
         area_id = int(getattr(area, "unique_id", -1))
         self._area_snapshots_by_step_area[(step, area_id)] = dict(snapshot)
+
+    def _grid_filename(self, step: int) -> Path:
+        pad = len(str(int(self.num_steps))) if self.num_steps is not None else 3
+        return self.ctx.out_dir / "grids" / f"grid_{int(step):0{pad}d}.npy"
+
+    def _write_grid_snapshot(self, *, step: int, grid_snapshot: np.ndarray) -> None:
+        grids_dir = self.ctx.out_dir / "grids"
+        grids_dir.mkdir(parents=True, exist_ok=True)
+        np.save(str(self._grid_filename(step)), grid_snapshot)
 
 
 def _grid_pattern(num_steps: int) -> str:

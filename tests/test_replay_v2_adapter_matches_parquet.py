@@ -36,10 +36,11 @@ def v2_run_dir(tmp_path):
 
 
 def _steps_from_replay(run_dir):
-    """Load v2 run via ReplayModel and materialize all steps into DataFrames."""
+    """Load v2 run via ReplayModel and materialize all recorded steps into DataFrames."""
     appcfg = load_config("configs/test.yaml")
     model = ReplayModel(appcfg=appcfg, run_dir=run_dir)
 
+    # ReplayModel starts at step 0 (grid only). Materialize all recorded steps.
     for _ in range(len(model.data)):
         model.step()
 
