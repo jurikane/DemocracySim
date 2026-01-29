@@ -1,6 +1,6 @@
 """
 Script to run the DemocracySim model server.
-Configure using a config file (YAML or TOML) inside the configs folder.
+Configure using a config file (YAML or TOML) inside the 'configs' folder.
 Use --config to specify a config file (YAML or TOML).
 Example:
 python -m scripts.run -c config.yaml --no-browser

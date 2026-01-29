@@ -11,7 +11,7 @@ vis_cfg = get_vis_cfg()
 show_area_stats = bool(getattr(vis_cfg, 'show_area_stats', True))
 
 
-def save_plot_to_base64(fig):
+def save_plot_to_base64(fig) -> str:
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     plt.close(fig)
@@ -22,7 +22,7 @@ def save_plot_to_base64(fig):
 
 
 class AreaStats(TextElement):
-    def render(self, model):
+    def render(self, model) -> str:
         step = getattr(model.scheduler, 'steps', 0)
         if not show_area_stats or step == 0:
             return ""
@@ -45,8 +45,12 @@ class AreaStats(TextElement):
 
         num_colors = len(color_distribution.iloc[0])
         num_areas = len(area_ids)
-        fig, axes = plt.subplots(nrows=num_areas, ncols=2,
-                                 figsize=(8, 4 * num_areas), sharex=True)
+        fig, axes = plt.subplots(
+            nrows=num_areas,
+            ncols=2,
+            figsize=(8, 4 * num_areas),
+            sharex=True,  # type: ignore[arg-type]
+        )
 
         # Handle case of single area (axes shape)
         if num_areas == 1:
@@ -122,7 +126,7 @@ class PersonalityDistribution(TextElement):
         plt.tight_layout()
         self.pers_dist_plot = save_plot_to_base64(fig)
 
-    def render(self, model):
+    def render(self, model) -> str:
         if getattr(model.scheduler, 'steps', 0) == 0:
             self.create_once(model)
         return self.pers_dist_plot or ""
@@ -152,7 +156,7 @@ class _AreaTimeSeriesElement(TextElement):
             return ":"
         return "--"
 
-    def render(self, model):
+    def render(self, model) -> str:
         series = self._get_series(model)
         if series is None:
             return ""
@@ -189,7 +193,7 @@ class AreaGiniElement(_AreaTimeSeriesElement):
     ylabel = "Gini Index (0-100)"
 
 class MatplotlibElement(TextElement):
-    def render(self, model):
+    def render(self, model) -> str:
         step = getattr(model.scheduler, 'steps', 0)
         if not show_area_stats or step == 0:
             return ""
@@ -210,7 +214,7 @@ class MatplotlibElement(TextElement):
 
 
 class StepsTextElement(TextElement):
-    def render(self, model):
+    def render(self, model) -> str:
         step = getattr(model.scheduler, 'steps', 0)
         first_agents = [str(a) for a in getattr(model, 'voting_agents', [])[:5]]
         return (f"Step: {step} | cells: {len(getattr(model, 'color_cells', []))} | "
@@ -243,8 +247,12 @@ class AreaPersonalityDists(TextElement):
 
         num_cols = math.ceil(math.sqrt(num_areas))
         num_rows = math.ceil(num_areas / num_cols)
-        fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols,
-                                 figsize=(8, num_areas), sharex=True)
+        fig, axes = plt.subplots(
+            nrows=num_rows,
+            ncols=num_cols,
+            figsize=(8, num_areas),
+            sharex=True,  # type: ignore[arg-type]
+        )
         axes_flat = axes.flatten() if hasattr(axes, "flatten") else [axes]
         for ax, area in zip(axes_flat, getattr(model, 'areas', [])):
             p_dist = getattr(area, 'personality_distribution', [])
@@ -252,7 +260,7 @@ class AreaPersonalityDists(TextElement):
             heights = [int(val * num_agents) for val in p_dist] if p_dist else []
             bars = ax.bar(range(num_personalities), heights, color='skyblue')
             max_height = max(heights) if heights else 1
-            p_top_hight = max_height * 0.02
+            p_top_height = max_height * 0.02
 
             for bar, personality in zip(bars, personalities):
                 height = bar.get_height()
@@ -260,7 +268,7 @@ class AreaPersonalityDists(TextElement):
                 for i, color_idx in enumerate(personality):
                     rect_width = width / num_colors
                     coords = (bar.get_x() + i * rect_width, height)
-                    rect = patches.Rectangle(coords, rect_width, p_top_hight,
+                    rect = patches.Rectangle(coords, rect_width, p_top_height,
                                              color=colors[color_idx])
                     ax.add_patch(rect)
 
@@ -271,7 +279,7 @@ class AreaPersonalityDists(TextElement):
         plt.tight_layout()
         self.areas_pers_dist_plot = save_plot_to_base64(fig)
 
-    def render(self, model):
+    def render(self, model) -> str:
         if getattr(model.scheduler, 'steps', 0) == 0:
             self.create_once(model)
         return self.areas_pers_dist_plot or ""

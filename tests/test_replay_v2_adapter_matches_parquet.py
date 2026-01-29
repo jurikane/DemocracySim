@@ -4,7 +4,7 @@ import pytest
 
 from src.config.loader import load_config
 from src.replay.replay_server import ReplayModel
-from src.logging.output_schema_v2 import (
+from src.logging.output_schema import (
     validate_steps_df,
     validate_area_steps_df,
 )

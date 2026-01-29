@@ -194,7 +194,7 @@ class Area(Agent):
         Args:
             agent (VoteAgent): The agent to be added to the area.
         """
-        # Make sure its an instance of Agent
+        # Make sure it's an instance of Agent
         if not isinstance(agent, Agent):
             raise ValueError("Only VoteAgent instances can be added to an Area")
         self.agents.append(agent)
@@ -335,7 +335,7 @@ class Area(Agent):
         color_search_pairs = model.color_search_pairs
         for a in self.agents:
             # Personality-based reward factor
-            #   the closer the elected outcome to the agents personality.
+            #   the closer the elected outcome to the agent's personality.
             #   the higher the reward for the agent.
             p = dist_func(a.personality, self.voted_ordering, color_search_pairs)
             pers_component = (1 - p) * pool_share

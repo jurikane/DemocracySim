@@ -8,7 +8,7 @@ import argparse
 from src.config.loader import load_config, get_project_root
 from src.model_setup import make_model
 from src.utils.metrics import get_grid_colors
-from src.logging.run_logger_v2 import RunLoggerV2
+from src.logging.run_logger import RunLoggerV2
 
 
 def run_once(run_id: int, cfg, out_dir: Path):

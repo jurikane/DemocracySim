@@ -5,7 +5,7 @@ import pandas as pd
 
 from src.config.loader import load_config
 from src.model_setup import make_model
-from src.logging.run_logger_v2 import RunLoggerV2
+from src.logging.run_logger import RunLoggerV2
 from src.utils.metrics import get_grid_colors
 
 

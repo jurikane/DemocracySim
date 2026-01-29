@@ -105,36 +105,37 @@ class ReplayData:
     # Schema detection
     # -----------------
     def _detect_schema(self) -> str:
-        """Return 'v2' if meta.yaml indicates output_schema_v2, else 'legacy'."""
+        """Return 'v2' if meta.yaml indicates output_schema_v2, else raise.
+        Replay is v2-only.
+        """
         meta_path = self.run_dir / "meta.yaml"
         if not meta_path.exists():
-            return "legacy"
+            raise ValueError(f"Missing meta.yaml; replay requires schema v2 run dirs. run_dir={self.run_dir}")
         try:
             import yaml
             meta = yaml.safe_load(meta_path.read_text()) or {}
-        except (OSError, ValueError, TypeError):
-            return "legacy"
+        except (OSError, ValueError, TypeError) as e:
+            raise ValueError(f"Failed to read meta.yaml; replay requires schema v2. run_dir={self.run_dir}") from e
+
         schema = meta.get("schema") if isinstance(meta.get("schema"), dict) else {}
         name = schema.get("name")
         version = schema.get("version")
         if name == "output_schema_v2" and int(version or 0) == 2:
             return "v2"
-        return "legacy"
+        raise ValueError(
+            f"meta.yaml does not describe schema v2 (name={name!r}, version={version!r}); run_dir={self.run_dir}"
+        )
 
     def _load_parquet_tables(self) -> None:
+        """Load Parquet tables required for replay (v2-only)."""
         steps_path = self.run_dir / "steps.parquet"
         area_steps_path = self.run_dir / "area_steps.parquet"
-        if steps_path.exists():
-            self._steps_df = pd.read_parquet(steps_path)
-        else:
-            self._steps_df = pd.DataFrame()
-        if area_steps_path.exists():
-            self._area_steps_df = pd.read_parquet(area_steps_path)
-        else:
-            self._area_steps_df = pd.DataFrame()
+
+        self._steps_df = pd.read_parquet(steps_path) if steps_path.exists() else pd.DataFrame()
+        self._area_steps_df = pd.read_parquet(area_steps_path) if area_steps_path.exists() else pd.DataFrame()
 
     # -----------------
-    # Legacy JSON support
+    # Loading
     # -----------------
     def load_step(self, index: int) -> Dict[str, Any]:
         """Load one step record (v2-only)."""
@@ -161,7 +162,7 @@ class ReplayData:
         if steps_df.empty:
             return {"step": int(index), "model": {}, "areas": {}}
 
-        # 'index' is the sequential position (0..len-1). The recorded 'step' value
+        # 'index' is the sequential position (0...len-1). The recorded 'step' value
         # is taken from parquet (schema v2 is 1-based).
         model_row_series = steps_df.iloc[int(index)]
         step = int(model_row_series["step"]) if "step" in steps_df.columns else int(index)
