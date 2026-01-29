@@ -35,6 +35,11 @@ _ALLOWED_KW = {
     "distance_idx",
     "election_costs",
     "seed",
+    # Adaptive participation learning
+    "participation_alpha",
+    "participation_beta",
+    "participation_init_q",
+    "participation_q_max",
 }
 
 

@@ -223,7 +223,7 @@ class Area(Agent):
             int: The voter turnout in percent. Returns 0 if no agent participates.
         """
         # Ask agents for participation and their votes
-        preference_profile = self._tally_votes()
+        preference_profile, eligible_assets_before = self._tally_votes()
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
             # Set to previous outcome but don't distribute rewards as usual
@@ -248,9 +248,16 @@ class Area(Agent):
         self._voted_ordering = self.model.options[winning_option]
         # Calculate and distribute rewards
         self._distribute_rewards()
-        # TODO check whether the current color dist and the mutation of the
-        #  colors is calculated and applied correctly and does not interfere
-        #  in any way with the election process
+
+        # --- Adaptive participation learning update (per election, eligible agents only) ---
+        for a in self.agents:
+            # Eligible agents are exactly those evaluated in _tally_votes(): assets_before present
+            before = eligible_assets_before.get(a.unique_id)
+            if before is None:
+                continue
+            delta_assets = float(a.assets) - float(before)
+            a.apply_participation_update(delta_assets)
+
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
@@ -264,10 +271,11 @@ class Area(Agent):
         respect to the available options. These values are combined into a NumPy array.
 
         Returns:
-            np.ndarray: A 2D array representing the preference profiles of all
-                participating agents. Each row corresponds to an agent's vote.
+            tuple[np.ndarray, dict[int, float]]:
+                (preference_profile, eligible_assets_before_by_agent_id)
         """
         preference_profile = []
+        eligible_assets_before: dict[int, float] = {}
         # Reset pool for this election step.
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_costs
@@ -276,12 +284,20 @@ class Area(Agent):
         vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
 
         for agent in self.agents:
+            # Eligibility: agents with assets <= 0 are skipped (no learning update).
+            if agent.assets <= 0:
+                continue
+
+            # Eligible: record assets_before for learning (decision is a valid action).
+            eligible_assets_before[int(agent.unique_id)] = float(agent.assets)
+
             # election_costs is treated as a percent (0..100) of current assets.
             cost = int(agent.assets * el_cost_rate)
             # Ensure participating agents pay at least 1 if they have assets.
             if cost == 0 and agent.assets >= 1 and not el_cost_rate == 0:
                 cost = 1
-            if agent.ask_for_participation(area=self) and agent.assets > 0:
+
+            if agent.ask_for_participation(area=self):
                 agent.num_elections_participated += 1
                 # Give agents their (new) known fields
                 agent.update_known_cells(area=self)
@@ -303,7 +319,7 @@ class Area(Agent):
                     )
                 # agent.vote returns an array containing dissatisfaction values
                 # between 0 and 1 for each option, interpretable as rank values.
-        return np.array(preference_profile)
+        return np.array(preference_profile), eligible_assets_before
 
     def _distribute_rewards(self) -> None:
         """

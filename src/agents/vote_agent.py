@@ -3,17 +3,38 @@ import numpy as np
 from typing import TYPE_CHECKING, cast, List, Optional, Protocol, Any
 from mesa import Agent
 
+
+def _sigmoid(x: float) -> float:
+    # Numerically stable-ish sigmoid.
+    if x >= 0:
+        z = np.exp(-x)
+        return float(1.0 / (1.0 + z))
+    z = np.exp(x)
+    return float(z / (1.0 + z))
+
+
 class Policy(Protocol):
     def decide_participation(self, agent, area) -> bool: ...
     def decide_altruism(self, agent, area) -> float: ...
     def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
 
+
 class RandomParticipationPolicy:
-    """Default fallback policy: random participation, random altruism, distance-based ranking."""
+    """Default policy: adaptive probabilistic participation + random altruism + distance-based ranking."""
+
     def decide_participation(self, agent, area) -> bool:
-        return bool(agent.random.choice([True, False]))
+        # Global, non-strategic participation policy with explicit learning state:
+        # p = sigmoid(beta * q_participation)
+        beta = float(getattr(agent.model, "participation_beta"))
+        q = float(getattr(agent, "q_participation"))
+        p = _sigmoid(beta * q)
+        # Use the model-level seeded NumPy RNG for determinism.
+        return bool(float(agent.model.np_random.random()) < p)
+
     def decide_altruism(self, agent, area) -> float:
+        # TODO do this properly
         return agent.random.uniform(0.0, 1.0)
+
     def rank_options(self, agent, area, options: Any) -> np.ndarray:
         # Use existing distance function; identical to original vote logic.
         dist_func = agent.model.distance_func
@@ -23,6 +44,7 @@ class RandomParticipationPolicy:
             ranking[i] = dist_func(agent.personality, option, color_search_pairs)
         ranking /= ranking.sum() if ranking.sum() else 1.0
         return ranking
+
 
 if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
@@ -96,6 +118,10 @@ class VoteAgent(Agent):
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
         self.award_history: List[float] = []
+
+        # --- Adaptive participation learning (global per agent) ---
+        self.q_participation: float = float(model.participation_init_q)
+
         # Policy (behavior strategy)
         self.policy: Policy = policy if policy is not None else RandomParticipationPolicy()
 
@@ -168,7 +194,6 @@ class VoteAgent(Agent):
         self.assets += reward
         if self.assets < 0:
             self.assets = 0  # Ensure assets don't go negative
-
 
     def ask_for_participation(self, area: Area) -> bool:
         """
@@ -257,3 +282,25 @@ class VoteAgent(Agent):
         self.est_real_dist[unique] = counts / known_colors.size
         self.confidence = len(self.known_cells) / area.num_cells
         return self.est_real_dist, self.confidence
+
+    def participation_probability(self) -> float:
+        """Current learned participation probability p in [0,1]."""
+        beta = float(getattr(self.model, "participation_beta", 1.0) or 0.0)
+        p = _sigmoid(beta * float(self.q_participation))
+        # Clamp defensively
+        if p < 0.0:
+            return 0.0
+        if p > 1.0:
+            return 1.0
+        return p
+
+    def _clip_q_participation(self) -> None:
+        q_max = float(getattr(self.model, "participation_q_max", 0.0) or 0.0)
+        if q_max > 0:
+            self.q_participation = float(np.clip(self.q_participation, -q_max, q_max))
+
+    def apply_participation_update(self, delta_assets: float) -> None:
+        """Update q_participation from a realized per-election asset delta."""
+        alpha = float(getattr(self.model, "participation_alpha", 0.0) or 0.0)
+        self.q_participation = (1.0 - alpha) * float(self.q_participation) + alpha * float(delta_assets)
+        self._clip_q_participation()

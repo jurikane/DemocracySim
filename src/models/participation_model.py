@@ -112,12 +112,34 @@ class ParticipationModel(mesa.Model):
             (set randomly) that affects cell initialization globally.
     """
 
-    def __init__(self, height, width, num_agents, num_colors, num_personalities,
-                 mu, election_impact_on_mutation, common_assets, known_cells,
-                 num_areas, av_area_height, av_area_width, area_size_variance,
-                 patch_power, color_patches_steps, heterogeneity,
-                 rule_idx, distance_idx, election_costs, seed=None,
-                 max_steps: Optional[int] = None):
+    def __init__(
+        self,
+        height,
+        width,
+        num_agents,
+        num_colors,
+        num_personalities,
+        mu,
+        election_impact_on_mutation,
+        common_assets,
+        known_cells,
+        num_areas,
+        av_area_height,
+        av_area_width,
+        area_size_variance,
+        patch_power,
+        color_patches_steps,
+        heterogeneity,
+        rule_idx,
+        distance_idx,
+        election_costs,
+        seed=None,
+        max_steps: Optional[int] = None,
+        participation_alpha: float = 0.05,
+        participation_beta: float = 1.0,
+        participation_init_q: float = 0.0,
+        participation_q_max: float = 50.0,
+    ):
         super().__init__()
         if seed is not None:
             self.random.seed(seed)  # Mesa RNG (Pythons random.Random
@@ -146,6 +168,13 @@ class ParticipationModel(mesa.Model):
         self._av_area_color_dst = self._preset_color_dst
         # Elections
         self.election_costs = election_costs
+
+        # --- Adaptive participation learning parameters (global per agent) ---
+        self.participation_alpha = float(participation_alpha)
+        self.participation_beta = float(participation_beta)
+        self.participation_init_q = float(participation_init_q)
+        self.participation_q_max = float(participation_q_max)
+
         self.known_cells = known_cells  # Integer
         self.voting_rule = social_welfare_functions[rule_idx]
         self.distance_func = distance_functions[distance_idx]
@@ -557,9 +586,9 @@ class ParticipationModel(mesa.Model):
             r = np.array([np.array(p) for p in permutations(range(n))])
         return r
 
-    @staticmethod
-    def color_by_dst(color_distribution: np.ndarray) -> int:
+    def color_by_dst(self, color_distribution: np.ndarray) -> int:
         """
+        Select a color index according to given distribution using the model RNG.
         Selects a color (int) based on the given color_distribution array,
         where each entry represents the probability of selecting that index.
 
@@ -578,14 +607,14 @@ class ParticipationModel(mesa.Model):
         """
         if abs(sum(color_distribution) -1) > 1e-8:
             raise ValueError("The color_distribution array must sum to 1.")
-        r = np.random.random()  # Float between 0 and 1
+        r = float(self.np_random.random())
         cumulative_sum = 0.0
         for color_idx, prob in enumerate(color_distribution):
             if prob < 0:
                 raise ValueError("color_distribution contains negative value.")
             cumulative_sum += prob
             if r < cumulative_sum:  # Compare r against the cumulative probability
-                return color_idx
+                return int(color_idx)
 
         # This point should never be reached.
         raise ValueError("Unexpected error in color_distribution.")

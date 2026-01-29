@@ -11,6 +11,13 @@ class ModelConfig(BaseModel):
     mu: float              # Mutation rate
     rule_idx: int          # Index of the voting rule to use
     distance_idx: int      # Index of the distance function to use
+
+    # --- Adaptive participation learning (schema v2 thesis) ---
+    participation_alpha: float = 0.05
+    participation_beta: float = 1.0
+    participation_init_q: float = 0.0
+    participation_q_max: float = 50.0
+
     num_agents: int        # Number of agents in the simulation
     common_assets: int     # Initial collective assets
     num_colors: int        # Number of color options
