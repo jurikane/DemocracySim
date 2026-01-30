@@ -37,6 +37,7 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
+        self._eligible_assets_before_last: dict[int, float] = {}
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -223,7 +224,8 @@ class Area(Agent):
             int: The voter turnout in percent. Returns 0 if no agent participates.
         """
         # Ask agents for participation and their votes
-        preference_profile, eligible_assets_before = self._tally_votes()
+        preference_profile = self._tally_votes()
+        eligible_assets_before = getattr(self, "_eligible_assets_before_last", {})
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
             # Set to previous outcome but don't distribute rewards as usual
@@ -242,7 +244,12 @@ class Area(Agent):
                 a.reward_agent(-1)
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
-        aggregated = self.model.voting_rule(preference_profile)
+        rule = self.model.voting_rule
+        voting_rng = getattr(self.model, "voting_rng", None)
+        try:
+            aggregated = rule(preference_profile, rng=voting_rng)
+        except TypeError:
+            aggregated = rule(preference_profile)
         # Save the "elected" ordering in self._voted_ordering
         winning_option = aggregated[0]
         self._voted_ordering = self.model.options[winning_option]
@@ -263,7 +270,7 @@ class Area(Agent):
         self.num_agents_participated_last = n
         return int((n / self.num_agents) * 100) # Voter turnout in percent
 
-    def _tally_votes(self):
+    def _tally_votes(self) -> np.ndarray:
         """
         Gathers votes from agents who choose to participate.
 
@@ -271,25 +278,28 @@ class Area(Agent):
         respect to the available options. These values are combined into a NumPy array.
 
         Returns:
-            tuple[np.ndarray, dict[int, float]]:
-                (preference_profile, eligible_assets_before_by_agent_id)
+            np.ndarray: A 2D array where each row corresponds to an agent's vote
+            and each column corresponds to an option.
         """
         preference_profile = []
-        eligible_assets_before: dict[int, float] = {}
         # Reset pool for this election step.
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_costs
+
+        # Reset per-election eligible-assets map for learning.
+        self._eligible_assets_before_last = {}
 
         # Optional schema-v2 vote sink (Batch 2): logger attaches a callable here.
         vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
 
         for agent in self.agents:
+
             # Eligibility: agents with assets <= 0 are skipped (no learning update).
             if agent.assets <= 0:
                 continue
 
             # Eligible: record assets_before for learning (decision is a valid action).
-            eligible_assets_before[int(agent.unique_id)] = float(agent.assets)
+            self._eligible_assets_before_last[int(agent.unique_id)] = float(agent.assets)
 
             # election_costs is treated as a percent (0..100) of current assets.
             cost = int(agent.assets * el_cost_rate)
@@ -319,7 +329,7 @@ class Area(Agent):
                     )
                 # agent.vote returns an array containing dissatisfaction values
                 # between 0 and 1 for each option, interpretable as rank values.
-        return np.array(preference_profile), eligible_assets_before
+        return np.array(preference_profile)
 
     def _distribute_rewards(self) -> None:
         """

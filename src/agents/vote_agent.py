@@ -19,7 +19,7 @@ class Policy(Protocol):
     def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
 
 
-class RandomParticipationPolicy:
+class ParticipationPolicy:
     """Default policy: adaptive probabilistic participation + random altruism + distance-based ranking."""
 
     def decide_participation(self, agent, area) -> bool:
@@ -33,6 +33,7 @@ class RandomParticipationPolicy:
 
     def decide_altruism(self, agent, area) -> float:
         # TODO do this properly
+        # should we change the name "altruism_factor" to "cooperation_factor" or "reality-weight"?
         return agent.random.uniform(0.0, 1.0)
 
     def rank_options(self, agent, area, options: Any) -> np.ndarray:
@@ -104,7 +105,7 @@ class VoteAgent(Agent):
         self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = assets
         self._num_elections_participated = 0
-        self.personality = personality
+        self.personality = personality  # Is an order of the available colors
         self.personality_idx = personality_idx
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
         # ColorCell objects the agent knows (knowledge)
@@ -120,10 +121,11 @@ class VoteAgent(Agent):
         self.award_history: List[float] = []
 
         # --- Adaptive participation learning (global per agent) ---
-        self.q_participation: float = float(model.participation_init_q)
+        init_q = getattr(model, "participation_init_q", 0.0)
+        self.q_participation = float(init_q)
 
         # Policy (behavior strategy)
-        self.policy: Policy = policy if policy is not None else RandomParticipationPolicy()
+        self.policy: Policy = policy if policy is not None else ParticipationPolicy()
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -285,22 +287,15 @@ class VoteAgent(Agent):
 
     def participation_probability(self) -> float:
         """Current learned participation probability p in [0,1]."""
-        beta = float(getattr(self.model, "participation_beta", 1.0) or 0.0)
-        p = _sigmoid(beta * float(self.q_participation))
-        # Clamp defensively
-        if p < 0.0:
-            return 0.0
-        if p > 1.0:
-            return 1.0
-        return p
-
-    def _clip_q_participation(self) -> None:
-        q_max = float(getattr(self.model, "participation_q_max", 0.0) or 0.0)
-        if q_max > 0:
-            self.q_participation = float(np.clip(self.q_participation, -q_max, q_max))
+        beta = float(getattr(self.model, "participation_beta", 1.0))
+        return _sigmoid(beta * float(self.q_participation))
 
     def apply_participation_update(self, delta_assets: float) -> None:
         """Update q_participation from a realized per-election asset delta."""
-        alpha = float(getattr(self.model, "participation_alpha", 0.0) or 0.0)
-        self.q_participation = (1.0 - alpha) * float(self.q_participation) + alpha * float(delta_assets)
-        self._clip_q_participation()
+        alpha = float(getattr(self.model, "participation_alpha", 0.0))
+        # learning signal (delta_assets) = per-election change in assets
+        q = (1.0 - alpha) * float(self.q_participation) + alpha * float(delta_assets)
+        q_max = float(getattr(self.model, "participation_q_max", 0.0))
+        if q_max > 0:
+            q = float(np.clip(q, -q_max, q_max))
+        self.q_participation = float(q)

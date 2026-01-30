@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 
-def complete_ranking(ranking: np.ndarray, num_options: int) -> np.ndarray:
+def complete_ranking(ranking: np.ndarray, num_options: int, rng: Optional[np.random.Generator] = None) -> np.ndarray:
     """
     This function adds options that are not in the ranking in a random order.
 
@@ -23,15 +23,19 @@ def complete_ranking(ranking: np.ndarray, num_options: int) -> np.ndarray:
     Returns:
         np.ndarray: Completed ranking of length `num_options`.
     """
+    if rng is None:
+        rng = np.random.default_rng()
     all_options = np.arange(num_options)
     mask = np.isin(all_options, ranking, invert=True)
     non_included_options = all_options[mask]
-    np.random.shuffle(non_included_options)
+    rng.shuffle(non_included_options)
     return np.concatenate((ranking, non_included_options))
 
-def run_tie_breaking_preparation_for_majority(pref_table: np.ndarray,
-                                              noise_factor: int = 100
-                                              ) -> np.ndarray:
+def run_tie_breaking_preparation_for_majority(
+    pref_table: np.ndarray,
+    noise_factor: int = 100,
+    rng: Optional[np.random.Generator] = None,
+) -> np.ndarray:
     """
     This function prepares the preference table for majority rule such that
     it handles ties in the voters' preferences.
@@ -45,6 +49,8 @@ def run_tie_breaking_preparation_for_majority(pref_table: np.ndarray,
     Returns:
         np.ndarray: Table without ties in first choices.
     """
+    if rng is None:
+        rng = np.random.default_rng()
     # Add some random noise to break ties (based on the variances)
     variances = np.var(pref_table, axis=1)
     # If variances are zero, all values are equal, then select a random option
@@ -57,21 +63,19 @@ def run_tie_breaking_preparation_for_majority(pref_table: np.ndarray,
     # Set exactly one option to 0 (the first choice) and the rest to 1/(m-1)
     pref_tab_var_zero.fill(1 / (m-1))
     for i in range(pref_tab_var_zero.shape[0]):
-        rand_option = np.random.randint(0, m)
+        rand_option = int(rng.integers(0, m))
         pref_tab_var_zero[i, rand_option] = 0
     # On the non-zero part, add some noise to the values to break ties
     non_zero_variances = variances[~mask]
     # Generate noise based on the variances
     noise_eps = non_zero_variances / noise_factor
-    noise = np.random.uniform(-noise_eps[:, np.newaxis],
-                              noise_eps[:, np.newaxis], (n, m))
-    # `noise_eps[:, np.newaxis]` reshapes noise_eps from shape `(n,)` to (n, 1)
+    noise = rng.uniform(-noise_eps[:, np.newaxis], noise_eps[:, np.newaxis], (n, m))
     pref_tab_var_non_zero += noise
 
     # Put the parts back together
     return np.concatenate((pref_tab_var_non_zero, pref_tab_var_zero))
 
-def majority_rule(pref_table: np.ndarray) -> np.ndarray:
+def majority_rule(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
     """
     This function implements the majority rule social welfare function.
     Beware: Input is a preference table (values define a ranking, index=option),
@@ -84,29 +88,20 @@ def majority_rule(pref_table: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Resulting preference ranking (beware: not a pref. relation)
     """
+    if rng is None:
+        rng = np.random.default_rng()
     n, m = pref_table.shape  # n agents, m options
-    # Break ties if they exist
-    pref_table = run_tie_breaking_preparation_for_majority(pref_table)
-    # Count how often an option is ranked first (indexes of the min values)
+    pref_table = run_tie_breaking_preparation_for_majority(pref_table, rng=rng)
     first_choices = np.argmin(pref_table, axis=1)
-    # To avoid bias toward voters of low indices in the counting, we shuffle
-    np.random.shuffle(first_choices)  # (crucial when counting shows ties later)
+    rng.shuffle(first_choices)
     first_choice_counts = {}
     for choice in first_choices:
-        first_choice_counts[choice] = first_choice_counts.get(choice, 0) + 1
-    # Get the ranking from the counts
+        first_choice_counts[int(choice)] = first_choice_counts.get(int(choice), 0) + 1
     option_count_pairs = list(first_choice_counts.items())
     option_count_pairs.sort(key=lambda x: x[1], reverse=True)
     ranking = np.array([pair[0] for pair in option_count_pairs])
-    # Faster:
-    # count_pairs = np.array(option_count_pairs)
-    # # Sort the array by the second element in descending order
-    # sorted_indices = np.argsort(count_pairs[:, 1])[::-1]
-    # count_pairs = count_pairs[sorted_indices]
-    # ranking = count_pairs[:, 0].astype(int)
-    # Fill up the ranking with the missing options (if any)
     if ranking.shape[0] < m:
-        ranking = complete_ranking(ranking, m)
+        ranking = complete_ranking(ranking, m, rng=rng)
     return ranking
 
 def preprocessing_for_approval(pref_table: np.ndarray,
@@ -154,7 +149,7 @@ def imp_prepr_for_approval(pref_table: np.ndarray) -> np.ndarray:
     return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
-def approval_voting(pref_table: np.ndarray) -> np.ndarray:
+def approval_voting(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
     """
     This function implements the approval voting social welfare function.
     Beware: Input is a preference table (values define a ranking, index=option),
@@ -166,36 +161,21 @@ def approval_voting(pref_table: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Resulting preference ranking (beware: not a pref. relation).
     """
-    # TODO: does this take the meaning of the values into account? value = dist. = disagreement !
+    if rng is None:
+        rng = np.random.default_rng()
     pref_table = imp_prepr_for_approval(pref_table)
-    # Count how often each option is approved
     approval_counts = np.sum(pref_table, axis=0)
-    # Add noise to break ties TODO check for bias
     eps = 1e-4
-    noise = np.random.uniform(-eps, eps, len(approval_counts))
-    #option_count_pairs = list(enumerate(approval_counts + noise))
-    #option_count_pairs.sort(key=lambda x: x[1], reverse=True)
-    #return [pair[0] for pair in option_count_pairs]
-    return np.argsort(-(approval_counts + noise))  # TODO: check order (ascending/descending) - np.argsort sorts ascending
+    noise = rng.uniform(-eps, eps, len(approval_counts))
+    return np.argsort(-(approval_counts + noise))
 
 
-def continuous_score_voting(pref_table: np.ndarray) -> np.ndarray:
-    """
-    This function implements a continuous score voting based on disagreement.
-    Beware: Input is a preference table (values define a ranking, index=option),
-            but the output is a ranking/an ordering (values represent options).
-
-    Args:
-        pref_table (np.ndarray): Agent's preferences (disagreement) as matrix.
-
-    Returns:
-        np.ndarray: Resulting preference ranking (beware: not a pref. relation).
-    """
-    # TODO: integrate and test
-    # Sum up the disagreement for each option
+def continuous_score_voting(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+    """Continuous score voting with deterministic tie-breaking noise."""
+    if rng is None:
+        rng = np.random.default_rng()
     scores = np.sum(pref_table, axis=0)
-    # Add noise to break ties
     eps = 1e-8
-    noise = np.random.uniform(-eps, eps, len(scores))
+    noise = rng.uniform(-eps, eps, len(scores))
     ranking = np.argsort(-(scores + noise))
     return ranking
