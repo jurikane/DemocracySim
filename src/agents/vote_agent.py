@@ -116,6 +116,11 @@ class VoteAgent(Agent):
             cell = model.grid.get_cell_list_contents([(col, row)])[0]
             cell.add_agent(self)
         # Election relevant variables
+        self._eligible_for_election = True
+        self._fee = 0.0
+        self._reward_pers_comp = 0.0
+        self._reward_common_comp = 0.0
+
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
         self.award_history: List[float] = []
@@ -169,7 +174,35 @@ class VoteAgent(Agent):
     def num_elections_participated(self, value):
         self._num_elections_participated = value
 
-    def update_known_cells(self, area: Area):
+    @property
+    def election_delta_signal(self) -> float:
+        """Return the per-election asset delta signal for participation learning."""
+        return self._reward_pers_comp + self._reward_common_comp - self._fee
+
+    @property
+    def eligible_for_election(self) -> bool:
+        return self._eligible_for_election
+
+    def mark_ineligible_for_election(self) -> None:
+        self._eligible_for_election = False
+
+    def set_election_fee(self, fee: float) -> None:
+        self._fee = float(fee)
+
+    def add_common_reward(self, amount: float) -> None:
+        self._reward_common_comp += float(amount)
+
+    def add_personal_reward(self, amount: float) -> None:
+        self._reward_pers_comp += float(amount)
+
+    def reset_election_variables(self) -> None:
+        """Reset per-election variables before the next election."""
+        self._eligible_for_election = True
+        self._fee = 0.0
+        self._reward_pers_comp = 0.0
+        self._reward_common_comp = 0.0
+
+    def update_known_cells(self, area: Area) -> None:
         """
         This method is to update the list of known cells before casting a vote.
 
@@ -184,16 +217,14 @@ class VoteAgent(Agent):
             else area.cells
         )
 
-    def reward_agent(self, reward: float):
+    def reward_agent(self) -> None:
         """
         Reward the agent by increasing/decreasing her assets.
         And save the awarded amount in the agent's history.
-
-        Args:
-            reward (int): The amount to increase/decrease the assets by.
         """
-        self.award_history.append(reward)
-        self.assets += reward
+        total_asset_delta = self.election_delta_signal
+        self.award_history.append(total_asset_delta)
+        self.assets += total_asset_delta
         if self.assets < 0:
             self.assets = 0  # Ensure assets don't go negative
 

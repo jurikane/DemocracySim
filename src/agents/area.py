@@ -37,7 +37,6 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
-        self._eligible_assets_before_last: dict[int, float] = {}
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -225,7 +224,6 @@ class Area(Agent):
         """
         # Ask agents for participation and their votes
         preference_profile = self._tally_votes()
-        eligible_assets_before = getattr(self, "_eligible_assets_before_last", {})
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
             # Set to previous outcome but don't distribute rewards as usual
@@ -241,7 +239,8 @@ class Area(Agent):
             )
             # Slightly punish for non-participation
             for a in self.agents:
-                a.reward_agent(-1)
+                a.add_common_reward(-1)
+                a.reward_agent()  # Apply the penalty
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         rule = self.model.voting_rule
@@ -258,12 +257,10 @@ class Area(Agent):
 
         # --- Adaptive participation learning update (per election, eligible agents only) ---
         for a in self.agents:
-            # Eligible agents are exactly those evaluated in _tally_votes(): assets_before present
-            before = eligible_assets_before.get(a.unique_id)
-            if before is None:
+            # Eligible agents are exactly those evaluated in _tally_votes()
+            if not a.eligible_for_election:
                 continue
-            delta_assets = float(a.assets) - float(before)
-            a.apply_participation_update(delta_assets)
+            a.apply_participation_update(a.election_delta_signal)
 
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
@@ -286,20 +283,16 @@ class Area(Agent):
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_costs
 
-        # Reset per-election eligible-assets map for learning.
-        self._eligible_assets_before_last = {}
-
         # Optional schema-v2 vote sink (Batch 2): logger attaches a callable here.
         vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
 
         for agent in self.agents:
-
+            # Reset per-election asset delta signal for learning.
+            agent.reset_election_variables()
             # Eligibility: agents with assets <= 0 are skipped (no learning update).
             if agent.assets <= 0:
+                agent.mark_ineligible_for_election()
                 continue
-
-            # Eligible: record assets_before for learning (decision is a valid action).
-            self._eligible_assets_before_last[int(agent.unique_id)] = float(agent.assets)
 
             # election_costs is treated as a percent (0..100) of current assets.
             cost = int(agent.assets * el_cost_rate)
@@ -311,8 +304,8 @@ class Area(Agent):
                 agent.num_elections_participated += 1
                 # Give agents their (new) known fields
                 agent.update_known_cells(area=self)
-                # Collect the participation fee into the area pool
-                agent.assets = agent.assets - cost
+                # Collect the participation _fee into the area pool
+                agent.set_election_fee(cost)  # Fee will be applied when rewards are distributed
                 self._election_fee_pool += cost
                 # Ask the agent for her preference
                 ranking = agent.vote(area=self)
@@ -365,7 +358,9 @@ class Area(Agent):
             #   the higher the reward for the agent.
             p = dist_func(a.personality, self.voted_ordering, color_search_pairs)
             pers_component = (1 - p) * pool_share
-            a.reward_agent(pers_component + common_component)
+            a.add_personal_reward(pers_component)
+            a.add_common_reward(common_component)
+            a.reward_agent()  # Apply the accumulated rewards/penalties to assets
 
     def _update_color_distribution(self) -> None:
         """
