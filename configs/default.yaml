@@ -29,6 +29,9 @@ model:
   av_area_width: 20
   area_size_variance: 0.0
 
+  # Per-agent personal_opt_dist (static)
+  personal_opt_dist_concentration: 1.0
+
 visualization:
   cell_size: 10
   draw_borders: true

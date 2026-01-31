@@ -136,11 +136,27 @@ class RunLoggerV2:
 
         # Optional: personality metadata if present (useful for replay UI)
         raw_personalities = getattr(model, "personalities", None)
-        if raw_personalities is not None:
+        global_pers_dist = getattr(model, "personality_distribution", None)
+        if raw_personalities is not None and global_pers_dist is not None:
             static["personality_info"] = {
                 "personalities": _to_python(np.asarray(raw_personalities)),
-                "global_distribution": _to_python(getattr(model, "personality_distribution", None)),
+                "global_distribution": _to_python(global_pers_dist),
             }
+
+        # Optional: per-agent static personal_opt_dist
+        agents = list(model.voting_agents)
+        if agents:
+            pod: dict[str, list[float]] = {}
+            for a in agents:
+                if a is None:
+                    continue
+                dist = getattr(a, "personal_opt_dist", None)
+                if dist is None:
+                    continue
+                pod[str(a.unique_id)] = _to_python(np.asarray(dist, dtype=np.float32))
+            if pod:
+                # static.json is a heterogeneous JSON payload; keep typing flexible here.
+                static["personal_opt_dist"] = pod  # type: ignore[assignment]
 
         import json
 

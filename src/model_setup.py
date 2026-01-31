@@ -40,6 +40,8 @@ _ALLOWED_KW = {
     "participation_beta",
     "participation_init_q",
     "participation_q_max",
+    # Per-agent personal_opt_dist
+    "personal_opt_dist_concentration",
 }
 
 

@@ -85,7 +85,7 @@ class VoteAgent(Agent):
     """An agent with resources and preferences that may participate in elections."""
 
     def __init__(self, unique_id, model: ParticipationModel, pos,
-                 personality=None, personality_idx=None, assets=1, add=True, policy: Policy | None = None):
+                 personality, personality_idx=None, assets=1, add=True, policy: Policy | None = None):
         """ Create a new agent.
 
         Attributes:
@@ -124,6 +124,11 @@ class VoteAgent(Agent):
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
         self.award_history: List[float] = []
+
+        # Per-agent personal_opt_dist (static)
+        # A distribution over colors that is consistent with the agent's
+        # personality ordering. Aka refined personality representation.
+        self.personal_opt_dist: np.ndarray = self._init_personal_opt_dist()
 
         # --- Adaptive participation learning (global per agent) ---
         init_q = getattr(model, "participation_init_q", 0.0)
@@ -330,3 +335,45 @@ class VoteAgent(Agent):
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = float(q)
+
+    def _init_personal_opt_dist(self) -> np.ndarray:
+        """Create a per-agent personal_opt_dist (distribution)
+        consistent with the agent's personality.
+
+        Contract:
+        - nonnegative
+        - sums to 1
+        - argsort(personal_opt_dist)[::-1] equals the personality ordering
+        """
+        # Fallback if no proper model personality context exists (DummyModel).
+        num_colors = int(getattr(self.model, "num_colors") or 0)
+        if num_colors <= 0:
+            return np.asarray([], dtype=np.float32)
+
+        personality = np.asarray(self.personality)
+        conc = getattr(self.model, "personal_opt_dist_concentration", 1.0)
+        conc = max(conc, 1e-8)  # Avoid zero concentration
+
+        # Sample positive intensities, sort descending, then assign by rank position.
+        rng = self.model.np_random
+        vals = rng.exponential(scale=1.0, size=num_colors).astype(np.float64)
+        # Concentration: >1 makes the distribution more peaked; <1 flattens.
+        vals = np.power(vals + 1e-12, conc)
+        vals.sort()
+        vals = vals[::-1]
+
+        # Assign values according to personality ranking.
+        dist = np.zeros(num_colors, dtype=np.float64)
+        for rank_pos in range(num_colors):
+            color = int(personality[rank_pos])
+            dist[color] = float(vals[rank_pos])
+
+        # Normalize to sum to 1.
+        s = float(dist.sum())
+        if s <= 0:
+            dist[:] = 1.0 / num_colors
+        else:
+            dist /= s
+
+        return dist.astype(np.float32)
+

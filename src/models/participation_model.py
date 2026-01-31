@@ -139,6 +139,7 @@ class ParticipationModel(mesa.Model):
         participation_beta: float = 1.0,
         participation_init_q: float = 0.0,
         participation_q_max: float = 50.0,
+        personal_opt_dist_concentration: float = 1.0,
     ):
         super().__init__()
         self._seed = seed
@@ -149,6 +150,7 @@ class ParticipationModel(mesa.Model):
         self.participation_beta = float(participation_beta)
         self.participation_init_q = float(participation_init_q)
         self.participation_q_max = float(participation_q_max)
+        self.personal_opt_dist_concentration = personal_opt_dist_concentration
 
         # Initialize RNGs early
         if seed is not None:
@@ -282,7 +284,7 @@ class ParticipationModel(mesa.Model):
         if self.num_agents < 1:
             raise ValueError("The number of agents must be at least 1.")
         dist = self.personality_distribution
-        assets = self.common_assets // self.num_agents
+        assets = self.common_assets // self.num_agents  # TODO: always equal dist?
         nr = len(self.personalities)
         for idx in range(self.num_agents):
             # Assign unique ID after areas

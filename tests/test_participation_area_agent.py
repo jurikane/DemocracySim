@@ -62,7 +62,8 @@ class TestAreaBasics(unittest.TestCase):
         area = Area(1, self.dummy_model, 2, 2, 0)
         cell = ColorCell(10, self.dummy_model, (0, 0), 1)
         area.add_cell(cell)
-        dummy_agent = VoteAgent(1, self.dummy_model, (0, 0))
+        dummy_agent = VoteAgent(1, self.dummy_model, (0, 0),
+                                personality=list(range(self.dummy_model.num_colors)))
         area.add_agent(dummy_agent)
 
         self.assertIn(cell, area.cells)
