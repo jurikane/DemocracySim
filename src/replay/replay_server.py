@@ -279,9 +279,9 @@ class ReplayModel(mesa.Model):
         self._width = int(static.get("width", getattr(appcfg.model, "width", 1)))
         self._num_colors = int(static.get("num_colors", getattr(appcfg.model, "num_colors", 2)))
 
-        # Populate static personality info expected by visualization elements
+        # Populate static personality_group info expected by visualization elements
         # (must run before we build area stubs)
-        self._load_static_personality_info()
+        self._load_static_personality_group_info()
 
         # Expose static voter counts for analysis/UI use
         self.total_voters = int(static.get("total_voters", 0) or 0)
@@ -291,8 +291,8 @@ class ReplayModel(mesa.Model):
         self.grid = mesa.space.SingleGrid(height=self._height, width=self._width, torus=True)
         self.color_cells: list[ColorCell] = []
 
-        # Areas are not simulated in replay, but AreaPersonalityDists expects area objects.
-        self.areas = self._build_area_stubs_from_personalities()
+        # Areas are not simulated in replay, but AreaPersonalityGroupDists expects area objects.
+        self.areas = self._build_area_stubs_from_personality_groups()
         self.voting_agents = []
 
         # Load npy static data if present
@@ -353,34 +353,34 @@ class ReplayModel(mesa.Model):
             return True
         return False
 
-    def _load_static_personality_info(self) -> None:
-        payload = self.data.load_static().get("personality_info") or {}
-        self.personalities = np.array(payload.get("personalities") or [])
-        self.personality_distribution = payload.get("global_distribution") or []
-        self._areas_personality_payload = payload.get("areas") or {}
+    def _load_static_personality_group_info(self) -> None:
+        payload = self.data.load_static().get("personality_group_info") or {}
+        self.personality_groups = np.array(payload.get("personality_groups") or [])
+        self.personality_group_distribution = payload.get("global_distribution") or []
+        self._areas_personality_group_payload = payload.get("areas") or {}
 
-    def _build_area_stubs_from_personalities(self):
+    def _build_area_stubs_from_personality_groups(self):
         class _AreaStub:
-            def __init__(self, unique_id: int, num_agents: int | None, personality_distribution):
+            def __init__(self, unique_id: int, num_agents: int | None, personality_group_distribution):
                 self.unique_id = unique_id
                 self.num_agents = int(num_agents) if num_agents is not None else 0
-                self.personality_distribution = personality_distribution or []
+                self.personality_group_distribution = personality_group_distribution or []
                 self.color_distribution = []  # For tooltip compatibility
 
         stubs = []
-        for aid, rec in (self._areas_personality_payload or {}).items():
+        for aid, rec in (self._areas_personality_group_payload or {}).items():
             aid = int(aid)
             stubs.append(_AreaStub(aid, rec.get("num_agents"),
-                                   rec.get("personality_distribution")))
+                                   rec.get("personality_group_distribution")))
         stubs.sort(key=lambda a: a.unique_id)
         return stubs
 
     def _build_agent_stubs(self, agents_str):
         class _VoterStub:
             def __init__(self, vote_agent_str: str):
-                aid, personality = vote_agent_str.split(": ")
+                aid, personality_group = vote_agent_str.split(": ")
                 self.unique_id = int(aid)
-                self.personality = personality
+                self.personality_group = personality_group
                 self.assets = "-"
 
         return [_VoterStub(a_str) for a_str in agents_str.split(", ")]

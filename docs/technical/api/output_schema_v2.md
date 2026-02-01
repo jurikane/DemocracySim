@@ -11,7 +11,7 @@ This document is the human-readable contract for the on-disk outputs produced by
 Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 
 - `meta.yaml` – config + seed + schema metadata
-- `static.json` – static model info (grid size, personalities, file patterns)
+- `static.json` – static model info (grid size, personality_groups, file patterns)
 - `steps.parquet`
 - `area_steps.parquet`
 - `agents.parquet`
@@ -97,7 +97,7 @@ Agent snapshot table (**agent state only**).
 | col                        |   int16 |                                              |
 | assets                     | float32 | matches simulation internal type             |
 | num_elections_participated |   int32 | cumulative counter across all areas/steps    |
-| personality_idx            |   int16 |                                              |
+| personality_group_idx            |   int16 |                                              |
 
 **Semantics:** the row for step `t` represents the agent’s final state after it
 participated in all elections it was eligible for during step `t`.

@@ -9,7 +9,7 @@ DemocracySim is set in a grid-based environment where agents interact with their
 ### Agents:
 - Agents are equipped with a basic artificial intelligence system and operate under a **"top-down" model**, learning decision-making strategies via training.
 - Each agent has a **limited budget** and must decide whether to participate in elections.
-- Agents have individual **preferences** over colors (called *personalities*) and are divided into **y** randomly distributed personality types.  
+- Agents have individual **preferences** over colors (called *personalities*) and are divided into **y** randomly distributed personality group types.  
   *(The distribution of types forms majority-minority situations.)*
 
 ### Elections and Rewards (Two Dilemmas):

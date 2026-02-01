@@ -17,7 +17,7 @@ model:
   # seed: 42 (optional))
 
   # Voting Agents
-  num_personalities: 4
+  num_personality_groups: 4
 
   # Grid parameters
   height: 100

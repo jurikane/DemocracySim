@@ -81,7 +81,7 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
         # Add agent info (tooltips)
         for voter in agent.agents:
             p[f"Agent {voter.unique_id}"] = \
-                f"personality: {voter.personality}, assets: {voter.assets}"
+                f"personality_group: {voter.personality_group}, assets: {voter.assets}"
 
         return p
 
@@ -117,18 +117,18 @@ def make_charts(cfg: AppConfig) -> list:
 
     # Advanced matplotlib-based elements
     from src.viz.visualisation_elements import (
-        PersonalityDistribution,
+        PersonalityGroupDistribution,
         AreaStats,
         VoterTurnoutElement,
         AreaGiniElement,
-        AreaPersonalityDists,
+        AreaPersonalityGroupDists,
     )
     extras = [
-        PersonalityDistribution(),
+        PersonalityGroupDistribution(),
         AreaStats(),
         VoterTurnoutElement(),
         AreaGiniElement(),
-        AreaPersonalityDists(),
+        AreaPersonalityGroupDists(),
     ]
 
     return [color_distribution_chart, wealth_chart, voter_turnout, *extras]

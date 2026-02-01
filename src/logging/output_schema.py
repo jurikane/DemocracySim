@@ -158,7 +158,7 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "col",
     "assets",
     "num_elections_participated",
-    "personality_idx",
+    "personality_group_idx",
 )
 
 AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -171,7 +171,7 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     # assets must match simulation internal type; allow float.
     "assets": "float32",
     "num_elections_participated": "int32",
-    "personality_idx": "int16",
+    "personality_group_idx": "int16",
 }
 
 AGENTS_TABLE: Final[TableSchema] = TableSchema(

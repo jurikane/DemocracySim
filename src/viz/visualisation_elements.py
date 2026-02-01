@@ -86,43 +86,43 @@ class AreaStats(TextElement):
         return save_plot_to_base64(fig)
 
 
-class PersonalityDistribution(TextElement):
+class PersonalityGroupDistribution(TextElement):
     def __init__(self):
         super().__init__()
         self.pers_dist_plot = None
 
     def create_once(self, model):
         try:
-            dists = getattr(model, 'personality_distribution', None)
-            personalities = getattr(model, 'personalities', None)
-            if dists is None or personalities is None:
+            dists = getattr(model, 'personality_group_distribution', None)
+            personality_groups = getattr(model, 'personality_groups', None)
+            if dists is None or personality_groups is None:
                 self.pers_dist_plot = ""
                 return
-            num_personalities = personalities.shape[0]
+            num_personality_groups = personality_groups.shape[0]
             num_agents = getattr(model, 'num_agents', 0)
             colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
-            num_colors = len(personalities[0])
+            num_colors = len(personality_groups[0])
         except(IndexError, TypeError):
             self.pers_dist_plot = ""
             return
 
         fig, ax = plt.subplots(figsize=(6, 4))
         heights = dists
-        bars = ax.bar(range(num_personalities), heights, width=0.6)
+        bars = ax.bar(range(num_personality_groups), heights, width=0.6)
 
-        for bar, personality in zip(bars, personalities):
+        for bar, personality_group in zip(bars, personality_groups):
             height = bar.get_height()
             width = bar.get_width()
-            for i, color_idx in enumerate(personality):
+            for i, color_idx in enumerate(personality_group):
                 rect_width = width / num_colors
                 coords = (bar.get_x() + i * rect_width, 0)
                 rect = patches.Rectangle(coords, rect_width, height,
                                          color=colors[color_idx])
                 ax.add_patch(rect)
 
-        ax.set_xlabel('"Personality" ID')
+        ax.set_xlabel('"Personality Group" ID')
         ax.set_ylabel(f'Percentage of the {num_agents} Agents')
-        ax.set_title('Global distribution of personalities among agents')
+        ax.set_title('Global distribution of personality groups among agents')
         plt.tight_layout()
         self.pers_dist_plot = save_plot_to_base64(fig)
 
@@ -222,7 +222,7 @@ class StepsTextElement(TextElement):
                 f"{len(getattr(model, 'voting_agents', []))}: {first_agents}")
 
 
-class AreaPersonalityDists(TextElement):
+class AreaPersonalityGroupDists(TextElement):
     def __init__(self):
         super().__init__()
         self.areas_pers_dist_plot = None
@@ -230,12 +230,12 @@ class AreaPersonalityDists(TextElement):
     def create_once(self, model):
         try:
             colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
-            personalities = getattr(model, 'personalities', None)
-            if personalities is None:
+            personality_groups = getattr(model, 'personality_groups', None)
+            if personality_groups is None:
                 self.areas_pers_dist_plot = ""
                 return
-            num_colors = len(personalities[0])
-            num_personalities = personalities.shape[0]
+            num_colors = len(personality_groups[0])
+            num_personality_groups = personality_groups.shape[0]
             num_areas = len(getattr(model, 'areas', []))
         except (TypeError, IndexError, AttributeError, ValueError):
             self.areas_pers_dist_plot = ""
@@ -255,24 +255,24 @@ class AreaPersonalityDists(TextElement):
         )
         axes_flat = axes.flatten() if hasattr(axes, "flatten") else [axes]
         for ax, area in zip(axes_flat, getattr(model, 'areas', [])):
-            p_dist = getattr(area, 'personality_distribution', [])
+            p_dist = getattr(area, 'personality_group_distribution', [])
             num_agents = getattr(area, 'num_agents', 0)
             heights = [int(val * num_agents) for val in p_dist] if p_dist else []
-            bars = ax.bar(range(num_personalities), heights, color='skyblue')
+            bars = ax.bar(range(num_personality_groups), heights, color='skyblue')
             max_height = max(heights) if heights else 1
             p_top_height = max_height * 0.02
 
-            for bar, personality in zip(bars, personalities):
+            for bar, personality_group in zip(bars, personality_groups):
                 height = bar.get_height()
                 width = bar.get_width()
-                for i, color_idx in enumerate(personality):
+                for i, color_idx in enumerate(personality_group):
                     rect_width = width / num_colors
                     coords = (bar.get_x() + i * rect_width, height)
                     rect = patches.Rectangle(coords, rect_width, p_top_height,
                                              color=colors[color_idx])
                     ax.add_patch(rect)
 
-            ax.set_xlabel('"Personality" ID')
+            ax.set_xlabel('"Personality Group" ID')
             ax.set_ylabel('Number of Agents')
             ax.set_title(f'Area {getattr(area, "unique_id", "?")}')
 

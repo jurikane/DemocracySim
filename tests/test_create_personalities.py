@@ -11,47 +11,47 @@ class TestParticipationModel(unittest.TestCase):
         """Create a fresh model instance before each test and mock `initialize_area`."""
         self.model, _ = create_test_model(
             height=10, width=10, num_agents=100, num_colors=4,
-            num_personalities=10, area_size_variance=0.2,
+            num_personality_groups=10, area_size_variance=0.2,
             num_areas=4, av_area_height=5, av_area_width=5,
             heterogeneity=0.5,
         )
         self.model.initialize_area = MagicMock()
 
 
-    def test_create_personalities_shape(self):
-        """Test that the generated personalities array has the correct shape."""
-        for n_personalities in range(2, 15):
-            personalities = self.model.create_personalities(n_personalities)
-            self.assertEqual(personalities.shape,
-                             (n_personalities, self.model.num_colors))
+    def test_create_personality_groups_shape(self):
+        """Test that the generated personality_groups array has the correct shape."""
+        for n_personality_groups in range(2, 15):
+            personality_groups = self.model.create_personality_groups(n_personality_groups)
+            self.assertEqual(personality_groups.shape,
+                             (n_personality_groups, self.model.num_colors))
 
-    def test_create_personalities_uniqueness(self):
-        """Test that the generated personalities are unique."""
-        n_personalities = 12
-        personalities = self.model.create_personalities(n_personalities)
-        unique_personalities = set(map(tuple, personalities))
-        self.assertEqual(len(unique_personalities), n_personalities)
+    def test_create_personality_groups_uniqueness(self):
+        """Test that the generated personality_groups are unique."""
+        n_personality_groups = 12
+        personality_groups = self.model.create_personality_groups(n_personality_groups)
+        unique_personality_groups = set(map(tuple, personality_groups))
+        self.assertEqual(len(unique_personality_groups), n_personality_groups)
 
-    def test_create_personalities_max_limit(self):
+    def test_create_personality_groups_max_limit(self):
         """Test that the method raises an error when
         n exceeds the total number of permutations."""
         assert self.model.num_colors == 4  # 4! = 24 unique permutations
-        n_personalities = 25
+        n_personality_groups = 25
         with self.assertRaises(ValueError):
-            self.model.create_personalities(n_personalities)
+            self.model.create_personality_groups(n_personality_groups)
 
-    def test_create_personalities_minimum_input(self):
-        """Test that the method can handle generating a single personality."""
-        personalities = self.model.create_personalities(1)
-        self.assertEqual(personalities.shape, (1, self.model.num_colors))
+    def test_create_personality_groups_minimum_input(self):
+        """Test that the method can handle generating a single personality_group."""
+        personality_groups = self.model.create_personality_groups(1)
+        self.assertEqual(personality_groups.shape, (1, self.model.num_colors))
 
-    def test_create_personalities_full_permutation(self):
+    def test_create_personality_groups_full_permutation(self):
         """Test that generating the full set of permutations does return all."""
         num_colors = self.model.num_colors
-        n_personalities = factorial(num_colors)
-        personalities = self.model.create_personalities(n_personalities)
+        n_personality_groups = factorial(num_colors)
+        personality_groups = self.model.create_personality_groups(n_personality_groups)
         expected_permutations = set(permutations(range(num_colors)))
-        self.assertEqual(set(map(tuple, personalities)), expected_permutations)
+        self.assertEqual(set(map(tuple, personality_groups)), expected_permutations)
 
 
 if __name__ == '__main__':

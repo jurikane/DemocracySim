@@ -15,7 +15,7 @@ def _sigmoid(x: float) -> float:
 
 class Policy(Protocol):
     def decide_participation(self, agent, area) -> bool: ...
-    def decide_altruism(self, agent, area) -> float: ...
+    def decide_altruism_factor(self, agent, area) -> float: ...
     def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
 
 
@@ -31,18 +31,18 @@ class ParticipationPolicy:
         # Use the model-level seeded NumPy RNG for determinism.
         return bool(float(agent.model.np_random.random()) < p)
 
-    def decide_altruism(self, agent, area) -> float:
+    def decide_altruism_factor(self, agent, area) -> float:
         # TODO do this properly
         # should we change the name "altruism_factor" to "cooperation_factor" or "reality-weight"?
         return agent.random.uniform(0.0, 1.0)
 
     def rank_options(self, agent, area, options: Any) -> np.ndarray:
-        # Use existing distance function; identical to original vote logic.
+        # Use existing distance function; personality_group is an ORDERING.
         dist_func = agent.model.distance_func
         ranking = np.zeros(options.shape[0])
         color_search_pairs = agent.model.color_search_pairs
         for i, option in enumerate(options):
-            ranking[i] = dist_func(agent.personality, option, color_search_pairs)
+            ranking[i] = dist_func(agent.personality_group, option, color_search_pairs)
         ranking /= ranking.sum() if ranking.sum() else 1.0
         return ranking
 
@@ -57,11 +57,11 @@ def combine_and_normalize(arr_1: np.ndarray, arr_2: np.ndarray, factor: float):
     """
     Combine two arrays weighted by a factor favoring arr_1.
     The first array is to be the estimated real distribution.
-    And the other is to be the personality vector of the agent.
+    And the other is to be the personality_group vector of the agent.
 
     Args:
         arr_1 (np.array): Estimated real distribution.
-        arr_2 (np.array): Personality vector.
+        arr_2 (np.array): Personality group vector.
         factor (float): Weight for arr_1.
 
     Returns:
@@ -85,16 +85,18 @@ class VoteAgent(Agent):
     """An agent with resources and preferences that may participate in elections."""
 
     def __init__(self, unique_id, model: ParticipationModel, pos,
-                 personality, personality_idx=None, assets=1, add=True, policy: Policy | None = None):
+                 personality_group, personality_group_idx=None, assets=1, add=True, policy: Policy | None = None):
         """ Create a new agent.
 
         Attributes:
             unique_id: The unique identifier of the agent.
             model: The simulation model of which the agent is part of.
             pos (int, int): The position of the agent in the grid (col, row).
-            personality: Represents the agent's preferences among colors.
-            personality_idx: Index of personality in model's personalities list.
+            personality_group: Represents the agent's preferences among colors.
+            personality_group_idx: Index of personality group in model's personality_groups list.
             assets: The wealth/assets/motivation of the agent.
+            add: Whether to add the agent to the model's agent list and cell.
+            policy: The behavior strategy of the agent.
         """
         super().__init__(unique_id=unique_id, model=model)
         # The "pos" variable in mesa is special, so I avoid it here
@@ -105,13 +107,21 @@ class VoteAgent(Agent):
         self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = assets
         self._num_elections_participated = 0
-        self.personality = personality  # Is an order of the available colors
-        self.personality_idx = personality_idx
+
+        # --- Representation contract (thesis):
+        # personality_group: ColorOrdering (permutation)
+        # personality: ColorDistribution (per-agent color intensity dist)
+        self.personality_group = np.asarray(personality_group)  # ordering / group identity
+        self.personality_group_idx = personality_group_idx
+
+        # Backward-compat: some code/tests still expect ordering under `.personality`.
+        # We keep an explicit accessor for that ordering.
+        # (Do NOT use `.personality_group_ordering` for new code; use `.personality_group`.)
+
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
         # ColorCell objects the agent knows (knowledge)
         self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells
-        # Add the agent to the models' agent list and the cell
-        if add:
+        if add:  # Add the agent to the models' agent list and the cell
             model.voting_agents.append(self)
             cell = model.grid.get_cell_list_contents([(col, row)])[0]
             cell.add_agent(self)
@@ -125,10 +135,9 @@ class VoteAgent(Agent):
         self.confidence = 0.0
         self.award_history: List[float] = []
 
-        # Per-agent personal_opt_dist (static)
-        # A distribution over colors that is consistent with the agent's
-        # personality ordering. Aka refined personality representation.
+        # Per-agent personality color-distribution (static), consistent with personality_group.
         self.personal_opt_dist: np.ndarray = self._init_personal_opt_dist()
+        # Preferred naming: expose distribution as `.personality`
 
         # --- Adaptive participation learning (global per agent) ---
         init_q = getattr(model, "participation_init_q", 0.0)
@@ -139,7 +148,7 @@ class VoteAgent(Agent):
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
-                f"personality={self.personality}, assets={self.assets})")
+                f"personality_group={self.personality_group}, assets={self.assets})")
 
     @property
     def position(self) -> tuple:
@@ -258,41 +267,41 @@ class VoteAgent(Agent):
         """
         # TODO Implement this (is to be decided upon a learned decision tree)
         # This part is important - also for monitoring - save/plot a_factors
-        a_factor = self.policy.decide_altruism(self, area)
+        a_factor = self.policy.decide_altruism_factor(self, area)
         return a_factor
 
     def compute_assumed_opt_dist(self, area: Area) -> np.ndarray:
-        """
-        Computes a color distribution that the agent assumes to be an optimal
-        choice in any election (regardless of whether it exists as a real option
-        to vote for or not). It takes "altruistic" concepts into consideration.
+        """Compute the distribution the agent uses as its internal 'ideal' for voting.
+
+        Mix self-interest vs reality-tracking.
+        - self-interest is represented by personal_opt_dist (static, per agent)
+        - reality-tracking is represented by the agent's estimated reality
+
+        altruism_factor semantics:
+        - 0.0 => purely self-interest (personal_opt_dist)
+        - 1.0 => purely reality-tracking (est_real_dist)
 
         Args:
-            area (Area): The area in which the election takes place.
-
+            area (Area): The area the agent is voting in.
         Returns:
-            np.array: The assumed optimal color distribution (normalized).
+            np.ndarray: The assumed optimal color distribution (normalized).
         """
-        # TODO PRIO 4 (this part is not used) => think about using personality
-        #  as dist and personality_idx as is (pointer to ordering) and use either a
-        #  s required | also think about making classes for orders and dists
-        #  to not confuse them and have it set up correctly and well documented
-        # Compute the "altruism_factor" via a decision tree
-        a_factor = self.decide_altruism_factor(area)  # TODO: Implement this
-        # Compute the preference ranking vector as a mix between the agent's own
-        #   preferences/personality traits and the estimated real distribution.
-        est_dist, conf = self.estimate_real_distribution(area)
-        ass_opt = combine_and_normalize(est_dist, self.personality, a_factor)
-        return ass_opt
+        a_factor = float(self.decide_altruism_factor(area))
+        # Clamp for safety (policy may not respect bounds yet)
+        a_factor = float(np.clip(a_factor, 0.0, 1.0))
+
+        est_dist, _conf = self.estimate_real_distribution(area)
+        personal = np.asarray(self.personal_opt_dist, dtype=np.float32)
+        if personal.ndim != 1 or personal.shape[0] != est_dist.shape[0]:
+            raise ValueError("personal_opt_dist shape mismatch with estimated distribution")
+        # Combine and normalize to a distribution
+        return combine_and_normalize(est_dist, personal, a_factor)
 
     def vote(self, area: Area):
-        """Return a normalized preference ranking vector over all options."""
-        # TODO Implement this (is to be decided upon a learned decision tree)
-        # Compute the color distribution that is assumed to be the best choice.
-        est_best_dist = self.compute_assumed_opt_dist(area)  # TODO !!! (Why is this not used ???)
-        # Make sure that r= is normalized!
-        # (r.min()=0.0 and r.max()=1.0 and all vals x are within [0.0, 1.0]!)
-        ##############
+        """Return a normalized 'oppose score' vector over all options.
+
+        Lower score = better (less opposition / closer to the agent's assumed-optimal).
+        """
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
 
@@ -336,21 +345,34 @@ class VoteAgent(Agent):
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = float(q)
 
+    @property
+    def personality_group_ordering(self) -> np.ndarray:
+        """Backward-compat accessor for the ordering (ColorOrdering)."""
+        return self.personality_group
+
+    @property
+    def personality(self) -> np.ndarray:
+        """Per-agent preferred color distribution (ColorDistribution).
+
+        Note: the ordering / group identity is `personality_group`.
+        """
+        return self.personal_opt_dist
+
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)
-        consistent with the agent's personality.
+        consistent with the agent's personality_group.
 
         Contract:
         - nonnegative
         - sums to 1
-        - argsort(personal_opt_dist)[::-1] equals the personality ordering
+        - argsort(personal_opt_dist)[::-1] equals personality_group
         """
-        # Fallback if no proper model personality context exists (DummyModel).
+        # Fallback if no proper model personality_group context exists (DummyModel).
         num_colors = int(getattr(self.model, "num_colors") or 0)
         if num_colors <= 0:
             return np.asarray([], dtype=np.float32)
 
-        personality = np.asarray(self.personality)
+        personality_group = np.asarray(self.personality_group)
         conc = getattr(self.model, "personal_opt_dist_concentration", 1.0)
         conc = max(conc, 1e-8)  # Avoid zero concentration
 
@@ -362,10 +384,10 @@ class VoteAgent(Agent):
         vals.sort()
         vals = vals[::-1]
 
-        # Assign values according to personality ranking.
+        # Assign values according to personality_group ranking.
         dist = np.zeros(num_colors, dtype=np.float64)
         for rank_pos in range(num_colors):
-            color = int(personality[rank_pos])
+            color = int(personality_group[rank_pos])
             dist[color] = float(vals[rank_pos])
 
         # Normalize to sum to 1.

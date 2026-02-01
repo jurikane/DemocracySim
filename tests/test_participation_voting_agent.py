@@ -10,9 +10,9 @@ class TestVotingAgent(unittest.TestCase):
 
     def setUp(self):
         self.model, self.model_cfg = create_test_model()
-        personality = random.choice(self.model.personalities)
+        personality_group = random.choice(self.model.personality_groups)
         self.agent = VoteAgent(self.model_cfg["num_agents"] + 1, self.model,
-                               pos=(0, 0), personality=personality, assets=25)
+                               pos=(0, 0), personality_group=personality_group, assets=25)
         self.additional_test_area = Area(self.model.num_areas + 1,
                                          model=self.model, height=5,
                                          width=5, size_variance=0)

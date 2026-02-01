@@ -119,7 +119,7 @@ def get_agent_strings_per_cell_grid(model) -> np.ndarray:
     h, w = grid.height, grid.width
 
     def agents_to_str(agents) -> str:
-        return ", ".join(f"{a.unique_id}: {a.personality}" for a in agents)
+        return ", ".join(f"{a.unique_id}: {a.personality_group}" for a in agents)
 
     flat = [
         agents_to_str(cell.agents) if cell is not None else ""

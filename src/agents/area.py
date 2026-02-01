@@ -28,7 +28,7 @@ class Area(Agent):
         super().__init__(unique_id=unique_id,  model=model)
         self._set_dimensions(width, height, size_variance)
         self.agents: List["VoteAgent"] = []
-        self._personality_distribution = None
+        self._personality_group_distribution = None
         self.cells: List["ColorCell"] = []
         self._idx_field = None  # An indexing position of the area in the grid
         self._color_distribution = np.zeros(model.num_colors) # Initialize to 0
@@ -84,8 +84,8 @@ class Area(Agent):
         return self._width * self._height
 
     @property
-    def personality_distribution(self):
-        return self._personality_distribution
+    def personality_group_distribution(self):
+        return self._personality_group_distribution
 
     @property
     def color_distribution(self):
@@ -169,23 +169,23 @@ class Area(Agent):
                     cell.is_border_cell = True
         self._idx_field = (adjusted_x, adjusted_y)
         self._update_color_distribution()
-        self._update_personality_distribution()
+        self._update_personality_group_distribution()
 
-    def _update_personality_distribution(self) -> None:
+    def _update_personality_group_distribution(self) -> None:
         """
-        This method calculates the areas current distribution of personalities.
+        This method calculates the areas current distribution of personality groups.
         """
-        personalities = list(self.model.personalities)
-        p_counts = {str(i): 0 for i in personalities}
-        # Count the occurrence of each personality
+        personality_groups = list(self.model.personality_groups)
+        p_counts = {str(i): 0 for i in personality_groups}
+        # Count the occurrence of each personality_group (color ordering)
         for agent in self.agents:
-            p_counts[str(agent.personality)] += 1
+            p_counts[str(agent.personality_group)] += 1
         # Normalize the counts
         if self.num_agents == 0:
-            self._personality_distribution = [0 for _ in personalities]
+            self._personality_group_distribution = [0 for _ in personality_groups]
         else:
-            self._personality_distribution = [p_counts[str(p)] / self.num_agents
-                                              for p in personalities]
+            self._personality_group_distribution = [p_counts[str(p)] / self.num_agents
+                                              for p in personality_groups]
 
     def add_agent(self, agent: VoteAgent) -> None:
         """
@@ -275,7 +275,7 @@ class Area(Agent):
         respect to the available options. These values are combined into a NumPy array.
 
         Returns:
-            np.ndarray: A 2D array where each row corresponds to an agent's vote
+            np.ndarray: A 2D array where each row corresponds to an agents' vote
             and each column corresponds to an option.
         """
         preference_profile = []
@@ -354,9 +354,13 @@ class Area(Agent):
         color_search_pairs = model.color_search_pairs
         for a in self.agents:
             # Personality-based reward factor
-            #   the closer the elected outcome to the agent's personality.
+            #   the closer the elected outcome to the agent's personality_group.
             #   the higher the reward for the agent.
-            p = dist_func(a.personality, self.voted_ordering, color_search_pairs)
+            #
+            # TODO(thesis): later switch this to a centralized distribution-distance
+            # between a.personal_opt_dist (agent personality_group dist) and the elected outcome
+            # expressed as a distribution (not ordering).
+            p = dist_func(a.personality_group, self.voted_ordering, color_search_pairs)
             pers_component = (1 - p) * pool_share
             a.add_personal_reward(pers_component)
             a.add_common_reward(common_component)

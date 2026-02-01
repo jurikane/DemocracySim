@@ -25,7 +25,7 @@ class ModelConfig(BaseModel):
     patch_power: float     # Power/radius of color patching
     heterogeneity: float   # Heterogeneity factor for color distribution
     known_cells: int       # Number of cells each agent knows
-    num_personalities: int # Number of unique agent personalities
+    num_personality_groups: int # Number of unique agent personality_groups
     height: int            # Grid height
     width: int             # Grid width
     num_areas: int         # Number of areas (territories)

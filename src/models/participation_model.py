@@ -90,9 +90,9 @@ class ParticipationModel(mesa.Model):
             Initialized during the model setup.
         voting_agents (list[VoteAgent]): List of all voting agents.
             Initialized during the model setup.
-        personalities (list): List of unique personalities available for agents.
-        personality_distribution (ndarray): The (global) probability
-            distribution of personalities among all agents.
+        personality_groups (list): List of personality groups available for agents.
+        personality_group_distribution (ndarray): The (global) probability
+            distribution of personality groups among all agents.
         areas (list[Area]): List of areas (regions or territories within the
             grid) in which elections take place. Initialized during model setup.
         global_area (Area): The area encompassing the entire grid.
@@ -118,7 +118,7 @@ class ParticipationModel(mesa.Model):
         width,
         num_agents,
         num_colors,
-        num_personalities,
+        num_personality_groups,
         mu,
         election_impact_on_mutation,
         common_assets,
@@ -202,8 +202,9 @@ class ParticipationModel(mesa.Model):
         self._initialize_color_cells(id_start=num_agents + num_areas)
         # Create voting agents (IDs start after areas)
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents    # TODO change to using mesas AgentSet class!
-        self.personalities = self.create_personalities(num_personalities)
-        self.personality_distribution = ParticipationModel.pers_dist(num_personalities, rng=self.np_random)
+        self.personality_groups = self.create_personality_groups(num_personality_groups)
+        pg_dst = ParticipationModel.pers_dist(num_personality_groups, rng=self.np_random)
+        self.personality_group_distribution = pg_dst
         self.initialize_voting_agents(id_start=num_areas)
         # Area variables
         self.global_area = self.initialize_global_area()
@@ -274,7 +275,7 @@ class ParticipationModel(mesa.Model):
     def initialize_voting_agents(self, id_start=0) -> None:
         """
         This method initializes as many voting agents as set in the model with
-        a randomly chosen personality. It places them randomly on the grid.
+        a randomly chosen personality_group. It places them randomly on the grid.
         It also ensures that each agent is assigned to the color cell it is
         standing on.
         Args:
@@ -283,21 +284,21 @@ class ParticipationModel(mesa.Model):
         # Testing parameter validity
         if self.num_agents < 1:
             raise ValueError("The number of agents must be at least 1.")
-        dist = self.personality_distribution
+        dist = self.personality_group_distribution
         assets = self.common_assets // self.num_agents  # TODO: always equal dist?
-        nr = len(self.personalities)
+        nr = len(self.personality_groups)
         for idx in range(self.num_agents):
             # Assign unique ID after areas
             unique_id = id_start + idx
             # Get a random position
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
-            # Choose a personality based on the distribution
-            personality_idx = self.np_random.choice(nr, p=dist)
-            personality = self.personalities[personality_idx]
+            # Choose a personality_group based on the distribution
+            personality_group_idx = self.np_random.choice(nr, p=dist)
+            personality_group = self.personality_groups[personality_group_idx]
             # Create agent without appending (add to the pre-defined list)
-            agent = VoteAgent(unique_id, self, (x, y), personality,
-                              personality_idx, assets=assets, add=False)
+            agent = VoteAgent(unique_id, self, (x, y), personality_group,
+                              personality_group_idx, assets=assets, add=False)
             self.voting_agents[idx] = agent  # Add using the index (faster)
             # Add the agent to the grid by placing it on a ColorCell
             cell = self.grid.get_cell_list_contents([(x, y)])[0]
@@ -398,12 +399,12 @@ class ParticipationModel(mesa.Model):
         return global_area
 
 
-    def create_personalities(self, n: int) -> np.ndarray:
+    def create_personality_groups(self, n: int) -> np.ndarray:
         """
-        Creates n unique personalities as permutations of color indices.
+        Creates n unique personality_groups as permutations of color indices.
 
         Args:
-            n (int): Number of unique personalities.
+            n (int): Number of unique personality_groups.
 
         Returns:
             np.ndarray: Shape `(n, num_colors)`.
@@ -417,11 +418,10 @@ class ParticipationModel(mesa.Model):
             [[1, 0, 2],
             [2, 1, 0]]
         """
-        # p_colors = range(1, self.num_colors)  # Personalities exclude white
         n_colors = self.num_colors
         max_permutations = factorial(n_colors)
         if n > max_permutations or n < 1:
-            raise ValueError(f"Cannot generate {n} unique personalities: "
+            raise ValueError(f"Cannot generate {n} unique personality_groups: "
                              f"only {max_permutations} unique ones exist.")
         selected_permutations = set()
         while len(selected_permutations) < n:
@@ -679,10 +679,6 @@ def get_election_results(area: Area) -> Optional[list[int]]:
     if isinstance(area, Area) and area.voted_ordering is not None:
         return area.voted_ordering.tolist()
     return None
-
-
-# def get_area_personality_based_reward(area: Area) -> Optional[float]:
-#     return area.personality_based_reward if isinstance(area, Area) else None
 
 
 def get_area_gini_index(area: Area) -> Optional[float]:

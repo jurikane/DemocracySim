@@ -27,10 +27,10 @@ class TestParticipationModelUnit(unittest.TestCase):
         self.assertEqual(len(self.model.areas), model_cfg["num_areas"])
         self.assertIsNotNone(self.model.global_area)
 
-    def test_personality_distribution_sums_to_one(self):
-        dist = self.model.personality_distribution
+    def test_personality_group_distribution_sums_to_one(self):
+        dist = self.model.personality_group_distribution
         np.testing.assert_almost_equal(dist.sum(), 1.0)
-        self.assertEqual(len(dist), len(self.model.personalities))
+        self.assertEqual(len(dist), len(self.model.personality_groups))
 
     def test_preset_color_distribution_valid(self):
         dst = self.model.preset_color_dst
@@ -127,25 +127,25 @@ class TestParticipationModelUnit(unittest.TestCase):
         self.assertFalse(np.allclose(mid_dst, eq_dst))
         self.assertFalse(np.allclose(het_dst, mid_dst))
 
-    def test_distribution_of_personalities(self):
-        p_dist = self.model.personality_distribution
+    def test_distribution_of_personality_groups(self):
+        p_dist = self.model.personality_group_distribution
         self.assertAlmostEqual(float(sum(p_dist)), 1.0)
-        self.assertEqual(len(p_dist), self.model_cfg["num_personalities"])
+        self.assertEqual(len(p_dist), self.model_cfg["num_personality_groups"])
 
         voting_agents = self.model.voting_agents
         nr_agents = self.model.num_agents
-        personalities = list(self.model.personalities)
-        p_counts = {str(i): 0 for i in personalities}
+        personality_groups = list(self.model.personality_groups)
+        p_counts = {str(i): 0 for i in personality_groups}
 
         for agent in voting_agents:
-            p_counts[str(agent.personality)] += 1
+            p_counts[str(agent.personality_group)] += 1
 
-        real_dist = [p_counts[str(p)] / nr_agents for p in personalities]
+        real_dist = [p_counts[str(p)] / nr_agents for p in personality_groups]
 
         self.assertEqual(len(real_dist), len(p_dist))
         self.assertAlmostEqual(float(sum(real_dist)), 1.0)
 
-        my_delta = 0.4 / self.model_cfg["num_personalities"]
+        my_delta = 0.4 / self.model_cfg["num_personality_groups"]
         for p_dist_val, real_p_dist_val in zip(p_dist, real_dist):
             self.assertAlmostEqual(p_dist_val, real_p_dist_val, delta=my_delta)
 
@@ -156,3 +156,4 @@ class TestParticipationModelUnit(unittest.TestCase):
     def test_step(self):
         # TODO: Add full step integration test
         pass
+

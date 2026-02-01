@@ -17,7 +17,7 @@ def _assert_is_dist(x: np.ndarray, *, tol: float = 1e-6) -> None:
     assert abs(s - 1.0) <= tol
 
 
-def test_personal_opt_dist_is_valid_and_matches_personality_ordering() -> None:
+def test_personal_opt_dist_is_valid_and_matches_personality_group_ordering() -> None:
     model, _cfg = create_test_model()
     agents = list(getattr(model, "voting_agents", []) or [])
     assert agents, "Expected test model to create voting_agents"
@@ -28,12 +28,12 @@ def test_personal_opt_dist_is_valid_and_matches_personality_ordering() -> None:
         dist = np.asarray(getattr(a, "personal_opt_dist"))
         _assert_is_dist(dist)
 
-        personality = np.asarray(getattr(a, "personality"))
+        ordering = np.asarray(getattr(a, "personality_group"))
         implied = np.argsort(dist)[::-1]
-        assert implied.shape == personality.shape
-        assert np.array_equal(implied, personality), (
+        assert implied.shape == ordering.shape
+        assert np.array_equal(implied, ordering), (
             f"personal_opt_dist ordering mismatch for agent {getattr(a, 'unique_id', '?')}: "
-            f"implied={implied.tolist()} personality={personality.tolist()}"
+            f"implied={implied.tolist()} personality_group={ordering.tolist()}"
         )
 
 

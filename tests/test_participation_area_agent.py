@@ -25,7 +25,7 @@ class DummyModel(Model):
         self.height = height
         self.num_colors = num_colors
         self.grid = space.SingleGrid(height=height, width=width, torus=True)
-        self.personalities = [0, 1]
+        self.personality_groups = [0, 1]
         self.voting_agents = []
         # Stubs for election-related attributes
         self.distance_func = lambda *args, **kwargs: 0
@@ -63,7 +63,7 @@ class TestAreaBasics(unittest.TestCase):
         cell = ColorCell(10, self.dummy_model, (0, 0), 1)
         area.add_cell(cell)
         dummy_agent = VoteAgent(1, self.dummy_model, (0, 0),
-                                personality=list(range(self.dummy_model.num_colors)))
+                                personality_group=list(range(self.dummy_model.num_colors)))
         area.add_agent(dummy_agent)
 
         self.assertIn(cell, area.cells)
@@ -156,9 +156,9 @@ class TestAreaIntegration(unittest.TestCase):
 
     def test_adding_new_area_and_agent_within_it(self):
         # Additional area and agent
-        personality = random.choice(self.model.personalities)
+        personality_group = random.choice(self.model.personality_groups)
         a = VoteAgent(self.model_cfg.num_agents + 1, self.model, pos=(0, 0),
-                      personality=personality, assets=25)
+                      personality_group=personality_group, assets=25)
         additional_test_area = Area(self.model.num_areas + 1,
                                     model=self.model, height=5,
                                     width=5, size_variance=0)

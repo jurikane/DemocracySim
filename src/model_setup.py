@@ -19,7 +19,7 @@ _ALLOWED_KW = {
     "width",
     "num_agents",
     "num_colors",
-    "num_personalities",
+    "num_personality_groups",
     "mu",
     "election_impact_on_mutation",
     "common_assets",
@@ -112,9 +112,9 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=max(2, model_cfg.num_colors),
             step=1,
         ),
-        "num_personalities": mesa.visualization.Slider(
-            name="# different personalities",
-            value=model_cfg.num_personalities,
+        "num_personality_groups": mesa.visualization.Slider(
+            name="# different personality_groups",
+            value=model_cfg.num_personality_groups,
             min_value=1,
             max_value=max(1, factorial(model_cfg.num_colors)),
             step=1,

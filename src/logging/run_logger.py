@@ -134,12 +134,12 @@ class RunLoggerV2:
             },
         }
 
-        # Optional: personality metadata if present (useful for replay UI)
-        raw_personalities = getattr(model, "personalities", None)
-        global_pers_dist = getattr(model, "personality_distribution", None)
-        if raw_personalities is not None and global_pers_dist is not None:
+        # Optional: personality_group metadata if present (useful for replay UI)
+        raw_personality_groups = getattr(model, "personality_groups", None)
+        global_pers_dist = getattr(model, "personality_group_distribution", None)
+        if raw_personality_groups is not None and global_pers_dist is not None:
             static["personality_info"] = {
-                "personalities": _to_python(np.asarray(raw_personalities)),
+                "personality_groups": _to_python(np.asarray(raw_personality_groups)),
                 "global_distribution": _to_python(global_pers_dist),
             }
 
@@ -433,7 +433,7 @@ class RunLoggerV2:
                     "col": np.int16(int(getattr(a, "col", 0) or 0)),
                     "assets": np.float32(float(getattr(a, "assets", 0.0) or 0.0)),
                     "num_elections_participated": np.int32(int(getattr(a, "num_elections_participated", 0) or 0)),
-                    "personality_idx": np.int16(int(getattr(a, "personality_idx", -1) or -1)),
+                    "personality_group_idx": np.int16(int(getattr(a, "personality_group_idx", -1) or -1)),
                 }
             )
         return rows
