@@ -57,20 +57,18 @@ class TestVotingAgent(unittest.TestCase):
                 self.assertTrue(np.allclose(comb, own_prefs, atol=1e-12))
             self.assertTrue(np.isclose(sum(comb), 1.0, atol=1e-8))
 
-    def test_compute_assumed_opt_dist(self):
-        a = self.agent
-        test_area = self.additional_test_area
-        # Give the agent some cells to know of
-        max_size = len(test_area.cells)
-        k = random.sample(range(2, max_size), 1)[0]
-        a.known_cells = random.sample(test_area.cells, k=k)
-        est_dist, conf = a.estimate_real_distribution(test_area)
-        own_prefs = a.personality
-        print(f"The agents\npersonality: {own_prefs} \n"
-              f"est_dist   : {est_dist} and confidences: {conf}")
-        r = a.compute_assumed_opt_dist(test_area)
-        print(f"Assumed optimal distribution: {r}")
-        self.assertTrue(np.isclose(sum(r), 1.0, atol=1e-8))
-
-
-
+    # Functional moved into strategy pattern - kept for reference
+    # def test_compute_assumed_opt_dist(self):
+    #     a = self.agent
+    #     test_area = self.additional_test_area
+    #     # Give the agent some cells to know of
+    #     max_size = len(test_area.cells)
+    #     k = random.sample(range(2, max_size), 1)[0]
+    #     a.known_cells = random.sample(test_area.cells, k=k)
+    #     est_dist, conf = a.estimate_real_distribution(test_area)
+    #     own_prefs = a.personality
+    #     print(f"The agents\npersonality: {own_prefs} \n"
+    #           f"est_dist   : {est_dist} and confidences: {conf}")
+    #     r = a.compute_assumed_opt_dist(test_area)
+    #     print(f"Assumed optimal distribution: {r}")
+    #     self.assertTrue(np.isclose(sum(r), 1.0, atol=1e-8))

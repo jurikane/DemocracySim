@@ -2,6 +2,8 @@ from __future__ import annotations
 import numpy as np
 from typing import TYPE_CHECKING, cast, List, Optional, Protocol, Any
 from mesa import Agent
+# New (minimal) strategy split: participation and voting
+from src.agents.strategies import DefaultParticipationStrategy, DefaultVotingStrategy
 
 
 def _sigmoid(x: float) -> float:
@@ -13,6 +15,7 @@ def _sigmoid(x: float) -> float:
     return float(z / (1.0 + z))
 
 
+# TODO: remove legacy Policy interface in future ###############################
 class Policy(Protocol):
     def decide_participation(self, agent, area) -> bool: ...
     def decide_altruism_factor(self, agent, area) -> float: ...
@@ -20,7 +23,10 @@ class Policy(Protocol):
 
 
 class ParticipationPolicy:
-    """Default policy: adaptive probabilistic participation + random altruism + distance-based ranking."""
+    """Legacy policy kept for compatibility with older tests/configs.
+
+    NOTE: Voting is now handled by VotingStrategy (schema/thesis semantics).
+    """
 
     def decide_participation(self, agent, area) -> bool:
         # Global, non-strategic participation policy with explicit learning state:
@@ -32,12 +38,11 @@ class ParticipationPolicy:
         return bool(float(agent.model.np_random.random()) < p)
 
     def decide_altruism_factor(self, agent, area) -> float:
-        # TODO do this properly
-        # should we change the name "altruism_factor" to "cooperation_factor" or "reality-weight"?
-        return agent.random.uniform(0.0, 1.0)
+        # Legacy: keep deterministic by using model.np_random (not agent.random)
+        return float(agent.model.np_random.random())
 
     def rank_options(self, agent, area, options: Any) -> np.ndarray:
-        # Use existing distance function; personality_group is an ORDERING.
+        # Legacy ranking path (normalized). Not used by VoteAgent.vote().
         dist_func = agent.model.distance_func
         ranking = np.zeros(options.shape[0])
         color_search_pairs = agent.model.color_search_pairs
@@ -45,6 +50,7 @@ class ParticipationPolicy:
             ranking[i] = dist_func(agent.personality_group, option, color_search_pairs)
         ranking /= ranking.sum() if ranking.sum() else 1.0
         return ranking
+################################################################################
 
 
 if TYPE_CHECKING:  # Type hint for IDEs
@@ -84,8 +90,18 @@ def combine_and_normalize(arr_1: np.ndarray, arr_2: np.ndarray, factor: float):
 class VoteAgent(Agent):
     """An agent with resources and preferences that may participate in elections."""
 
-    def __init__(self, unique_id, model: ParticipationModel, pos,
-                 personality_group, personality_group_idx=None, assets=1, add=True, policy: Policy | None = None):
+    def __init__(
+        self,
+        unique_id,
+        model: ParticipationModel,
+        pos,
+        personality_group,
+        personality_group_idx=None,
+        assets=1,
+        add=True,
+        participation_strategy=None,
+        voting_strategy=None,
+    ):
         """ Create a new agent.
 
         Attributes:
@@ -96,7 +112,6 @@ class VoteAgent(Agent):
             personality_group_idx: Index of personality group in model's personality_groups list.
             assets: The wealth/assets/motivation of the agent.
             add: Whether to add the agent to the model's agent list and cell.
-            policy: The behavior strategy of the agent.
         """
         super().__init__(unique_id=unique_id, model=model)
         # The "pos" variable in mesa is special, so I avoid it here
@@ -107,18 +122,13 @@ class VoteAgent(Agent):
         self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = assets
         self._num_elections_participated = 0
+        self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
 
         # --- Representation contract (thesis):
         # personality_group: ColorOrdering (permutation)
         # personality: ColorDistribution (per-agent color intensity dist)
         self.personality_group = np.asarray(personality_group)  # ordering / group identity
         self.personality_group_idx = personality_group_idx
-
-        # Backward-compat: some code/tests still expect ordering under `.personality`.
-        # We keep an explicit accessor for that ordering.
-        # (Do NOT use `.personality_group_ordering` for new code; use `.personality_group`.)
-
-        self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
         # ColorCell objects the agent knows (knowledge)
         self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells
         if add:  # Add the agent to the models' agent list and the cell
@@ -142,9 +152,10 @@ class VoteAgent(Agent):
         # --- Adaptive participation learning (global per agent) ---
         init_q = getattr(model, "participation_init_q", 0.0)
         self.q_participation = float(init_q)
-
-        # Policy (behavior strategy)
-        self.policy: Policy = policy if policy is not None else ParticipationPolicy()
+        self.participation_strategy = (
+            participation_strategy if participation_strategy is not None else DefaultParticipationStrategy()
+        )
+        self.voting_strategy = voting_strategy if voting_strategy is not None else DefaultVotingStrategy()
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -189,6 +200,13 @@ class VoteAgent(Agent):
         self._num_elections_participated = value
 
     @property
+    def personality(self) -> np.ndarray:
+        """Per-agent preferred color distribution (ColorDistribution).
+        Note: the ordering / group identity is `personality_group`.
+        """
+        return self.personal_opt_dist
+
+    @property
     def election_delta_signal(self) -> float:
         """Return the per-election asset delta signal for participation learning."""
         return self._reward_pers_comp + self._reward_common_comp - self._fee
@@ -219,6 +237,7 @@ class VoteAgent(Agent):
     def update_known_cells(self, area: Area) -> None:
         """
         This method is to update the list of known cells before casting a vote.
+        It is called only by the area during the election process.
 
         Args:
             area (Area): The area that holds the pool of cells in question
@@ -226,7 +245,7 @@ class VoteAgent(Agent):
         n_cells = len(area.cells)
         k = len(self.known_cells)
         self.known_cells = (
-            self.random.sample(area.cells, k)
+            list(self.model.np_random.choice(area.cells, size=k, replace=False))
             if n_cells >= k
             else area.cells
         )
@@ -245,70 +264,24 @@ class VoteAgent(Agent):
     def ask_for_participation(self, area: Area) -> bool:
         """
         Decide whether to participate in the given area's election.
-
-        Args:
-            area (Area): The area in which the election takes place.
-
-        Returns:
-            True if the agent decides to participate, False otherwise
         """
-        #print("Agent", self.unique_id, "decides whether to participate",
-        #      "in election of area", area.unique_id)
-        # TODO Implement this (is to be decided upon a learned decision tree)
-        # Delegate to policy for decision
-        return self.policy.decide_participation(self, area)
-
-    def decide_altruism_factor(self, area: Area) -> float:
-        """
-        Uses a trained decision tree to decide on the altruism factor.
-
-        Returns:
-            float
-        """
-        # TODO Implement this (is to be decided upon a learned decision tree)
-        # This part is important - also for monitoring - save/plot a_factors
-        a_factor = self.policy.decide_altruism_factor(self, area)
-        return a_factor
-
-    def compute_assumed_opt_dist(self, area: Area) -> np.ndarray:
-        """Compute the distribution the agent uses as its internal 'ideal' for voting.
-
-        Mix self-interest vs reality-tracking.
-        - self-interest is represented by personal_opt_dist (static, per agent)
-        - reality-tracking is represented by the agent's estimated reality
-
-        altruism_factor semantics:
-        - 0.0 => purely self-interest (personal_opt_dist)
-        - 1.0 => purely reality-tracking (est_real_dist)
-
-        Args:
-            area (Area): The area the agent is voting in.
-        Returns:
-            np.ndarray: The assumed optimal color distribution (normalized).
-        """
-        a_factor = float(self.decide_altruism_factor(area))
-        # Clamp for safety (policy may not respect bounds yet)
-        a_factor = float(np.clip(a_factor, 0.0, 1.0))
-
-        est_dist, _conf = self.estimate_real_distribution(area)
-        personal = np.asarray(self.personal_opt_dist, dtype=np.float32)
-        if personal.ndim != 1 or personal.shape[0] != est_dist.shape[0]:
-            raise ValueError("personal_opt_dist shape mismatch with estimated distribution")
-        # Combine and normalize to a distribution
-        return combine_and_normalize(est_dist, personal, a_factor)
+        return self.participation_strategy.decide_participation(self, area)
 
     def vote(self, area: Area):
-        """Return a normalized 'oppose score' vector over all options.
+        """Return raw oppose-scores over all options.
 
-        Lower score = better (less opposition / closer to the agent's assumed-optimal).
+        Contract:
+        - shape = (num_options,)
+        - values in [0,1]
+        - lower = better
+        - NOT normalized
+
+        Sampling of known_cells happens only in Area._tally_votes().
         """
-        if TYPE_CHECKING:  # Type hint for IDEs
+        if TYPE_CHECKING:
             self.model = cast(ParticipationModel, self.model)
-
         options = self.model.options
-        # Delegate to policy ranking
-        ranking = self.policy.rank_options(self, area, options)
-        return ranking
+        return self.voting_strategy.score_options(self, area, options)
 
     def estimate_real_distribution(self, area: Area) -> tuple[np.ndarray, float]:
         """
@@ -344,19 +317,6 @@ class VoteAgent(Agent):
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = float(q)
-
-    @property
-    def personality_group_ordering(self) -> np.ndarray:
-        """Backward-compat accessor for the ordering (ColorOrdering)."""
-        return self.personality_group
-
-    @property
-    def personality(self) -> np.ndarray:
-        """Per-agent preferred color distribution (ColorDistribution).
-
-        Note: the ordering / group identity is `personality_group`.
-        """
-        return self.personal_opt_dist
 
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)
