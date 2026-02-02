@@ -137,11 +137,25 @@ class RunLoggerV2:
         # Optional: personality_group metadata if present (useful for replay UI)
         raw_personality_groups = getattr(model, "personality_groups", None)
         global_pers_dist = getattr(model, "personality_group_distribution", None)
+        # get personality_groups distributions per area
+        area_distributions = {}
+        areas = list(model.areas)
+        for area in areas:
+            area_infos = {}  # To save num_agents and personality_group_distribution
+            a_id = area.unique_id
+            num_agents = area.num_agents
+            dist = getattr(area, "personality_group_distribution", None)
+            area_infos["num_agents"] = num_agents
+            area_infos["personality_group_distribution"] = _to_python(np.asarray(dist))
+            area_distributions[str(a_id)] = area_infos
         if raw_personality_groups is not None and global_pers_dist is not None:
-            static["personality_info"] = {
+            payload = {
                 "personality_groups": _to_python(np.asarray(raw_personality_groups)),
                 "global_distribution": _to_python(global_pers_dist),
+                "areas": area_distributions,
             }
+            # v2 replay expects this key.
+            static["personality_group_info"] = payload
 
         # Optional: per-agent static personal_opt_dist
         agents = list(model.voting_agents)

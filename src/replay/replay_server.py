@@ -357,7 +357,7 @@ class ReplayModel(mesa.Model):
         payload = self.data.load_static().get("personality_group_info") or {}
         self.personality_groups = np.array(payload.get("personality_groups") or [])
         self.personality_group_distribution = payload.get("global_distribution") or []
-        self._areas_personality_group_payload = payload.get("areas") or {}
+        self._areas = payload.get("areas") or {}
 
     def _build_area_stubs_from_personality_groups(self):
         class _AreaStub:
@@ -368,7 +368,7 @@ class ReplayModel(mesa.Model):
                 self.color_distribution = []  # For tooltip compatibility
 
         stubs = []
-        for aid, rec in (self._areas_personality_group_payload or {}).items():
+        for aid, rec in (self._areas or {}).items():
             aid = int(aid)
             stubs.append(_AreaStub(aid, rec.get("num_agents"),
                                    rec.get("personality_group_distribution")))
@@ -384,7 +384,6 @@ class ReplayModel(mesa.Model):
                 self.assets = "-"
 
         return [_VoterStub(a_str) for a_str in agents_str.split(", ")]
-
 
     # --- Properties expected by visualization elements ---
     @property
