@@ -29,6 +29,13 @@ model:
   av_area_width: 20
   area_size_variance: 0.0
 
+  # Adaptive participation learning
+  participation_alpha: 0.05
+  participation_beta: 1.0
+  participation_init_q: 0.0
+  participation_q_max: 50.0
+  bias_toward_participation: 0.25
+
   # Per-agent personal_opt_dist (static)
   personal_opt_dist_concentration: 1.0
 
