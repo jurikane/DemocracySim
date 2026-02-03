@@ -192,7 +192,7 @@ VOTES_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "step",
     "area_id",
     "agent_id",
-    "participated",
+    "participating",
     "confidence",
     # Vector (expanded): estim_dst_color_0..estim_dst_color_{C-1}
     "rank_1_option_id",
@@ -209,7 +209,7 @@ VOTES_BASE_DTYPES: Final[dict[str, str]] = {
     "step": "int32",
     "area_id": "int32",
     "agent_id": "int32",
-    "participated": "boolean",
+    "participating": "boolean",
     "confidence": "float32",
     # estim_dst_color_* float32 validated dynamically
     # Use nullable ints for option ids (so missing ranks can be NA).
@@ -435,11 +435,11 @@ def validate_votes_df(df: pd.DataFrame) -> None:
     # Validate estim_dst_color_* expansion (must exist for vote context)
     _validate_expanded_prefix(df, prefix="estim_dst_color", dtype="float32", table_name=table.name)
 
-    # Basic sanity: participated should be True for all rows (participants-only table).
-    if "participated" in df.columns:
+    # Basic sanity: participating should be True for all rows (participants-only table).
+    if "participating" in df.columns:
         try:
-            if (~df["participated"].fillna(False)).any():
-                raise SchemaValidationError(f"{table.name}: participated must be True for all rows")
+            if (~df["participating"].fillna(False)).any():
+                raise SchemaValidationError(f"{table.name}: participating must be True for all rows")
         except (TypeError, ValueError):
             # dtype validator should catch wild types; keep runtime robust
             pass

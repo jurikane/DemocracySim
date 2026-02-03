@@ -31,10 +31,11 @@ class DefaultParticipationStrategy:
     """Adaptive probabilistic participation using agent.q_participation."""
 
     def decide_participation(self, agent: Any, area: Any) -> bool:
-        # p = sigmoid(beta * q)
-        beta = float(getattr(agent.model, "participation_beta"))
-        q = float(getattr(agent, "q_participation"))
         p = float(getattr(agent, "participation_probability")())
+        bias = float(getattr(agent.model, "bias_toward_participation", 0.0))
+        if bias != 0.0:
+            # Simple additive bias in probability space.
+            p = float(np.clip(p + bias, 0.0, 1.0))
         # determinism: use model-level NumPy RNG
         return bool(float(agent.model.np_random.random()) < p)
 

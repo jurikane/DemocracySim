@@ -40,6 +40,7 @@ _ALLOWED_KW = {
     "participation_beta",
     "participation_init_q",
     "participation_q_max",
+    "bias_toward_participation",
     # Per-agent personal_opt_dist
     "personal_opt_dist_concentration",
 }
@@ -132,6 +133,13 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             min_value=1,
             max_value=100,
             step=1,
+        ),
+        "bias_toward_participation": mesa.visualization.Slider(
+            name="Bias toward participation",
+            value=model_cfg.bias_toward_participation,
+            min_value=0.0,
+            max_value=0.5,
+            step=0.01,
         ),
         "color_patches_steps": mesa.visualization.Slider(
             name="Patches size (# steps)",

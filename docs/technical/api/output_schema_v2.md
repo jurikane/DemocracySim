@@ -97,7 +97,7 @@ Agent snapshot table (**agent state only**).
 | col                        |   int16 |                                              |
 | assets                     | float32 | matches simulation internal type             |
 | num_elections_participated |   int32 | cumulative counter across all areas/steps    |
-| personality_group_idx            |   int16 |                                              |
+| personality_group_idx      |   int16 |                                              |
 
 **Semantics:** the row for step `t` represents the agent’s final state after it
 participated in all elections it was eligible for during step `t`.
@@ -116,7 +116,7 @@ Vote signal table (participants only). This is the single source of
 | step                                     |   int32 |                                                |
 | area_id                                  |   int32 | disambiguates overlapping areas                |
 | agent_id                                 |   int32 |                                                |
-| participated                             | boolean | always true (rows only for participants)       |
+| participating                             | boolean | always true (rows only for participants)       |
 | confidence                               | float32 | agent confidence at vote time **in this area** |
 | estim_dst_color_0..estim_dst_color_{C-1} | float32 | estimated area color distribution at vote time |
 | rank_1_option_id                         |   Int32 | option row index into `model.options`          |

@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import random
 
 from tests.factory import create_test_model
@@ -45,19 +44,24 @@ def test_learning_direction_positive_delta_increases_probability():
     agent = model.voting_agents[0]
     q0 = float(agent.q_participation)
 
-    # Clone q state and apply two opposite deltas.
+    # Participated: positive delta should increase q/p.
     agent.q_participation = q0
+    agent._participating = True
     agent.apply_participation_update(delta_assets=+10.0)
     q_pos = float(agent.q_participation)
     p_pos = agent.participation_probability()
 
+    # Abstained: same positive delta should decrease q/p.
     agent.q_participation = q0
-    agent.apply_participation_update(delta_assets=-10.0)
-    q_neg = float(agent.q_participation)
-    p_neg = agent.participation_probability()
+    agent._participating = False
+    agent.apply_participation_update(delta_assets=+10.0)
+    q_abs = float(agent.q_participation)
+    p_abs = agent.participation_probability()
 
-    assert q_pos > q_neg
-    assert p_pos > p_neg
+    assert q_pos > q0
+    assert p_pos > 0.5
+    assert q_abs < q0
+    assert p_abs < 0.5
 
 
 def test_determinism_same_seed_produces_same_participation_counts():

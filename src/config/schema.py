@@ -17,6 +17,7 @@ class ModelConfig(BaseModel):
     participation_beta: float = 1.0
     participation_init_q: float = 0.0
     participation_q_max: float = 50.0
+    bias_toward_participation: float = 0.0
 
     num_agents: int        # Number of agents in the simulation
     common_assets: int     # Initial collective assets

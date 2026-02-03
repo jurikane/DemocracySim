@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import TYPE_CHECKING, cast, List, Optional, Protocol, Any
+from typing import TYPE_CHECKING, cast, List, Optional
 from mesa import Agent
 # New (minimal) strategy split: participation and voting
 from src.agents.strategies import DefaultParticipationStrategy, DefaultVotingStrategy
@@ -15,42 +15,31 @@ def _sigmoid(x: float) -> float:
     return float(z / (1.0 + z))
 
 
-# TODO: remove legacy Policy interface in future ###############################
-class Policy(Protocol):
-    def decide_participation(self, agent, area) -> bool: ...
-    def decide_altruism_factor(self, agent, area) -> float: ...
-    def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
-
-
-class ParticipationPolicy:
-    """Legacy policy kept for compatibility with older tests/configs.
-
-    NOTE: Voting is now handled by VotingStrategy (schema/thesis semantics).
-    """
-
-    def decide_participation(self, agent, area) -> bool:
-        # Global, non-strategic participation policy with explicit learning state:
-        # p = sigmoid(beta * q_participation)
-        beta = float(getattr(agent.model, "participation_beta"))
-        q = float(getattr(agent, "q_participation"))
-        p = _sigmoid(beta * q)
-        # Use the model-level seeded NumPy RNG for determinism.
-        return bool(float(agent.model.np_random.random()) < p)
-
-    def decide_altruism_factor(self, agent, area) -> float:
-        # Legacy: keep deterministic by using model.np_random (not agent.random)
-        return float(agent.model.np_random.random())
-
-    def rank_options(self, agent, area, options: Any) -> np.ndarray:
-        # Legacy ranking path (normalized). Not used by VoteAgent.vote().
-        dist_func = agent.model.distance_func
-        ranking = np.zeros(options.shape[0])
-        color_search_pairs = agent.model.color_search_pairs
-        for i, option in enumerate(options):
-            ranking[i] = dist_func(agent.personality_group, option, color_search_pairs)
-        ranking /= ranking.sum() if ranking.sum() else 1.0
-        return ranking
-################################################################################
+# # TODO: remove legacy Policy interface in future ###############################
+# class Policy(Protocol):
+#     def decide_participation(self, agent, area) -> bool: ...
+#     def decide_altruism_factor(self, agent, area) -> float: ...
+#     def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
+#
+# class ParticipationPolicy:
+#     """Legacy policy kept for compatibility with older tests/configs.
+#
+#     NOTE: Voting is now handled by VotingStrategy (schema/thesis semantics).
+#     """
+#     def decide_altruism_factor(self, agent, area) -> float:
+#         # Legacy: keep deterministic by using model.np_random (not agent.random)
+#         return float(agent.model.np_random.random())
+#
+#     def rank_options(self, agent, area, options: Any) -> np.ndarray:
+#         # Legacy ranking path (normalized). Not used by VoteAgent.vote().
+#         dist_func = agent.model.distance_func
+#         ranking = np.zeros(options.shape[0])
+#         color_search_pairs = agent.model.color_search_pairs
+#         for i, option in enumerate(options):
+#             ranking[i] = dist_func(agent.personality_group, option, color_search_pairs)
+#         ranking /= ranking.sum() if ranking.sum() else 1.0
+#         return ranking
+# ################################################################################
 
 
 if TYPE_CHECKING:  # Type hint for IDEs
@@ -140,6 +129,7 @@ class VoteAgent(Agent):
         self._fee = 0.0
         self._reward_pers_comp = 0.0
         self._reward_common_comp = 0.0
+        self._participating = False
 
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
@@ -227,12 +217,21 @@ class VoteAgent(Agent):
     def add_personal_reward(self, amount: float) -> None:
         self._reward_pers_comp += float(amount)
 
-    def reset_election_variables(self) -> None:
+    def reset_reward_variables(self) -> None:
         """Reset per-election variables before the next election."""
         self._eligible_for_election = True
         self._fee = 0.0
         self._reward_pers_comp = 0.0
         self._reward_common_comp = 0.0
+        self._participating = False
+
+    @property
+    def participating(self) -> bool:
+        """Whether the agent is participating in the current election (per-election flag)."""
+        return bool(self._participating)
+
+    def mark_participating(self) -> None:
+        self._participating = True
 
     def update_known_cells(self, area: Area) -> None:
         """
@@ -244,11 +243,15 @@ class VoteAgent(Agent):
         """
         n_cells = len(area.cells)
         k = len(self.known_cells)
-        self.known_cells = (
-            list(self.model.np_random.choice(area.cells, size=k, replace=False))
-            if n_cells >= k
-            else area.cells
-        )
+        if n_cells <= 0 or k <= 0:
+            self.known_cells = []
+            return
+        # Sample indices, then index into the list
+        if n_cells >= k:
+            idx = self.model.np_random.choice(n_cells, size=k, replace=False)
+            self.known_cells = [area.cells[int(i)] for i in idx]
+        else:
+            self.known_cells = list(area.cells)
 
     def reward_agent(self) -> None:
         """
@@ -305,18 +308,26 @@ class VoteAgent(Agent):
 
     def participation_probability(self) -> float:
         """Current learned participation probability p in [0,1]."""
-        beta = float(getattr(self.model, "participation_beta", 1.0))
-        return _sigmoid(beta * float(self.q_participation))
+        beta = self.model.participation_beta
+        q = self.q_participation
+        return _sigmoid(beta * q)
 
     def apply_participation_update(self, delta_assets: float) -> None:
-        """Update q_participation from a realized per-election asset delta."""
-        alpha = float(getattr(self.model, "participation_alpha", 0.0))
-        # learning signal (delta_assets) = per-election change in assets
-        q = (1.0 - alpha) * float(self.q_participation) + alpha * float(delta_assets)
-        q_max = float(getattr(self.model, "participation_q_max", 0.0))
+        """Naive action reinforcement update for q_participation.
+
+        Contract (thesis baseline): reinforce last action.
+        - participating + positive delta => q up (p up)
+        - abstained     + positive delta => q down (p down)
+        - participating + negative delta => q down
+        - abstained     + negative delta => q up
+        """
+        alpha = self.model.participation_alpha
+        sign = 1.0 if self._participating else -1.0
+        q = self.q_participation + alpha * sign * delta_assets
+        q_max = self.model.participation_q_max
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))
-        self.q_participation = float(q)
+        self.q_participation = q
 
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)

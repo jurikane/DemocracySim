@@ -139,6 +139,7 @@ class ParticipationModel(mesa.Model):
         participation_beta: float = 1.0,
         participation_init_q: float = 0.0,
         participation_q_max: float = 50.0,
+        bias_toward_participation: float = 0.0,
         personal_opt_dist_concentration: float = 1.0,
     ):
         super().__init__()
@@ -150,6 +151,7 @@ class ParticipationModel(mesa.Model):
         self.participation_beta = float(participation_beta)
         self.participation_init_q = float(participation_init_q)
         self.participation_q_max = float(participation_q_max)
+        self.bias_toward_participation = float(bias_toward_participation)
         self.personal_opt_dist_concentration = personal_opt_dist_concentration
 
         # Initialize RNGs early

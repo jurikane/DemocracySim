@@ -255,7 +255,7 @@ class Area(Agent):
         # Calculate and distribute rewards
         self._distribute_rewards()
 
-        # --- Adaptive participation learning update (per election, eligible agents only) ---
+        # Adaptive participation learning update (eligible agents only)
         for a in self.agents:
             # Eligible agents are exactly those evaluated in _tally_votes()
             if not a.eligible_for_election:
@@ -288,7 +288,7 @@ class Area(Agent):
 
         for agent in self.agents:
             # Reset per-election asset delta signal for learning.
-            agent.reset_election_variables()
+            agent.reset_reward_variables()
             # Eligibility: agents with assets <= 0 are skipped (no learning update).
             if agent.assets <= 0:
                 agent.mark_ineligible_for_election()
@@ -301,6 +301,7 @@ class Area(Agent):
                 cost = 1
 
             if agent.ask_for_participation(area=self):
+                agent.mark_participating()
                 agent.num_elections_participated += 1
                 # Give agents their (new) known fields
                 agent.update_known_cells(area=self)

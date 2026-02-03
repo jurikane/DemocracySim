@@ -251,7 +251,7 @@ class RunLoggerV2:
                     "step",
                     "area_id",
                     "agent_id",
-                    "participated",
+                    "participating",
                     "confidence",
                     "rank_1_option_id",
                     "rank_1_oppose_score",
@@ -460,6 +460,7 @@ class RunLoggerV2:
         step = int(self._current_step)
         area_id = area.unique_id
         agent_id = agent.unique_id
+        participating = agent.participating
 
         scores = np.asarray(oppose_scores, dtype=np.float32)
         if scores.ndim != 1:
@@ -476,7 +477,7 @@ class RunLoggerV2:
             "step": np.int32(step),
             "area_id": np.int32(area_id),
             "agent_id": np.int32(agent_id),
-            "participated": True,
+            "participating": bool(participating),
             "confidence": np.float32(0.0 if confidence is None else float(confidence)),
             "rank_1_option_id": pd.NA,
             "rank_1_oppose_score": np.float32(np.nan),
