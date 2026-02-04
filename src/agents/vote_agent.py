@@ -130,6 +130,9 @@ class VoteAgent(Agent):
         self._reward_pers_comp = 0.0
         self._reward_common_comp = 0.0
         self._participating = False
+        # Per-election signals (computed right before applying to assets)
+        self._delta_abs = 0.0
+        self._delta_rel = 0.0
 
         self.est_real_dist = np.zeros(self.model.num_colors)
         self.confidence = 0.0
@@ -201,13 +204,27 @@ class VoteAgent(Agent):
         return self.personal_opt_dist
 
     @property
-    def election_delta_signal(self) -> float:
-        """Return the per-election asset delta signal for participation learning."""
+    def election_delta_abs(self) -> float:
+        """Absolute per-election asset delta (pers + common - fee)."""
         return self._reward_pers_comp + self._reward_common_comp - self._fee
 
     @property
+    def election_delta_rel(self) -> float:
+        """Relative per-election delta stored at application time.
+
+        Defined as: delta_abs / max(assets_pre, eps) with eps=1.0.
+        """
+        return float(self._delta_rel)
+
+    @property
     def eligible_for_election(self) -> bool:
+        """Whether the agent is eligible for the current election."""
         return self._eligible_for_election
+
+    @property
+    def participating(self) -> bool:
+        """Whether the agent is participating in the current election (per-election flag)."""
+        return bool(self._participating)
 
     def mark_ineligible_for_election(self) -> None:
         self._eligible_for_election = False
@@ -228,11 +245,8 @@ class VoteAgent(Agent):
         self._reward_pers_comp = 0.0
         self._reward_common_comp = 0.0
         self._participating = False
-
-    @property
-    def participating(self) -> bool:
-        """Whether the agent is participating in the current election (per-election flag)."""
-        return bool(self._participating)
+        self._delta_abs = 0.0
+        self._delta_rel = 0.0
 
     def mark_participating(self) -> None:
         self._participating = True
@@ -258,13 +272,20 @@ class VoteAgent(Agent):
             self.known_cells = list(area.cells)
 
     def reward_agent(self) -> None:
+        """Reward the agent by increasing/decreasing her assets.
+
+        Computes and stores per-election signals *before* mutating assets:
+          - delta_abs: pers + common - fee
+          - delta_rel: delta_abs / max(assets_pre, 1.0)
+
+        And saves delta_abs into award_history.
         """
-        Reward the agent by increasing/decreasing her assets.
-        And save the awarded amount in the agent's history.
-        """
-        total_asset_delta = self.election_delta_signal
-        self.award_history.append(total_asset_delta)
-        self.assets += total_asset_delta
+        assets_pre = float(self.assets)
+        delta_abs = float(self.election_delta_abs)
+        self._delta_rel = float(delta_abs / max(assets_pre, 1.0))
+
+        self.award_history.append(delta_abs)
+        self.assets += delta_abs
         if self.assets < 0:
             self.assets = 0  # Ensure assets don't go negative
 

@@ -414,7 +414,7 @@ class CohortElectionLearningDiagnostics(TextElement):
                 continue
 
             participated = bool(getattr(a, "participating", False))
-            delta = float(getattr(a, "election_delta_signal", 0.0))
+            delta = float(getattr(a, "election_delta_abs", 0.0))
             fee = float(getattr(a, "_fee", 0.0))
             common = float(getattr(a, "_reward_common_comp", 0.0))
             personal = float(getattr(a, "_reward_pers_comp", 0.0))

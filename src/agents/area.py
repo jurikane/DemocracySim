@@ -259,12 +259,12 @@ class Area(Agent):
         for a in self.agents:
             # Eligible agents are exactly those evaluated in _tally_votes()
             if a.eligible_for_election:
-                a.apply_participation_update(a.election_delta_signal)
+                a.apply_participation_update(a.election_delta_rel)
 
         # Adaptive altruism learning update (participant-only)
         for a in self.agents:
             if a.participating:
-                a.apply_altruism_update(a.election_delta_signal)
+                a.apply_altruism_update(a.election_delta_rel)
 
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated

@@ -37,6 +37,7 @@ def test_action_reinforcement_positive_delta_participant_up_abstainer_down() -> 
     a1._participating = False  # abstainer
 
     delta = 2.0
+    # Learning now uses relative delta; magnitude doesn't matter for monotonicity.
     a0.apply_participation_update(delta)
     a1.apply_participation_update(delta)
 

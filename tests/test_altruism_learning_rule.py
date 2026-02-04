@@ -14,8 +14,10 @@ def test_altruism_learning_participant_only_direction_rules() -> None:
     - not participating => no change
 
     Update rule:
-        a = a + altruism_alpha * delta_assets
+        a = a + altruism_alpha * delta
         clip to [altruism_clip_min, altruism_clip_max]
+
+    Note: delta is now treated as a relative per-election signal.
     """
 
     model, _ = create_test_model(
