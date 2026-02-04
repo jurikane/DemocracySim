@@ -33,7 +33,8 @@ _ALLOWED_KW = {
     "heterogeneity",
     "rule_idx",
     "distance_idx",
-    "election_costs",
+    "election_cost_rate",
+    "reward_rate",
     "seed",
     # Adaptive participation learning
     "participation_alpha",
@@ -89,11 +90,18 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=len(distance_functions) - 1,
             step=1,
         ),
-        "election_costs": mesa.visualization.Slider(
-            name="Election costs in %",
-            value=model_cfg.election_costs,
+        "election_cost_rate": mesa.visualization.Slider(
+            name="Election cost/effort rate in % (wealth-scaled)",
+            value=model_cfg.election_cost_rate,
             min_value=0,
             max_value=1,
+            step=0.01,
+        ),
+        "reward_rate": mesa.visualization.Slider(
+            name="Reward rate in % (wealth-scaled)",
+            value=model_cfg.reward_rate,
+            min_value=0.0,
+            max_value=1.0,
             step=0.01,
         ),
         "mu": mesa.visualization.Slider(

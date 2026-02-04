@@ -102,7 +102,7 @@ class ParticipationModel(mesa.Model):
             non-uniformity among election territories.
         common_assets (int): Total resources to be distributed among all agents.
         av_area_color_dst (ndarray): Current (area)-average color distribution.
-        election_costs (float): Cost associated with participating in elections.
+        election_cost_rate (float): Cost/effort associated with participating in elections (relative to assets).
         known_cells (int): Number of cells each agent knows the color of.
         datacollector (mesa.DataCollector): A tool for collecting data
             (metrics and statistics) at each simulation step.
@@ -132,7 +132,8 @@ class ParticipationModel(mesa.Model):
         heterogeneity,
         rule_idx,
         distance_idx,
-        election_costs,
+        election_cost_rate,
+        reward_rate: float = 0.02,
         seed=None,
         max_steps: Optional[int] = None,
         participation_alpha: float = 0.05,
@@ -191,7 +192,8 @@ class ParticipationModel(mesa.Model):
         self._preset_color_dst = self.create_color_distribution(heterogeneity)
         self._av_area_color_dst = self._preset_color_dst
         # Elections
-        self.election_costs = election_costs
+        self.election_cost_rate = election_cost_rate
+        self.reward_rate = reward_rate
 
         # Wrap voting rules so they use deterministic RNG
         # Keep self.voting_rule as the base function for tests.

@@ -34,7 +34,7 @@ class DummyModel(Model):
         self.known_cells = 1
         self.color_search_pairs = []
         self.max_reward = 10
-        self.election_costs = 1
+        self.election_cost_rate = 1
         self.mu = 0.1
         self.color_probs = [1 / num_colors] * num_colors
         self.np_random = np.random.default_rng()

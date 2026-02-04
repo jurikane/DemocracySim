@@ -380,7 +380,7 @@ class RunLoggerV2:
                 "turnout": np.float32(area.voter_turnout / 100.0
                     if area.voter_turnout > 1.0 else float(area.voter_turnout)
                 ),
-                "election_cost_rate": np.float32(float(getattr(model, "election_costs", 0.0) or 0.0)),
+                "election_cost_rate": np.float32(float(getattr(model, "election_cost_rate", 0.0) or 0.0)),
                 "fee_pool": np.float32(float(getattr(area, "_election_fee_pool", 0.0) or 0.0)),
                 "winning_option_id": np.int32(-1),
                 "dist_to_reality": np.float32(float(getattr(area, "dist_to_reality", 0.0) or 0.0)),

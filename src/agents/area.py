@@ -285,7 +285,7 @@ class Area(Agent):
         preference_profile = []
         # Reset pool for this election step.
         self._election_fee_pool = 0
-        el_cost_rate = self.model.election_costs
+        el_cost_rate = self.model.election_cost_rate
 
         # Optional schema-v2 vote sink (Batch 2): logger attaches a callable here.
         vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
@@ -298,7 +298,7 @@ class Area(Agent):
                 agent.mark_ineligible_for_election()
                 continue
 
-            # election_costs is treated as a percent (0..100) of current assets.
+            # election_cost_rate is treated as a percent (0..100) of current assets.
             cost = int(agent.assets * el_cost_rate)
             # Ensure participating agents pay at least 1 if they have assets.
             if cost == 0 and agent.assets >= 1 and not el_cost_rate == 0:
@@ -333,43 +333,40 @@ class Area(Agent):
         """
         Calculates and distributes rewards (or penalties) to agents based on outcomes.
 
-        The function measures the difference between the actual color distribution
-        and the elected outcome using a distance metric. It then increments or reduces
-        agent assets accordingly, ensuring assets do not fall below zero.
-        Rewards are budget-balanced around the fees collected from participants
-        in the same election step.
+        Contract (economics v2):
+        - Signs are determined by distances in [0,1] mapped via (0.5 - d)
+        - Magnitudes are scaled by agent wealth via model.reward_rate (0..1)
+        - Fee pool is tracked as a statistic but no longer sets reward magnitude
         """
-        model = self.model
-        # Calculate the distance to the real distribution using distance_func
+        dist_func = self.model.distance_func
+        # Calculate the distance to the real distribution using distance_func in [0,1]
         real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
-        dist_func = model.distance_func
+        search_pairs = self.model.color_search_pairs
         self._dist_to_reality = dist_func(
-            real_color_ord, self.voted_ordering, model.color_search_pairs
+            real_color_ord, self.voted_ordering, search_pairs
         )
-        # Reward budget pool: collected election fees from participating agents
-        pool = self._election_fee_pool
-        if pool == 0:  # To avoid division by zero.
-            pool = 1  # In case election is free (non-participation handled earlier)
-        pool_share = pool / self.num_agents  # Equal share per agent
-        # Adjust pool to be budget-balanced
-        # Distribute the two types of rewards, the common component:
-        #   If dist_to_reality large (vote for change), society invests in change.
-        #   If it is small (vote for small/no change), society reaps returns.
-        common_component = (0.5 - self.dist_to_reality) * pool_share
-        color_search_pairs = model.color_search_pairs
+        # Common component coefficient shared across agents
+        common_coeff = (0.5 - float(self.dist_to_reality))
+        # Model wide reward rate for scaling rewards/penalties by agent wealth
+        reward_rate = self.model.reward_rate
         for a in self.agents:
             # Personality-based reward factor
             #   the closer the elected outcome to the agent's personality_group.
             #   the higher the reward for the agent.
-            #
             # TODO(thesis): later switch this to a centralized distribution-distance
-            # between a.personal_opt_dist (agent personality_group dist) and the elected outcome
-            # expressed as a distribution (not ordering).
-            p = dist_func(a.personality_group, self.voted_ordering, color_search_pairs)
-            pers_component = (0.5 - p) * pool_share
+            #   between a.personal_opt_dist (agent personality dist) and the elected outcome
+            #   expressed as a distribution (not ordering).
+            p = dist_func(a.personality_group, self.voted_ordering, search_pairs)
+            pers_coeff = (0.5 - p)
+
+            # Absolute rewards/penalties in asset units
+            scale = reward_rate * a.assets  # Scale by current wealth
+            pers_component = pers_coeff * scale
+            common_component = common_coeff * scale
+            # Save and apply rewards/penalties to the agent.
             a.add_personal_reward(pers_component)
             a.add_common_reward(common_component)
-            a.reward_agent()  # Apply the accumulated rewards/penalties to assets
+            a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
 
     def _update_color_distribution(self) -> None:
         """
@@ -420,7 +417,7 @@ class Area(Agent):
             area_snapshot_sink(
                 area=self,
                 snapshot={
-                    "election_cost_rate": float(self.model.election_costs),
+                    "election_cost_rate": float(self.model.election_cost_rate),
                     "fee_pool": float(getattr(self, "_election_fee_pool", 0.0)),
                     "eligible_voters": int(self.num_agents),
                     "participants": int(self.num_agents_participated_last),

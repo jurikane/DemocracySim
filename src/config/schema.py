@@ -6,11 +6,14 @@ class ModelConfig(BaseModel):
     """
     Configuration for the core simulation model.
     """
-    election_costs: float  # Cost for participating in an election in % of assets
+    election_cost_rate: float  # Cost for participating in an election in % of assets
     election_impact_on_mutation: float  # Impact of election on mutation rate
     mu: float              # Mutation rate
     rule_idx: int          # Index of the voting rule to use
     distance_idx: int      # Index of the distance function to use
+
+    # --- Reward magnitude scaling (v2 economics) ---
+    reward_rate: float = 0.0  # Reward/punishment magnitude in % of agent assets
 
     # --- Adaptive participation learning (schema v2 thesis) ---
     participation_alpha: float = 0.05

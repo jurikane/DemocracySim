@@ -112,8 +112,8 @@ class TestParticipationModelUnit(unittest.TestCase):
                          self.model_cfg["common_assets"])
         self.assertEqual(self.model.voting_rule, v_rule)
         self.assertEqual(self.model.distance_func, dist_func)
-        self.assertEqual(self.model.election_costs,
-                         self.model_cfg["election_costs"])
+        self.assertEqual(self.model.election_cost_rate,
+                         self.model_cfg["election_cost_rate"])
 
     def test_create_color_distribution(self):
         eq_dst = self.model.create_color_distribution(heterogeneity=0)
