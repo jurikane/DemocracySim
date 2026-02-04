@@ -68,7 +68,13 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
     params = {
         "height": model_cfg.height,
         "width": model_cfg.width,
-        "seed": getattr(model_cfg, "seed", None),  # Optional seed
+        "seed": mesa.visualization.Slider(
+            name="Seed (None = random)",
+            value=int(getattr(model_cfg, "seed", 42) or 42),
+            min_value=0,
+            max_value=200,
+            step=1,
+        ),
         "rule_idx": mesa.visualization.Slider(
             name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
             value=model_cfg.rule_idx,

@@ -446,11 +446,28 @@ class ParticipationModel(mesa.Model):
     def initialize_datacollector(self) -> mesa.DataCollector:
         # Live (run.py) visualization expects snake_case keys.
         color_data = {f"color_{i}": get_color_distribution_function(i) for i in range(self.num_colors)}
+
+        def mean_p_participation(m: "ParticipationModel") -> float:
+            agents = getattr(m, "voting_agents", [])
+            if not agents:
+                return 0.0
+            vals = [float(a.participation_probability()) for a in agents if a is not None]
+            return float(np.mean(vals)) if vals else 0.0
+
+        def mean_altruism(m: "ParticipationModel") -> float:
+            agents = getattr(m, "voting_agents", [])
+            if not agents:
+                return 0.0
+            vals = [float(getattr(a, "altruism_factor", 0.0)) for a in agents if a is not None]
+            return float(np.mean(vals)) if vals else 0.0
+
         return mesa.DataCollector(
             model_reporters={
                 "collective_assets": compute_collective_assets,
                 "gini_index": compute_gini_index,
                 "turnout": get_voter_turnout,
+                "mean_p_participation": mean_p_participation,
+                "mean_altruism": mean_altruism,
                 **color_data,
                 "grid_colors": get_grid_colors,
             },

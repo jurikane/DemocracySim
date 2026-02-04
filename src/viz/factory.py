@@ -115,6 +115,14 @@ def make_charts(cfg: AppConfig) -> list:
         data_collector_name="datacollector",
     )
 
+    learning_means_chart = ChartModule(
+        [
+            {"Label": "mean_p_participation", "Color": "Black"},
+            {"Label": "mean_altruism", "Color": "Blue"},
+        ],
+        data_collector_name="datacollector",
+    )
+
     # Advanced matplotlib-based elements
     from src.viz.visualisation_elements import (
         PersonalityGroupDistribution,
@@ -122,8 +130,12 @@ def make_charts(cfg: AppConfig) -> list:
         VoterTurnoutElement,
         AreaGiniElement,
         AreaPersonalityGroupDists,
+        AgentLearningHistograms,
+        CohortElectionLearningDiagnostics,
     )
     extras = [
+        AgentLearningHistograms(),
+        CohortElectionLearningDiagnostics(),
         PersonalityGroupDistribution(),
         AreaStats(),
         VoterTurnoutElement(),
@@ -131,4 +143,4 @@ def make_charts(cfg: AppConfig) -> list:
         AreaPersonalityGroupDists(),
     ]
 
-    return [color_distribution_chart, wealth_chart, voter_turnout, *extras]
+    return [color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, *extras]

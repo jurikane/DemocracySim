@@ -366,7 +366,7 @@ class Area(Agent):
             # between a.personal_opt_dist (agent personality_group dist) and the elected outcome
             # expressed as a distribution (not ordering).
             p = dist_func(a.personality_group, self.voted_ordering, color_search_pairs)
-            pers_component = (1 - p) * pool_share
+            pers_component = (0.5 - p) * pool_share
             a.add_personal_reward(pers_component)
             a.add_common_reward(common_component)
             a.reward_agent()  # Apply the accumulated rewards/penalties to assets

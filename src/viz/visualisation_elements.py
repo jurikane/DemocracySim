@@ -5,6 +5,7 @@ from src.viz.factory import COLORS, get_vis_cfg
 import base64
 import math
 import io
+import numpy as np
 
 # Visualization config (is set by make_canvas before these are instantiated)
 vis_cfg = get_vis_cfg()
@@ -283,3 +284,316 @@ class AreaPersonalityGroupDists(TextElement):
         if getattr(model.scheduler, 'steps', 0) == 0:
             self.create_once(model)
         return self.areas_pers_dist_plot or ""
+
+
+class AgentLearningHistograms(TextElement):
+    """Fast feedback panel: per-step histograms over voting agents.
+
+    Reads agent state directly from model.voting_agents (no schema/logging changes).
+    Renders 4 histograms:
+      - participation probability p
+      - q_participation
+      - altruism_factor
+      - assets
+    and prints mean/median for p and altruism.
+
+    Intended for live sanity checks while tuning knobs.
+    """
+
+    def render(self, model) -> str:
+        step = int(getattr(getattr(model, "scheduler", None), "steps", 0) or 0)
+        agents = [a for a in getattr(model, "voting_agents", []) if a is not None]
+        if not agents:
+            return ""
+
+        # Collect vectors (robust to missing attributes during refactors)
+        try:
+            p = np.asarray([float(a.participation_probability()) for a in agents], dtype=np.float64)
+        except (AttributeError, TypeError, ValueError):
+            p = np.asarray([], dtype=np.float64)
+
+        q = np.asarray([float(getattr(a, "q_participation", 0.0)) for a in agents], dtype=np.float64)
+        altruism = np.asarray([float(getattr(a, "altruism_factor", 0.0)) for a in agents], dtype=np.float64)
+        assets = np.asarray([float(getattr(a, "assets", 0.0)) for a in agents], dtype=np.float64)
+
+        # Require something meaningful
+        if p.size == 0:
+            return ""
+
+        # Summary stats (finite only)
+        def _finite(x: np.ndarray) -> np.ndarray:
+            return x[np.isfinite(x)]
+
+        p_f = _finite(p)
+        a_f = _finite(altruism)
+        if p_f.size == 0 or a_f.size == 0:
+            return ""
+
+        p_mean = float(np.mean(p_f))
+        p_median = float(np.median(p_f))
+        a_mean = float(np.mean(a_f))
+        a_median = float(np.median(a_f))
+
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(8, 6))
+        ax = axes[0][0]
+        ax.hist(p_f, bins=20, range=(0.0, 1.0), color="gray", alpha=0.8)
+        ax.set_title(f"p_participation (mean={p_mean:.3f}, med={p_median:.3f})")
+        ax.set_xlim(0.0, 1.0)
+
+        ax = axes[0][1]
+        q_f = _finite(q)
+        ax.hist(q_f, bins=20, color="black", alpha=0.8)
+        ax.set_title("q_participation")
+
+        ax = axes[1][0]
+        ax.hist(a_f, bins=20, range=(0.0, 1.0), color="blue", alpha=0.8)
+        ax.set_title(f"altruism_factor (mean={a_mean:.3f}, med={a_median:.3f})")
+        ax.set_xlim(0.0, 1.0)
+
+        ax = axes[1][1]
+        assets_f = _finite(assets)
+        ax.hist(assets_f, bins=20, color="green", alpha=0.8)
+        ax.set_title("assets")
+
+        fig.suptitle(f"Agent learning inspector (step={step})")
+        plt.tight_layout()
+        return save_plot_to_base64(fig)
+
+
+class CohortElectionLearningDiagnostics(TextElement):
+    """Cohort-stratified election learning diagnostics for live runs.
+
+    Reads directly from model.voting_agents and uses per-election variables stored on agents.
+
+    Per personality_group (cohort), we compute (eligible agents only):
+      - counts + participation_rate
+      - mean/median delta for participants vs abstainers
+      - mean fee (participants), mean common reward, mean personal reward
+      - optional: mean altruism_factor, mean participation_probability
+
+    Plot layout:
+      A: participation rate by group
+      B: mean delta participants vs abstainers by group
+      C: fee/common/personal means by group
+      D: optional altruism mean by group
+
+    If groups > 10: show top-K by population + 'other'.
+    """
+
+    def __init__(self, top_k: int = 8):
+        super().__init__()
+        self.top_k = int(top_k)
+
+    @staticmethod
+    def _safe_mean(x: np.ndarray) -> float:
+        x = x[np.isfinite(x)]
+        return float(np.mean(x)) if x.size else float("nan")
+
+    @staticmethod
+    def _safe_median(x: np.ndarray) -> float:
+        x = x[np.isfinite(x)]
+        return float(np.median(x)) if x.size else float("nan")
+
+    def _compute(self, model):
+        agents = [a for a in getattr(model, "voting_agents", []) if a is not None]
+        if not agents:
+            return None
+
+        # Build per-agent rows (eligible only)
+        rows = []
+        for a in agents:
+            eligible = bool(getattr(a, "eligible_for_election", False))
+            if not eligible:
+                continue
+            gid = getattr(a, "personality_group_idx", None)
+            if gid is None:
+                continue
+            try:
+                gid_i = int(gid)
+            except (TypeError, ValueError):
+                continue
+
+            participated = bool(getattr(a, "participating", False))
+            delta = float(getattr(a, "election_delta_signal", 0.0))
+            fee = float(getattr(a, "_fee", 0.0))
+            common = float(getattr(a, "_reward_common_comp", 0.0))
+            personal = float(getattr(a, "_reward_pers_comp", 0.0))
+            altruism = float(getattr(a, "altruism_factor", 0.0))
+            try:
+                p_part = float(a.participation_probability())
+            except Exception:
+                p_part = float("nan")
+
+            rows.append(
+                (gid_i, participated, delta, fee, common, personal, altruism, p_part)
+            )
+
+        if not rows:
+            return None
+
+        arr = np.asarray(rows, dtype=np.float64)
+        gid = arr[:, 0].astype(np.int64)
+        participated = arr[:, 1].astype(bool)
+        delta = arr[:, 2]
+        fee = arr[:, 3]
+        common = arr[:, 4]
+        personal = arr[:, 5]
+        altruism = arr[:, 6]
+        p_part = arr[:, 7]
+
+        # Determine groups to show
+        unique_g, counts = np.unique(gid, return_counts=True)
+        order = np.argsort(counts)[::-1]
+        unique_g = unique_g[order]
+        counts = counts[order]
+
+        show_other = unique_g.size > 10
+        if show_other:
+            k = min(self.top_k, unique_g.size)
+            show_groups = unique_g[:k]
+            other_groups = set(unique_g[k:].tolist())
+        else:
+            show_groups = unique_g
+            other_groups = set()
+
+        labels = [str(int(g)) for g in show_groups]
+        if show_other:
+            labels.append("other")
+
+        def _mask_for_group(gval):
+            return gid == gval
+
+        # Aggregate per shown group
+        out = {
+            "labels": labels,
+            "eligible": [],
+            "participants": [],
+            "abstainers": [],
+            "rate": [],
+            "delta_p_mean": [],
+            "delta_p_median": [],
+            "delta_a_mean": [],
+            "delta_a_median": [],
+            "fee_mean": [],
+            "common_mean": [],
+            "personal_mean": [],
+            "altruism_mean": [],
+            "p_part_mean": [],
+        }
+
+        def _add_bucket(mask: np.ndarray):
+            elig_n = int(np.sum(mask))
+            part_mask = mask & participated
+            abst_mask = mask & (~participated)
+            part_n = int(np.sum(part_mask))
+            abst_n = int(np.sum(abst_mask))
+            rate = float(part_n / elig_n) if elig_n > 0 else float("nan")
+
+            out["eligible"].append(elig_n)
+            out["participants"].append(part_n)
+            out["abstainers"].append(abst_n)
+            out["rate"].append(rate)
+
+            out["delta_p_mean"].append(self._safe_mean(delta[part_mask]))
+            out["delta_p_median"].append(self._safe_median(delta[part_mask]))
+            out["delta_a_mean"].append(self._safe_mean(delta[abst_mask]))
+            out["delta_a_median"].append(self._safe_median(delta[abst_mask]))
+
+            # Fee meaningful only for participants
+            out["fee_mean"].append(self._safe_mean(fee[part_mask]))
+            out["common_mean"].append(self._safe_mean(common[mask]))
+            out["personal_mean"].append(self._safe_mean(personal[mask]))
+            out["altruism_mean"].append(self._safe_mean(altruism[mask]))
+            out["p_part_mean"].append(self._safe_mean(p_part[mask]))
+
+        for g in show_groups:
+            _add_bucket(_mask_for_group(g))
+        if show_other:
+            other_mask = np.isin(gid, np.array(list(other_groups), dtype=np.int64))
+            _add_bucket(other_mask)
+
+        # Convert lists -> arrays
+        for k in list(out.keys()):
+            if k == "labels":
+                continue
+            out[k] = np.asarray(out[k], dtype=np.float64)
+
+        return out
+
+    def render(self, model) -> str:
+        step = int(getattr(getattr(model, "scheduler", None), "steps", 0) or 0)
+        if step == 0:
+            # Avoid noisy empty plots before the first election has happened.
+            return ""
+
+        stats = self._compute(model)
+        if stats is None:
+            return ""
+
+        labels = stats["labels"]
+        n = len(labels)
+        x = np.arange(n)
+
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12, 7))
+
+        # Panel A: participation rate
+        ax = axes[0][0]
+        rate = stats["rate"]
+        ax.bar(x, np.nan_to_num(rate, nan=0.0), color="gray", alpha=0.85)
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_title("Participation rate by personality_group")
+        ax.set_ylabel("participant_count / eligible")
+
+        # Panel B: mean delta participants vs abstainers
+        ax = axes[0][1]
+        w = 0.4
+        dp = stats["delta_p_mean"]
+        da = stats["delta_a_mean"]
+        ax.bar(x - w / 2, np.nan_to_num(dp, nan=0.0), width=w, label="participants", color="black", alpha=0.8)
+        ax.bar(x + w / 2, np.nan_to_num(da, nan=0.0), width=w, label="abstainers", color="red", alpha=0.6)
+        ax.axhline(0.0, color="k", linewidth=0.8)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_title("Mean delta_assets by action (eligible only)")
+        ax.set_ylabel("mean delta_assets")
+        ax.legend()
+
+        # Panel C: decomposition
+        ax = axes[1][0]
+        fee_m = stats["fee_mean"]
+        common_m = stats["common_mean"]
+        pers_m = stats["personal_mean"]
+        ax.bar(x - w, np.nan_to_num(fee_m, nan=0.0), width=w, label="fee (participants)", color="orange", alpha=0.8)
+        ax.bar(x, np.nan_to_num(common_m, nan=0.0), width=w, label="common reward", color="blue", alpha=0.6)
+        ax.bar(x + w, np.nan_to_num(pers_m, nan=0.0), width=w, label="personal reward", color="green", alpha=0.6)
+        ax.axhline(0.0, color="k", linewidth=0.8)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_title("Reward decomposition means")
+        ax.set_ylabel("mean component")
+        ax.legend(fontsize=8)
+
+        # Panel D: altruism + p
+        ax = axes[1][1]
+        altru = stats["altruism_mean"]
+        pmean = stats["p_part_mean"]
+        ax.plot(x, np.nan_to_num(altru, nan=0.0), marker="o", label="mean altruism_factor", color="blue")
+        ax.plot(x, np.nan_to_num(pmean, nan=0.0), marker="o", label="mean p_participation", color="black")
+        ax.set_ylim(0.0, 1.0)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_title("Mean altruism_factor and p_participation")
+        ax.legend(fontsize=8)
+
+        elig = stats["eligible"].astype(int)
+        parts = stats["participants"].astype(int)
+        abst = stats["abstainers"].astype(int)
+        fig.suptitle(
+            f"Cohort election learning diagnostics (step={step}) | eligible/part/abst per group: "
+            + ", ".join([f"{labels[i]}:{elig[i]}/{parts[i]}/{abst[i]}" for i in range(n)])
+        )
+        plt.tight_layout()
+        return save_plot_to_base64(fig)
+
