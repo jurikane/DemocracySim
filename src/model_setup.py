@@ -41,6 +41,11 @@ _ALLOWED_KW = {
     "participation_init_q",
     "participation_q_max",
     "bias_toward_participation",
+    # Adaptive altruism learning
+    "altruism_alpha",
+    "altruism_init",
+    "altruism_clip_min",
+    "altruism_clip_max",
     # Per-agent personal_opt_dist
     "personal_opt_dist_concentration",
 }
@@ -175,6 +180,34 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             min_value=0.0,
             max_value=5.0,
             step=0.1,
+        ),
+        "altruism_alpha": mesa.visualization.Slider(
+            name="Altruism learning alpha",
+            value=model_cfg.altruism_alpha,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "altruism_init": mesa.visualization.Slider(
+            name="Altruism init factor",
+            value=model_cfg.altruism_init,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "altruism_clip_min": mesa.visualization.Slider(
+            name="Altruism clip min",
+            value=model_cfg.altruism_clip_min,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "altruism_clip_max": mesa.visualization.Slider(
+            name="Altruism clip max",
+            value=model_cfg.altruism_clip_max,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
         ),
         "color_patches_steps": mesa.visualization.Slider(
             name="Patches size (# steps)",

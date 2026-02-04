@@ -147,6 +147,10 @@ class VoteAgent(Agent):
         )
         self.voting_strategy = voting_strategy if voting_strategy is not None else DefaultVotingStrategy()
 
+        # --- Adaptive altruism (reality-weight) learning (per agent) ---
+        init_a = getattr(model, "altruism_init", 0.5)
+        self.altruism_factor = float(init_a)
+
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
                 f"personality_group={self.personality_group}, assets={self.assets})")
@@ -328,6 +332,26 @@ class VoteAgent(Agent):
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = q
+
+    def apply_altruism_update(self, delta_assets: float) -> None:
+        """Participant-only learning of altruism_factor (reality-weight).
+        Update rule:
+            a = a + altruism_alpha * delta_assets
+            a = clip(a, [altruism_clip_min, altruism_clip_max])
+        """
+        if not self.participating:
+            return
+        alpha = float(getattr(self.model, "altruism_alpha", 0.0))
+        if alpha == 0.0:
+            return
+
+        a = float(self.altruism_factor)
+        a = a + alpha * float(delta_assets)
+
+        lo = float(getattr(self.model, "altruism_clip_min", 0.0))
+        hi = float(getattr(self.model, "altruism_clip_max", 1.0))
+        a = float(np.clip(a, lo, hi))
+        self.altruism_factor = a
 
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)

@@ -39,6 +39,12 @@ model:
   # Per-agent personal_opt_dist (static)
   personal_opt_dist_concentration: 1.0
 
+  # Adaptive altruism learning (reality-weight)
+  altruism_alpha: 0.05
+  altruism_init: 0.5
+  altruism_clip_min: 0.0
+  altruism_clip_max: 1.0
+
 visualization:
   cell_size: 10
   draw_borders: true

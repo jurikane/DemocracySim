@@ -14,6 +14,11 @@ REQUIRED_MODEL_KEYS = {
     "bias_toward_participation",
     # Personal preference intensity distribution
     "personal_opt_dist_concentration",
+    # Adaptive altruism learning
+    "altruism_alpha",
+    "altruism_init",
+    "altruism_clip_min",
+    "altruism_clip_max",
 }
 
 

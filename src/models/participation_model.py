@@ -140,6 +140,10 @@ class ParticipationModel(mesa.Model):
         participation_init_q: float = 0.0,
         participation_q_max: float = 50.0,
         bias_toward_participation: float = 0.0,
+        altruism_alpha: float = 0.05,
+        altruism_init: float = 0.5,
+        altruism_clip_min: float = 0.0,
+        altruism_clip_max: float = 1.0,
         personal_opt_dist_concentration: float = 1.0,
     ):
         super().__init__()
@@ -147,11 +151,16 @@ class ParticipationModel(mesa.Model):
         # Store scalar params early because agent init depends on them.
         self.known_cells = known_cells  # Integer
         # Adaptive participation learning parameters (global per agent)
-        self.participation_alpha = float(participation_alpha)
-        self.participation_beta = float(participation_beta)
+        self.participation_alpha = float(participation_alpha)  # Learning rate
+        self.participation_beta = float(participation_beta)  # Sensitivity
         self.participation_init_q = float(participation_init_q)
         self.participation_q_max = float(participation_q_max)
         self.bias_toward_participation = float(bias_toward_participation)
+        # Adaptive altruism learning parameters (global per agent)
+        self.altruism_alpha = float(altruism_alpha)  # Learning rate. How fast q changes in response to the signal.
+        self.altruism_init = float(altruism_init)
+        self.altruism_clip_min = float(altruism_clip_min)
+        self.altruism_clip_max = float(altruism_clip_max)
         self.personal_opt_dist_concentration = personal_opt_dist_concentration
 
         # Initialize RNGs early

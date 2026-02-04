@@ -19,6 +19,12 @@ class ModelConfig(BaseModel):
     participation_q_max: float = 50.0
     bias_toward_participation: float = 0.0
 
+    # --- Adaptive altruism learning (reality-weight) ---
+    altruism_alpha: float = 0.05
+    altruism_init: float = 0.5
+    altruism_clip_min: float = 0.0
+    altruism_clip_max: float = 1.0
+
     num_agents: int        # Number of agents in the simulation
     common_assets: int     # Initial collective assets
     num_colors: int        # Number of color options

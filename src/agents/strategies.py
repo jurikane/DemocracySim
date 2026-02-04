@@ -48,8 +48,8 @@ class DefaultVotingStrategy:
         # Assumes Area._tally_votes already populated agent.known_cells for this election.
         est_real_dist, _conf = agent.estimate_real_distribution(area)
 
-        altruism_factor = float(agent.model.np_random.random())
-        # - 0.0 = > purely self-interest (personal_opt_dist)
+        altruism_factor = float(getattr(agent, "altruism_factor", 0.5))
+        # - 0.0 => purely self-interest (personal_opt_dist)
         # - 1.0 => purely reality-tracking (est_real_dist)
 
         target_dist = mix_distributions(
