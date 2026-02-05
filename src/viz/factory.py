@@ -128,6 +128,7 @@ def make_charts(cfg: AppConfig) -> list:
     # Advanced matplotlib-based elements
     from src.viz.visualisation_elements import (
         PersonalityGroupDistribution,
+        AreaDiagnosticsPanel,
         AreaStats,
         VoterTurnoutElement,
         AreaGiniElement,
@@ -138,9 +139,8 @@ def make_charts(cfg: AppConfig) -> list:
     if calibration_mode:
         # Calibration layout: area-focused first, then histograms, then global charts.
         extras = [
+            AreaDiagnosticsPanel(),
             AreaStats(),
-            VoterTurnoutElement(),
-            AreaGiniElement(),
             AgentLearningHistograms(),
             CohortElectionLearningDiagnostics(),
         ]

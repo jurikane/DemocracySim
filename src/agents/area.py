@@ -37,6 +37,7 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
+        self._diag_history: List[dict] = []  # Per-area diagnostics time series
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -269,7 +270,67 @@ class Area(Agent):
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
+        self._update_diag_history()
         return int((n / self.num_agents) * 100) # Voter turnout in percent
+
+    def _update_diag_history(self) -> None:
+        """Append per-area diagnostics for the current step."""
+        agents = [a for a in self.agents if a is not None]
+        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
+        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
+        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
+
+        def _mean(vals):
+            return float(np.mean(vals)) if len(vals) > 0 else float("nan")
+
+        def _mean_attr(pool, attr):
+            return _mean([float(getattr(a, attr, 0.0)) for a in pool])
+
+        def _mean_participation_prob(pool):
+            vals = []
+            for a in pool:
+                try:
+                    vals.append(float(a.participation_probability()))
+                except Exception:
+                    vals.append(float("nan"))
+            return _mean([v for v in vals if np.isfinite(v)])
+
+        # Per-election delta (relative) means
+        mean_delta_rel_participants = _mean_attr(participants, "election_delta_rel")
+        mean_delta_rel_abstainers = _mean_attr(abstainers, "election_delta_rel")
+
+        # Reward components (absolute)
+        mean_common_reward = _mean_attr(eligible, "_reward_common_comp")
+        mean_personal_reward = _mean_attr(eligible, "_reward_pers_comp")
+
+        # Learning signals
+        mean_q_participation = _mean_attr(eligible, "q_participation")
+        mean_p_participation = _mean_participation_prob(eligible)
+        mean_altruism = _mean_attr(eligible, "altruism_factor")
+
+        # Area gini (0-100)
+        from src.utils.metrics import gini_index_0_100
+        assets = [float(getattr(a, "assets", 0.0)) for a in eligible]
+        gini = int(gini_index_0_100(assets)) if assets else 0
+
+        self._diag_history.append(
+            {
+                "turnout": float(self.voter_turnout),
+                "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
+                "mean_delta_rel_participants": mean_delta_rel_participants,
+                "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
+                "mean_common_reward": mean_common_reward,
+                "mean_personal_reward": mean_personal_reward,
+                "mean_q_participation": mean_q_participation,
+                "mean_p_participation": mean_p_participation,
+                "mean_altruism": mean_altruism,
+                "gini": float(gini),
+            }
+        )
+
+    @property
+    def diag_history(self) -> List[dict]:
+        return self._diag_history
 
     def _tally_votes(self) -> np.ndarray:
         """

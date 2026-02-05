@@ -87,6 +87,89 @@ class AreaStats(TextElement):
         return save_plot_to_base64(fig)
 
 
+class AreaDiagnosticsPanel(TextElement):
+    """Per-area diagnostics panel (Phase B).
+
+    Plots last N steps for each area in one row:
+      1) turnout
+      2) dist_to_reality
+      3) mean_delta_rel (participants vs abstainers)
+      4) mean common + mean personal rewards
+    """
+
+    def __init__(self, max_steps: int = 200):
+        super().__init__()
+        self.max_steps = int(max_steps)
+
+    def render(self, model) -> str:
+        step = getattr(model.scheduler, 'steps', 0)
+        if step == 0:
+            return ""
+
+        areas = [a for a in getattr(model, 'areas', []) if a is not None and a.unique_id != -1]
+        if not areas:
+            return ""
+
+        # Gather histories
+        histories = []
+        for area in areas:
+            hist = getattr(area, "diag_history", [])
+            if not hist:
+                histories.append([])
+            else:
+                histories.append(hist[-self.max_steps:])
+
+        if all(len(h) == 0 for h in histories):
+            return ""
+
+        num_areas = len(areas)
+        fig, axes = plt.subplots(nrows=num_areas, ncols=4, figsize=(12, 3.5 * num_areas), sharex=True)
+
+        # Handle case of single area
+        if num_areas == 1:
+            axes = [axes]
+
+        for i, area in enumerate(areas):
+            hist = histories[i]
+            if not hist:
+                continue
+
+            x = np.arange(len(hist))
+            turnout = [h.get("turnout") for h in hist]
+            dist = [h.get("dist_to_reality") for h in hist]
+            delta_p = [h.get("mean_delta_rel_participants") for h in hist]
+            delta_a = [h.get("mean_delta_rel_abstainers") for h in hist]
+            common = [h.get("mean_common_reward") for h in hist]
+            personal = [h.get("mean_personal_reward") for h in hist]
+
+            ax0, ax1, ax2, ax3 = axes[i]
+            ax0.plot(x, turnout, color="black")
+            ax0.set_title(f"Area {area.unique_id} turnout")
+            ax0.set_ylabel("%")
+
+            ax1.plot(x, dist, color="red")
+            ax1.set_title("dist_to_reality")
+
+            ax2.plot(x, delta_p, color="black", label="participants")
+            ax2.plot(x, delta_a, color="gray", label="abstainers")
+            ax2.axhline(0.0, color="k", linewidth=0.5)
+            ax2.set_title("mean delta_rel")
+            ax2.legend(fontsize=8)
+
+            ax3.plot(x, common, color="blue", label="common")
+            ax3.plot(x, personal, color="green", label="personal")
+            ax3.axhline(0.0, color="k", linewidth=0.5)
+            ax3.set_title("mean rewards")
+            ax3.legend(fontsize=8)
+
+            if i == num_areas - 1:
+                for ax in (ax0, ax1, ax2, ax3):
+                    ax.set_xlabel("Step")
+
+        plt.tight_layout()
+        return save_plot_to_base64(fig)
+
+
 class PersonalityGroupDistribution(TextElement):
     def __init__(self):
         super().__init__()
