@@ -40,7 +40,7 @@ def unnormalized_kendall_tau(ordering_1: IntArray, ordering_2: IntArray,
     return kendall_distance
 
 
-def kendall_tau_ordering(ordering_1: IntArray, ordering_2: IntArray,
+def kendall_tau_order(ordering_1: IntArray, ordering_2: IntArray,
                          search_pairs: Sequence[tuple[int, int]]) -> float:
     """Normalized Kendall tau distance on orderings (permutations).
 
@@ -72,7 +72,7 @@ def kendall_tau_ordering(ordering_1: IntArray, ordering_2: IntArray,
 # Backward-compatible name (ordering-based)
 def kendall_tau(ordering_1: IntArray, ordering_2: IntArray,
                 search_pairs: Sequence[tuple[int, int]]) -> float:
-    return kendall_tau_ordering(ordering_1, ordering_2, search_pairs)
+    return kendall_tau_order(ordering_1, ordering_2, search_pairs)
 
 
 def spearman_footrule_ranks(rank_arr_1: FloatArray, rank_arr_2: FloatArray) -> float:
@@ -94,7 +94,7 @@ def spearman_footrule_ranks(rank_arr_1: FloatArray, rank_arr_2: FloatArray) -> f
     return distance / max_dist if max_dist > 0 else 0.0
 
 
-def spearman_footrule_ordering(ordering_1: IntArray, ordering_2: IntArray, _search_pairs=None) -> float:
+def spearman_fr_order(ordering_1: IntArray, ordering_2: IntArray, _search_pairs=None) -> float:
     """Normalized Spearman footrule on orderings.
 
     Ordering: index = rank, value = option id.
@@ -113,7 +113,7 @@ def spearman_footrule_ordering(ordering_1: IntArray, ordering_2: IntArray, _sear
 # Backward-compatible name (ordering-based)
 
 def spearman(ordering_1: IntArray, ordering_2: IntArray, _search_pairs=None) -> float:
-    return spearman_footrule_ordering(ordering_1, ordering_2, _search_pairs)
+    return spearman_fr_order(ordering_1, ordering_2, _search_pairs)
 
 
 def l1_score_distance(score_1: FloatArray, score_2: FloatArray) -> float:

@@ -13,7 +13,11 @@ class ModelConfig(BaseModel):
     distance_idx: int      # Index of the distance function to use
 
     # --- Reward magnitude scaling (v2 economics) ---
-    reward_rate: float = 0.0  # Reward/punishment magnitude in % of agent assets
+    reward_rate_common: float = 0.0  # Common reward magnitude in % of agent assets
+    reward_rate_personal: float = 0.0  # Personal reward magnitude in % of agent assets
+    reward_threshold_common: float = 0.5  # Common coeff = threshold - dist_to_reality
+    reward_threshold_personal: float = 0.5  # Personal coeff = threshold - dist(personality, elected)
+    abstention_share: float = 1.0  # Share of common reward given to abstainers (0..1)
 
     # --- Adaptive participation learning (schema v2 thesis) ---
     participation_alpha: float = 0.05

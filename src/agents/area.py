@@ -333,8 +333,8 @@ class Area(Agent):
         Calculates and distributes rewards (or penalties) to agents based on outcomes.
 
         Contract (economics v2):
-        - Signs are determined by distances in [0,1] mapped via (0.5 - d)
-        - Magnitudes are scaled by agent wealth via model.reward_rate (0..1)
+        - Signs are determined by distances in [0,1] mapped via (threshold - d)
+        - Magnitudes are scaled by agent wealth via model.reward_rate_* (0..1)
         - Fee pool is tracked as a statistic but no longer sets reward magnitude
         """
         dist_func = self.model.distance_func
@@ -345,9 +345,11 @@ class Area(Agent):
             real_color_ord, self.voted_ordering, search_pairs
         )
         # Common component coefficient shared across agents
-        common_coeff = (0.5 - float(self.dist_to_reality))
-        # Model wide reward rate for scaling rewards/penalties by agent wealth
-        reward_rate = self.model.reward_rate
+        common_coeff = (self.model.reward_threshold_common - float(self.dist_to_reality))
+        # Model-wide reward rates for scaling rewards/penalties by agent wealth
+        reward_rate_common = self.model.reward_rate_common
+        reward_rate_personal = self.model.reward_rate_personal
+        abstention_share = self.model.abstention_share
         for a in self.agents:
             # Personality-based reward factor
             #   the closer the elected outcome to the agent's personality_group.
@@ -356,12 +358,15 @@ class Area(Agent):
             #   between a.personal_opt_dist (agent personality dist) and the elected outcome
             #   expressed as a distribution (not ordering).
             p = dist_func(a.personality_group, self.voted_ordering, search_pairs)
-            pers_coeff = (0.5 - p)
+            pers_coeff = (self.model.reward_threshold_personal - p)
 
             # Absolute rewards/penalties in asset units
-            scale = reward_rate * a.assets  # Scale by current wealth
-            pers_component = pers_coeff * scale
-            common_component = common_coeff * scale
+            scale_common = reward_rate_common * a.assets  # Scale by current wealth
+            scale_personal = reward_rate_personal * a.assets
+            pers_component = pers_coeff * scale_personal
+            common_component = common_coeff * scale_common
+            if not a.participating:
+                common_component *= abstention_share
             # Save and apply rewards/penalties to the agent.
             a.add_personal_reward(pers_component)
             a.add_common_reward(common_component)

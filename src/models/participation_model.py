@@ -5,7 +5,7 @@ import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
 from src.utils.social_welfare_functions import majority_rule, approval_voting
-from src.utils.distance_functions import spearman_footrule_ordering, kendall_tau_ordering
+from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors,
@@ -16,7 +16,7 @@ from src.utils.metrics import (compute_gini_index, compute_collective_assets,
 social_welfare_functions = [majority_rule, approval_voting]
 # Distance functions
 # (explicitly ordering-based)
-distance_functions = [spearman_footrule_ordering, kendall_tau_ordering]
+distance_functions = [spearman_fr_order, kendall_tau_order]
 
 
 class CustomScheduler(mesa.time.BaseScheduler):
@@ -134,7 +134,11 @@ class ParticipationModel(mesa.Model):
         rule_idx,
         distance_idx,
         election_cost_rate,
-        reward_rate: float = 0.02,
+        reward_rate_common: float = 0.0,
+        reward_rate_personal: float = 0.0,
+        reward_threshold_common: float = 0.5,
+        reward_threshold_personal: float = 0.5,
+        abstention_share: float = 1.0,
         seed=None,
         max_steps: Optional[int] = None,
         participation_alpha: float = 0.05,
@@ -194,7 +198,12 @@ class ParticipationModel(mesa.Model):
         self._av_area_color_dst = self._preset_color_dst
         # Elections
         self.election_cost_rate = election_cost_rate
-        self.reward_rate = reward_rate
+        # Reward scaling knobs
+        self.reward_rate_common = float(reward_rate_common)
+        self.reward_rate_personal = float(reward_rate_personal)
+        self.reward_threshold_common = float(reward_threshold_common)
+        self.reward_threshold_personal = float(reward_threshold_personal)
+        self.abstention_share = max(0.0, min(1.0, float(abstention_share)))
 
         # Wrap voting rules so they use deterministic RNG
         # Keep self.voting_rule as the base function for tests.
