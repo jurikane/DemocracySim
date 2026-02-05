@@ -90,11 +90,15 @@ class AreaStats(TextElement):
 class AreaDiagnosticsPanel(TextElement):
     """Per-area diagnostics panel (Phase B).
 
-    Plots last N steps for each area in one row:
-      1) turnout
-      2) dist_to_reality
-      3) mean_delta_rel (participants vs abstainers)
-      4) mean common + mean personal rewards
+    Plots last N steps for each area with two rows of three columns:
+      Row 1 (AreaStats):
+        1) area color distribution + dist_to_reality
+        2) elected ranking
+        3) mean common + mean personal rewards
+      Row 2 (Diagnostics):
+        4) turnout
+        5) dist_to_reality
+        6) mean_delta_rel (participants vs abstainers)
     """
 
     def __init__(self, max_steps: int = 200):
@@ -109,62 +113,117 @@ class AreaDiagnosticsPanel(TextElement):
         areas = [a for a in getattr(model, 'areas', []) if a is not None and a.unique_id != -1]
         if not areas:
             return ""
+        areas = sorted(areas, key=lambda a: int(getattr(a, "unique_id", 0)))
 
-        # Gather histories
+        # Diagnostics histories
         histories = []
         for area in areas:
             hist = getattr(area, "diag_history", [])
-            if not hist:
-                histories.append([])
-            else:
-                histories.append(hist[-self.max_steps:])
+            histories.append(hist[-self.max_steps:] if hist else [])
 
-        if all(len(h) == 0 for h in histories):
+        # AreaStats series from datacollector
+        data = model.datacollector.get_agent_vars_dataframe()
+        if data is None or len(data) == 0:
+            return ""
+        if ('area_color_distribution' not in data.columns
+                or 'dist_to_reality' not in data.columns
+                or 'elected_color' not in data.columns):
             return ""
 
+        color_distribution = data['area_color_distribution'].dropna()
+        dist_to_reality = data['dist_to_reality'].dropna()
+        election_results = data['elected_color'].dropna()
+
+        if len(color_distribution) == 0:
+            return ""
+
+        num_colors = len(color_distribution.iloc[0])
         num_areas = len(areas)
-        fig, axes = plt.subplots(nrows=num_areas, ncols=4, figsize=(12, 3.5 * num_areas), sharex=True)
+        fig, axes = plt.subplots(nrows=num_areas * 2, ncols=3,
+                                 figsize=(14, 3.5 * num_areas), sharex=False)
 
         # Handle case of single area
         if num_areas == 1:
             axes = [axes]
 
         for i, area in enumerate(areas):
-            hist = histories[i]
-            if not hist:
+            row_top = i * 2
+            row_bot = row_top + 1
+
+            # --- AreaStats (top row) ---
+            try:
+                area_cd = color_distribution.xs(area.unique_id, level=1)
+                area_dist = dist_to_reality.xs(area.unique_id, level=1)
+                area_elec = election_results.xs(area.unique_id, level=1)
+            except Exception:
                 continue
 
-            x = np.arange(len(hist))
-            turnout = [h.get("turnout") for h in hist]
-            dist = [h.get("dist_to_reality") for h in hist]
-            delta_p = [h.get("mean_delta_rel_participants") for h in hist]
-            delta_a = [h.get("mean_delta_rel_abstainers") for h in hist]
-            common = [h.get("mean_common_reward") for h in hist]
-            personal = [h.get("mean_personal_reward") for h in hist]
+            # limit to last N steps for AreaStats
+            if len(area_cd) > self.max_steps:
+                area_cd = area_cd.iloc[-self.max_steps:]
+            if len(area_dist) > self.max_steps:
+                area_dist = area_dist.iloc[-self.max_steps:]
+            if len(area_elec) > self.max_steps:
+                area_elec = area_elec.iloc[-self.max_steps:]
 
-            ax0, ax1, ax2, ax3 = axes[i]
-            ax0.plot(x, turnout, color="black")
-            ax0.set_title(f"Area {area.unique_id} turnout")
-            ax0.set_ylabel("%")
+            ax0 = axes[row_top][0]
+            ax1 = axes[row_top][1]
+            ax2 = axes[row_top][2]
 
-            ax1.plot(x, dist, color="red")
-            ax1.set_title("dist_to_reality")
+            ax0.plot(area_dist.index, area_dist.values, color='Black', linestyle='--')
+            for color_idx in range(num_colors):
+                cdata = area_cd.apply(lambda x: x[color_idx])
+                ax0.plot(cdata.index, cdata.values, color=COLORS[color_idx])
+            ax0.set_title(f'Area {area.unique_id} dist + dist_to_reality')
+            ax0.set_xlabel('Step')
+            ax0.set_ylabel('Color dist')
 
-            ax2.plot(x, delta_p, color="black", label="participants")
-            ax2.plot(x, delta_a, color="gray", label="abstainers")
-            ax2.axhline(0.0, color="k", linewidth=0.5)
-            ax2.set_title("mean delta_rel")
+            for color_id in range(num_colors):
+                cdata = area_elec.apply(lambda x: list(x).index(color_id) if color_id in x else None)
+                ax1.plot(cdata.index, cdata.values, marker='o',
+                         label=f'Color {color_id}', color=COLORS[color_id],
+                         linewidth=0.2)
+            ax1.set_title('Elected ranking')
+            ax1.set_xlabel('Step')
+            ax1.set_ylabel('Rank')
+            ax1.invert_yaxis()
+
+            # rewards (top row, col 3)
+            hist = histories[i]
+            if hist:
+                xh = np.arange(len(hist))
+                common = [h.get("mean_common_reward") for h in hist]
+                personal = [h.get("mean_personal_reward") for h in hist]
+                ax2.plot(xh, common, color="blue", label="common")
+                ax2.plot(xh, personal, color="green", label="personal")
+                ax2.axhline(0.0, color="k", linewidth=0.5)
+            ax2.set_title("mean rewards")
+            ax2.set_xlabel("Step")
             ax2.legend(fontsize=8)
 
-            ax3.plot(x, common, color="blue", label="common")
-            ax3.plot(x, personal, color="green", label="personal")
-            ax3.axhline(0.0, color="k", linewidth=0.5)
-            ax3.set_title("mean rewards")
-            ax3.legend(fontsize=8)
+            # --- Diagnostics (bottom row) ---
+            ax3 = axes[row_bot][0]
+            ax4 = axes[row_bot][1]
+            ax5 = axes[row_bot][2]
 
-            if i == num_areas - 1:
-                for ax in (ax0, ax1, ax2, ax3):
-                    ax.set_xlabel("Step")
+            if hist:
+                x = np.arange(len(hist))
+                turnout = [h.get("turnout") for h in hist]
+                dist = [h.get("dist_to_reality") for h in hist]
+                delta_p = [h.get("mean_delta_rel_participants") for h in hist]
+                delta_a = [h.get("mean_delta_rel_abstainers") for h in hist]
+
+                ax3.plot(x, turnout, color="black")
+                ax3.set_ylabel("%")
+                ax4.plot(x, dist, color="red")
+                ax5.plot(x, delta_p, color="black", label="participants")
+                ax5.plot(x, delta_a, color="gray", label="abstainers")
+                ax5.axhline(0.0, color="k", linewidth=0.5)
+
+            ax3.set_title("turnout")
+            ax4.set_title("dist_to_reality")
+            ax5.set_title("mean delta_rel")
+            ax5.legend(fontsize=8)
 
         plt.tight_layout()
         return save_plot_to_base64(fig)

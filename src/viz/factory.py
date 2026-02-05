@@ -140,7 +140,6 @@ def make_charts(cfg: AppConfig) -> list:
         # Calibration layout: area-focused first, then histograms, then global charts.
         extras = [
             AreaDiagnosticsPanel(),
-            AreaStats(),
             AgentLearningHistograms(),
             CohortElectionLearningDiagnostics(),
         ]
