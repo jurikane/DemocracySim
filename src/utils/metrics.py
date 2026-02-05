@@ -78,16 +78,18 @@ def compute_gini_index(model):
 
 
 def get_voter_turnout(model):
-    voter_turnout_sum = 0
-    num_areas = model.num_areas
-    for area in model.areas:
-        voter_turnout_sum += area.voter_turnout
-    if not model.global_area is None:
-        # TODO: Check the correctness and whether it makes sense to include the global area here
-        voter_turnout_sum += model.global_area.voter_turnout
-        num_areas += 1
-    elif num_areas == 0:
+    """Return global voter turnout as the mean across *stepped* areas.
+
+    Note: the model currently does NOT run elections for `model.global_area`.
+    If global elections are ever implemented, they should be included here
+    explicitly (and only then).
+    """
+    voter_turnout_sum = 0.0
+    num_areas = int(getattr(model, "num_areas", 0))
+    if num_areas == 0:
         return 0
+    for area in model.areas:
+        voter_turnout_sum += float(area.voter_turnout)
     return voter_turnout_sum / num_areas
 
 
