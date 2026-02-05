@@ -64,11 +64,12 @@ def score_options_c2(
     distance_func: Callable[[np.ndarray, np.ndarray, Sequence[tuple[int, int]]], float],
     color_search_pairs: Sequence[tuple[int, int]],
 ) -> np.ndarray:
-    """C2 scoring: convert target distribution to ordering externally, then score each option ordering.
+    """C2 scoring: target Ordering scored against option Orderings.
 
     Contract:
-    - Returns float32 vector of raw distances (lower=better)
-    - Must be in [0,1] if distance_func is correctly normalized
+    - Inputs: Orderings (permutations)
+    - Output: ScoreVector of raw distances (lower=better)
+    - Values must be in [0,1] if distance_func is correctly normalized
     - No normalization is performed here
 
     Pure function (no RNG).

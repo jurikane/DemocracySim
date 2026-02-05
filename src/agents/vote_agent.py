@@ -296,7 +296,7 @@ class VoteAgent(Agent):
         return self.participation_strategy.decide_participation(self, area)
 
     def vote(self, area: Area):
-        """Return raw oppose-scores over all options.
+        """Return raw oppose-scores (ScoreVector) over all options.
 
         Contract:
         - shape = (num_options,)

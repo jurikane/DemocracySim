@@ -1,24 +1,27 @@
 """
-Here we define the social welfare functions that can be used in the simulation.
-Beware:
-We assume the preference relation in the following (unconventional) way
-on purpose.
-pref_table: numpy matrix with one row per agent, column number is option number
-            and the values (each in [0,1]) are normalized ranking values.
-The purpose of this is to allow for non-discrete and non-equidistant rankings.
+Representation contract:
+- Input: ScoreVector table (pref_table)
+  * rows = agents
+  * columns = options
+  * values = disagreement/oppose scores (lower = better)
+- Output: Ordering (permutation) with best option first.
+
+This design allows non-discrete and non-equidistant preferences.
 """
+
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
 
-def complete_ranking(ranking: np.ndarray, num_options: int, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+def complete_ranking(ranking: np.ndarray, num_options: int, rng = None) -> np.ndarray:
     """
     This function adds options that are not in the ranking in a random order.
 
     Args:
         ranking (nd.ndarray): Partial ranking of option indices.
         num_options (int): The total number of options.
+        rng (np.random.Generator | None): Random number generator.
 
     Returns:
         np.ndarray: Completed ranking of length `num_options`.
@@ -45,6 +48,7 @@ def run_tie_breaking_preparation_for_majority(
     Args:
         pref_table (np.ndarray): Preferences per agent (rows) per option (cols).
         noise_factor (int): Controls noise magnitude.
+        rng (np.random.Generator | None): Random number generator.
 
     Returns:
         np.ndarray: Table without ties in first choices.
@@ -75,18 +79,17 @@ def run_tie_breaking_preparation_for_majority(
     # Put the parts back together
     return np.concatenate((pref_tab_var_non_zero, pref_tab_var_zero))
 
-def majority_rule(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+def majority_rule(pref_table: np.ndarray, rng = None) -> np.ndarray:
     """
     This function implements the majority rule social welfare function.
-    Beware: Input is a preference table (values define a ranking, index=option),
-            but the output is a ranking/an ordering (values represent options).
 
     Args:
-        pref_table (np.ndarray): Preferences (disagreement values)
-            per agent (rows) per option (cols).
+        pref_table (np.ndarray): ScoreVector table (disagreement values)
+            per agent (rows) per option (cols), lower = better.
+        rng (np.random.Generator | None): Random number generator.
 
     Returns:
-        np.ndarray: Resulting preference ranking (beware: not a pref. relation)
+        np.ndarray: Ordering (permutation) of options.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -149,17 +152,17 @@ def imp_prepr_for_approval(pref_table: np.ndarray) -> np.ndarray:
     return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
-def approval_voting(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+def approval_voting(pref_table: np.ndarray, rng = None) -> np.ndarray:
     """
     This function implements the approval voting social welfare function.
-    Beware: Input is a preference table (values define a ranking, index=option),
-            but the output is a ranking/an ordering (values represent options).
 
     Args:
-        pref_table (np.ndarray): Agent's preferences (disagreement) as matrix.
+        pref_table (np.ndarray): ScoreVector table (disagreement values).
+            per agent (rows) per option (cols), lower = better.
+        rng (np.random.Generator | None): Random number generator.
 
     Returns:
-        np.ndarray: Resulting preference ranking (beware: not a pref. relation).
+        np.ndarray: Ordering (permutation) of options.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -170,8 +173,8 @@ def approval_voting(pref_table: np.ndarray, rng: Optional[np.random.Generator] =
     return np.argsort(-(approval_counts + noise))
 
 
-def continuous_score_voting(pref_table: np.ndarray, rng: Optional[np.random.Generator] = None) -> np.ndarray:
-    """Continuous score voting with deterministic tie-breaking noise."""
+def continuous_score_voting(pref_table: np.ndarray, rng= None) -> np.ndarray:
+    """Continuous score voting returning an Ordering (permutation)."""
     if rng is None:
         rng = np.random.default_rng()
     scores = np.sum(pref_table, axis=0)

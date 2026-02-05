@@ -275,11 +275,11 @@ class Area(Agent):
         """
         Gathers votes from agents who choose to participate.
 
-        Each participating agent contributes a vector of dissatisfaction values with
-        respect to the available options. These values are combined into a NumPy array.
+        Each participating agent contributes a ScoreVector of oppose-scores over
+        the available options (lower = better). These are stacked into a matrix.
 
         Returns:
-            np.ndarray: A 2D array where each row corresponds to an agents' vote
+            np.ndarray: 2D array where each row is an agent's ScoreVector
             and each column corresponds to an option.
         """
         preference_profile = []
@@ -325,8 +325,7 @@ class Area(Agent):
                         est_dist=getattr(agent, "est_real_dist", None),
                         confidence=getattr(agent, "confidence", None),
                     )
-                # agent.vote returns an array containing dissatisfaction values
-                # between 0 and 1 for each option, interpretable as rank values.
+                # agent.vote returns a ScoreVector (oppose scores) for each option
         return np.array(preference_profile)
 
     def _distribute_rewards(self) -> None:

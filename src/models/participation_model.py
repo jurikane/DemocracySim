@@ -5,7 +5,7 @@ import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
 from src.utils.social_welfare_functions import majority_rule, approval_voting
-from src.utils.distance_functions import spearman, kendall_tau
+from src.utils.distance_functions import spearman_footrule_ordering, kendall_tau_ordering
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors,
@@ -15,7 +15,8 @@ from src.utils.metrics import (compute_gini_index, compute_collective_assets,
 # Voting rules to be accessible by index
 social_welfare_functions = [majority_rule, approval_voting]
 # Distance functions
-distance_functions = [spearman, kendall_tau]
+# (explicitly ordering-based)
+distance_functions = [spearman_footrule_ordering, kendall_tau_ordering]
 
 
 class CustomScheduler(mesa.time.BaseScheduler):
