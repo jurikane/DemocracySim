@@ -101,7 +101,7 @@ class AreaDiagnosticsPanel(TextElement):
         6) mean_delta_rel (participants vs abstainers)
     """
 
-    def __init__(self, max_steps: int = 200):
+    def __init__(self, max_steps: int = 10):
         super().__init__()
         self.max_steps = int(max_steps)
 
@@ -159,12 +159,9 @@ class AreaDiagnosticsPanel(TextElement):
                 continue
 
             # limit to last N steps for AreaStats
-            if len(area_cd) > self.max_steps:
-                area_cd = area_cd.iloc[-self.max_steps:]
-            if len(area_dist) > self.max_steps:
-                area_dist = area_dist.iloc[-self.max_steps:]
-            if len(area_elec) > self.max_steps:
-                area_elec = area_elec.iloc[-self.max_steps:]
+            area_cd = area_cd.tail(self.max_steps)
+            area_dist = area_dist.tail(self.max_steps)
+            area_elec = area_elec.tail(self.max_steps)
 
             ax0 = axes[row_top][0]
             ax1 = axes[row_top][1]
@@ -191,11 +188,12 @@ class AreaDiagnosticsPanel(TextElement):
             # rewards (top row, col 3)
             hist = histories[i]
             if hist:
-                xh = np.arange(len(hist))
+                hist_len = len(hist)
+                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
                 common = [h.get("mean_common_reward") for h in hist]
                 personal = [h.get("mean_personal_reward") for h in hist]
-                ax2.plot(xh, common, color="blue", label="common")
-                ax2.plot(xh, personal, color="green", label="personal")
+                ax2.plot(step_axis, common, color="blue", label="common")
+                ax2.plot(step_axis, personal, color="green", label="personal")
                 ax2.axhline(0.0, color="k", linewidth=0.5)
             ax2.set_title("mean rewards")
             ax2.set_xlabel("Step")
@@ -207,17 +205,18 @@ class AreaDiagnosticsPanel(TextElement):
             ax5 = axes[row_bot][2]
 
             if hist:
-                x = np.arange(len(hist))
+                hist_len = len(hist)
+                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
                 turnout = [h.get("turnout") for h in hist]
                 dist = [h.get("dist_to_reality") for h in hist]
                 delta_p = [h.get("mean_delta_rel_participants") for h in hist]
                 delta_a = [h.get("mean_delta_rel_abstainers") for h in hist]
 
-                ax3.plot(x, turnout, color="black")
+                ax3.plot(step_axis, turnout, color="black")
                 ax3.set_ylabel("%")
-                ax4.plot(x, dist, color="red")
-                ax5.plot(x, delta_p, color="black", label="participants")
-                ax5.plot(x, delta_a, color="gray", label="abstainers")
+                ax4.plot(step_axis, dist, color="red")
+                ax5.plot(step_axis, delta_p, color="black", label="participants")
+                ax5.plot(step_axis, delta_a, color="gray", label="abstainers")
                 ax5.axhline(0.0, color="k", linewidth=0.5)
 
             ax3.set_title("turnout")
