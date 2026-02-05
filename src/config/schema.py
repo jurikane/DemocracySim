@@ -57,6 +57,7 @@ class VisualizationConfig(BaseModel):
     cell_size: int = 10                # Size of each grid cell in pixels
     draw_borders: bool                 # Whether to draw area borders
     show_area_stats: Optional[bool] = True  # Show area statistics overlay
+    calibration_mode: bool = False     # Reorder UI for calibration-focused layout
 
 class SimulationConfig(BaseModel):
     """

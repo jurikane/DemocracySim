@@ -94,6 +94,8 @@ def make_charts(cfg: AppConfig) -> list:
     """
     model_cfg = cfg.model.model_dump()
     num_colors = int(model_cfg["num_colors"])
+    vis_cfg = cfg.visualization
+    calibration_mode = bool(getattr(vis_cfg, "calibration_mode", False))
 
     color_distribution_chart = ChartModule(
         [{"Label": f"color_{i}",
@@ -133,6 +135,17 @@ def make_charts(cfg: AppConfig) -> list:
         AgentLearningHistograms,
         CohortElectionLearningDiagnostics,
     )
+    if calibration_mode:
+        # Calibration layout: area-focused first, then histograms, then global charts.
+        extras = [
+            AreaStats(),
+            VoterTurnoutElement(),
+            AreaGiniElement(),
+            AgentLearningHistograms(),
+            CohortElectionLearningDiagnostics(),
+        ]
+        return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]
+
     extras = [
         AgentLearningHistograms(),
         CohortElectionLearningDiagnostics(),

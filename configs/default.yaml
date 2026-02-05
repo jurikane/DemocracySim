@@ -25,13 +25,13 @@ model:
   num_personality_groups: 4
 
   # Grid parameters
-  height: 100
-  width: 80
+  height: 80
+  width: 100
 
   # Voting Areas
   num_areas: 16
-  av_area_height: 25
-  av_area_width: 20
+  av_area_height: 20
+  av_area_width: 25
   area_size_variance: 0.0
 
   # Adaptive participation learning
@@ -54,6 +54,7 @@ visualization:
   cell_size: 10
   draw_borders: true
   show_area_stats: false
+  calibration_mode: false
 
 simulation:  # Config for headless runs
   runs: 3
