@@ -70,9 +70,9 @@ class Area(Agent):
         else:  # Apply variance
             w_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
             h_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
-            self._width = int(width * w_var_factor)
+            self._width = max(1, int(width * w_var_factor))
             self.width_off = abs(width - self._width)
-            self._height = int(height * h_var_factor)
+            self._height = max(1, int(height * h_var_factor))
             self.height_off = abs(height - self._height)
 
     @property
@@ -229,7 +229,7 @@ class Area(Agent):
             # Set to previous outcome but don't distribute rewards as usual
             print("Area", self.unique_id, "no one participated in the election")
             # If no previous outcome, use the real distribution ordering
-            real_color_ord = np.argsort(self.color_distribution)[::-1]
+            real_color_ord = np.argsort(self.color_distribution, kind="stable")[::-1]
             if self._voted_ordering is None:
                 self._voted_ordering = real_color_ord
             # Update dist_to_reality for monitoring but no rewards
@@ -339,7 +339,7 @@ class Area(Agent):
         """
         dist_func = self.model.distance_func
         # Calculate the distance to the real distribution using distance_func in [0,1]
-        real_color_ord = np.argsort(self.color_distribution)[::-1]  # Descending
+        real_color_ord = np.argsort(self.color_distribution, kind="stable")[::-1]  # Descending
         search_pairs = self.model.color_search_pairs
         self._dist_to_reality = dist_func(
             real_color_ord, self.voted_ordering, search_pairs
@@ -396,23 +396,20 @@ class Area(Agent):
         cell_set = set(self.cells)
         return [c for c in cell_list if c in cell_set]
 
-    def step(self) -> None:
-        """
-        Run one step of the simulation.
+    def run_election(self) -> bool:
+        """Run the election only (no mutation).
 
-        Conduct an election in the area,
-        mutate the cells' colors according to the election outcome
-        and update the color distribution of the area.
+        Returns:
+            bool: True if at least one agent participated.
         """
-        self._voter_turnout = self._conduct_election()  # The main election logic!
+        self._voter_turnout = self._conduct_election()  # The main election logic
         if self.voter_turnout == 0:
-            return  # TODO: What to do if no agent participated..?
+            return False  # No one participated
 
-        # --- schema v2 hook: snapshot right before mutation (post-election, pre-mutation)
+        # --- optional schema v2 hook: snapshot right before mutation (pre-mutation)
+        # NOTE: default logging does NOT use this snapshot for area_steps.parquet.
         area_snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
         if area_snapshot_sink is not None:
-            # Emit a minimal snapshot dict. The logger is responsible for
-            # completing/normalizing schema columns.
             area_snapshot_sink(
                 area=self,
                 snapshot={
@@ -422,19 +419,21 @@ class Area(Agent):
                     "participants": int(self.num_agents_participated_last),
                     "turnout": float(self.voter_turnout),
                     "dist_to_reality": float(self.dist_to_reality),
-                    # Should be the distribution used by reward logic (pre-mutation).
                     "area_color": np.asarray(self.color_distribution)
                     if self.color_distribution is not None else None,
                     "elected_color": np.asarray(self.voted_ordering)
                     if self.voted_ordering is not None else None,
                 },
             )
+        return True
 
-        # Mutate colors in cells
+    def mutate_cells(self) -> None:
+        """Mutate cell colors based on the last election outcome."""
+        if self.voter_turnout == 0:
+            return
         # Take some number of cells to mutate (i.e., 5 %)
         n_to_mutate = int(self.model.mu * self.num_cells)
         # TODO/Idea: What if the voter_turnout determines the mutation rate?
-        # randomly select x cells
         cells_to_mutate = self.random.sample(self.cells, n_to_mutate)
         # Use voted ordering to pick colors in descending order
         # To pre-select colors for all cells to mutate
@@ -449,3 +448,14 @@ class Area(Agent):
             cell.color = color
         # Important: Update the color distribution (because colors changed)
         self._update_color_distribution()
+
+    def step(self) -> None:
+        """
+        Run one step of the simulation.
+
+        Conduct an election in the area,
+        mutate the cells' colors according to the election outcome
+        and update the color distribution of the area.
+        """
+        self.run_election()
+        self.mutate_cells()

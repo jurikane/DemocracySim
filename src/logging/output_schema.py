@@ -4,7 +4,7 @@ This module is the *single source of truth* for the on-disk output format
 produced by headless batch runs.
 
 Key rules:
-- Step indexing semantics: post-election, post-reward, **pre-mutation**.
+- Step indexing semantics: post-election, post-reward, **post-mutation**.
 - Step-based data is stored in Parquet tables (no per-step JSON files).
 - Dense arrays (grids/overlays) remain in separate artifacts (e.g. in .npy).
 - No `run_id`. Every table includes:
@@ -31,8 +31,8 @@ SCHEMA_NAME: Final[str] = "output_schema_v2"
 SCHEMA_VERSION: Final[int] = 2
 
 # Indexing meaning for all step-based tables in this schema.
-# (Election has run, rewards distributed, mutation not applied yet.)
-STEP_INDEXING: Final[str] = "post_election_pre_mutation"
+# (Election has run, rewards distributed, mutation has been applied.)
+STEP_INDEXING: Final[str] = "post_election_post_mutation"
 
 
 @dataclass(frozen=True)

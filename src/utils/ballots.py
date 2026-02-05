@@ -26,11 +26,14 @@ def normalize_distribution(x: np.ndarray) -> np.ndarray:
 
 
 def ordering_from_distribution(dist: np.ndarray) -> np.ndarray:
-    """Convert a distribution into a ColorOrdering by descending probability."""
+    """Convert a distribution into a ColorOrdering by descending probability.
+
+    Tie-break: stable argsort uses lower option id first (deterministic).
+    """
     dist = np.asarray(dist, dtype=np.float32)
     if dist.ndim != 1:
         raise ValueError("dist must be 1D")
-    return np.argsort(dist)[::-1].astype(np.int16)
+    return np.argsort(dist, kind="stable")[::-1].astype(np.int16)
 
 
 def mix_distributions(*, altruism_factor: float, est_real_dist: np.ndarray, personal_opt_dist: np.ndarray) -> np.ndarray:

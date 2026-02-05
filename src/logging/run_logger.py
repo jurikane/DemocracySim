@@ -11,10 +11,9 @@ Responsibilities (Batch 1.0 only):
 
 Not implemented yet (future batches):
 - votes.parquet
-- pre-mutation snapshot hooks
 
 This module intentionally keeps core model logic unchanged and reads values from the
-model/areas/agents after each model.step().
+model/areas/agents after each model.step() (post-mutation state).
 """
 
 from __future__ import annotations
@@ -75,7 +74,7 @@ class RunLoggerV2:
         self._agent_rows: List[Dict[str, Any]] = []
         self._votes_rows: List[Dict[str, Any]] = []
         self._current_step: Optional[int] = None
-        # Pre-mutation area snapshots emitted from Area.step() (Batch 3)
+        # Reserved for optional future artifacts; not used for area_steps.parquet
         self._area_snapshots_by_step_area: Dict[tuple[int, int], Dict[str, Any]] = {}
 
     # -----------------
@@ -196,12 +195,10 @@ class RunLoggerV2:
     def attach_to_model(self, model: Model) -> None:
         """Attach schema-v2 sinks to the model.
 
-        - vote sink: used by Area._tally_votes() to emit participant vote rows.
-        - area snapshot sink: used by Area.step() to emit a post-election/pre-mutation
-          snapshot for area_steps.parquet.
+                - vote sink: used by Area._tally_votes() to emit participant vote rows.
         """
         setattr(model, "_schema_v2_vote_sink", self._on_vote)
-        setattr(model, "_schema_v2_area_snapshot_sink", self._on_area_snapshot)
+        # NOTE: pre-mutation area snapshots are not used for area_steps.parquet.
 
     def detach_from_model(self, model: Model) -> None:
         """Detach schema-v2 sinks from the model."""
@@ -215,8 +212,8 @@ class RunLoggerV2:
 
         Args:
             step: Recorded step number (schema v2 is 1-based).
-            model: The ParticipationModel.
-            grid_snapshot: Optional HxW array to write to grids/ (1-based).
+            model: The ParticipationModel (post-mutation state).
+            grid_snapshot: Optional HxW array to write to grids/ (1-based, post-mutation).
         """
         s = int(step)
         self._current_step = s
@@ -366,8 +363,6 @@ class RunLoggerV2:
                 continue
             area_id = int(getattr(area, "unique_id", -1))
 
-            snap = self._area_snapshots_by_step_area.get((step, area_id))
-
             # Base row
             r: Dict[str, Any] = {
                 "run_seed": np.int32(self.ctx.run_seed),
@@ -377,9 +372,7 @@ class RunLoggerV2:
                 "eligible_voters": np.int32(area.num_agents),
                 # Not tracked explicitly yet; default 0.
                 "participants": np.int32(0),
-                "turnout": np.float32(area.voter_turnout / 100.0
-                    if area.voter_turnout > 1.0 else float(area.voter_turnout)
-                ),
+                "turnout": np.float32(float(area.voter_turnout)),  # In percent
                 "election_cost_rate": np.float32(float(getattr(model, "election_cost_rate", 0.0) or 0.0)),
                 "fee_pool": np.float32(float(getattr(area, "_election_fee_pool", 0.0) or 0.0)),
                 "winning_option_id": np.int32(-1),
@@ -387,36 +380,12 @@ class RunLoggerV2:
                 "gini_index": np.int16(0),
             }
 
-            if snap is not None:
-                # Prefer the pre-mutation snapshot (Batch 3).
-                # TODO(schema-v2): remove post-step fallback once snapshot coverage is guaranteed.
-                if "eligible_voters" in snap and snap["eligible_voters"] is not None:
-                    r["eligible_voters"] = np.int32(int(snap["eligible_voters"]))
-                if "participants" in snap and snap["participants"] is not None:
-                    r["participants"] = np.int32(int(snap["participants"]))
-                if "turnout" in snap and snap["turnout"] is not None:
-                    tv = float(snap["turnout"])
-                    r["turnout"] = np.float32(tv / 100.0 if tv > 1.0 else tv)
-                if "election_cost_rate" in snap and snap["election_cost_rate"] is not None:
-                    r["election_cost_rate"] = np.float32(float(snap["election_cost_rate"]))
-                if "fee_pool" in snap and snap["fee_pool"] is not None:
-                    r["fee_pool"] = np.float32(float(snap["fee_pool"]))
-                if "dist_to_reality" in snap and snap["dist_to_reality"] is not None:
-                    r["dist_to_reality"] = np.float32(float(snap["dist_to_reality"]))
-
-                elected_color = snap.get("elected_color")
-                area_color = snap.get("area_color")
-                _apply_election_vectors(r_dict=r,
-                                        elected_color_vec=elected_color,
-                                        area_color_vec=area_color)
-            else:
-                # Fallback: post-step reads (may be post-mutation). Kept for safety.
-                # TODO(schema-v2): remove fallback once snapshot hook is tested across configs.
-                voted_ordering = getattr(area, "voted_ordering", None)
-                cd = getattr(area, "color_distribution", None)
-                _apply_election_vectors(r_dict=r,
-                                        elected_color_vec=voted_ordering,
-                                        area_color_vec=cd)
+            # Post-mutation reads only (canonical timing for area_steps.parquet).
+            voted_ordering = getattr(area, "voted_ordering", None)
+            cd = getattr(area, "color_distribution", None)
+            _apply_election_vectors(r_dict=r,
+                                    elected_color_vec=voted_ordering,
+                                    area_color_vec=cd)
 
             # area gini from agents' assets (same as old replay logger)
             agents = list(getattr(area, "agents", []) or [])
@@ -494,16 +463,16 @@ class RunLoggerV2:
         # estim_dst_color_* expanded columns
         dist = np.asarray(est_dist, dtype=np.float32) if est_dist is not None else None
         if dist is None or dist.ndim != 1:
-            # Emit zeros to satisfy contract (will be refined later if needed)
+            # Emit NaNs to avoid masking missing estimate_real_distribution()
             num_colors = int(agent.model.num_colors)
-            dist = np.zeros(num_colors, dtype=np.float32)
+            dist = np.full(num_colors, np.nan, dtype=np.float32)
         for i in range(dist.shape[0]):
             row[f"estim_dst_color_{i}"] = np.float32(dist[i])
 
         self._votes_rows.append(row)
 
     def _on_area_snapshot(self, *, area: Area, snapshot: Dict[str, Any]) -> None:
-        """Receive a post-election/pre-mutation snapshot for one area."""
+        """Receive a pre-mutation snapshot for one area (stored but not used)."""
         if self._current_step is None:
             return
         step = int(self._current_step)

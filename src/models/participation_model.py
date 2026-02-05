@@ -208,7 +208,7 @@ class ParticipationModel(mesa.Model):
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing rankings
-        self.search_pairs = list(combinations(range(0, self.options.shape[0]), 2))
+        # (Removed unused self.search_pairs to avoid O(options^2) memory growth.)
         self.option_vec = np.arange(self.options.shape[0])  # Also to speed up
         self.color_search_pairs = list(combinations(range(0, num_colors), 2))
         # Create color cells (IDs start after areas+agents)

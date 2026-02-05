@@ -2,7 +2,7 @@
 
 **Schema name:** `output_schema_v2`  
 **Schema version:** `2`  
-**Step indexing meaning:** `post_election_pre_mutation`
+**Step indexing meaning:** `post_election_post_mutation`
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
@@ -22,13 +22,13 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 
 ## Timing semantics (important)
 
-All Parquet tables are indexed as **post election + post reward, pre mutation**.
+All Parquet tables are indexed as **post election + post reward + post mutation**.
 
 Meaning for step `t` (where **t starts at 1**):
 - The election in each area has been conducted.
 - Rewards and participation costs have been applied.
-- **No color-cell mutation has been applied yet.**
-- `area_color_*` in `area_steps.parquet` is the *real* area color distribution used at election time and by the reward logic.
+- Color-cell mutation has already been applied.
+- `area_color_*` in `area_steps.parquet` reflects the **post-mutation** distribution for that step.
 
 ### Replay step 0
 
@@ -79,7 +79,7 @@ Merged area-state + election table.
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                 |
 | dist_to_reality                      | float32 | distance(real_order, voted_order)     |
 | gini_index                           |   int16 | area gini 0–100                       |
-| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**         |
+| area_color_0..area_color_{C-1}       | float32 | **post-mutation distribution**        |
 
 ### `agents.parquet`
 
