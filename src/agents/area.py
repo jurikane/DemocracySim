@@ -321,6 +321,9 @@ class Area(Agent):
         group_mean_delta_rel = [float("nan")] * num_groups
         group_mean_delta_rel_participants = [float("nan")] * num_groups
         group_mean_delta_rel_abstainers = [float("nan")] * num_groups
+        group_mean_common_reward = [float("nan")] * num_groups
+        group_mean_personal_reward = [float("nan")] * num_groups
+        group_mean_fee = [float("nan")] * num_groups
 
         if num_groups > 0:
             for g in range(num_groups):
@@ -336,6 +339,9 @@ class Area(Agent):
                     group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
                 if g_agents:
                     group_mean_assets[g] = _mean_attr(g_agents, "assets")
+                    group_mean_common_reward[g] = _mean_attr(g_agents, "_reward_common_comp")
+                    group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
+                    group_mean_fee[g] = _mean_attr(g_agents, "_fee")
 
         self._diag_history.append(
             {
@@ -354,6 +360,9 @@ class Area(Agent):
                 "group_mean_delta_rel": group_mean_delta_rel,
                 "group_mean_delta_rel_participants": group_mean_delta_rel_participants,
                 "group_mean_delta_rel_abstainers": group_mean_delta_rel_abstainers,
+                "group_mean_common_reward": group_mean_common_reward,
+                "group_mean_personal_reward": group_mean_personal_reward,
+                "group_mean_fee": group_mean_fee,
             }
         )
 

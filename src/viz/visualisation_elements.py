@@ -187,14 +187,29 @@ class AreaDiagnosticsPanel(TextElement):
             if hist:
                 hist_len = len(hist)
                 step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
-                common = [h.get("mean_common_reward") for h in hist]
-                personal = [h.get("mean_personal_reward") for h in hist]
-                ax2.plot(step_axis, common, color="blue", label="common")
-                ax2.plot(step_axis, personal, color="green", label="personal")
+                group_common = [h.get("group_mean_common_reward", []) for h in hist]
+                group_personal = [h.get("group_mean_personal_reward", []) for h in hist]
+                group_fee = [h.get("group_mean_fee", []) for h in hist]
+
+                num_groups = len(group_common[0]) if group_common and group_common[0] is not None else 0
+                cmap = plt.get_cmap("tab10")
+
+                for g in range(num_groups):
+                    c_series = [gc[g] if gc and len(gc) > g else float("nan") for gc in group_common]
+                    p_series = [gp[g] if gp and len(gp) > g else float("nan") for gp in group_personal]
+                    f_series = [gf[g] if gf and len(gf) > g else float("nan") for gf in group_fee]
+                    color = cmap(g % 10)
+
+                    ax2.plot(step_axis, c_series, color=color, label=f"g{g} com")
+                    ax2.plot(step_axis, p_series, color=color, linestyle="--", label=f"g{g} pers")
+                    ax2.plot(step_axis, f_series, color=color, linestyle=":", label=f"g{g} fee")
+
                 ax2.axhline(0.0, color="k", linewidth=0.5)
-            ax2.set_title("mean rewards")
+                if num_groups <= 10:
+                    ax2.legend(fontsize=6)
+            ax2.set_title("mean rewards/fees by group")
             ax2.set_xlabel("Step")
-            ax2.legend(fontsize=8)
+            ax2.legend(fontsize=6)
 
             # --- Diagnostics (bottom row) ---
             ax3 = axes[row_bot][0]
@@ -222,16 +237,16 @@ class AreaDiagnosticsPanel(TextElement):
 
                     ax3.plot(step_axis, t_series, color=color, label=f"g{g}")
                     ax4.plot(step_axis, a_series, color=color, label=f"g{g}")
-                    ax5.plot(step_axis, dp_series, color=color, label=f"g{g} p")
-                    ax5.plot(step_axis, da_series, color=color, linestyle=":", label=f"g{g} a")
+                    ax5.plot(step_axis, dp_series, color=color, linestyle=":", label=f"g{g} p")
+                    ax5.plot(step_axis, da_series, color=color, label=f"g{g} a")
 
                 ax3.set_ylabel("%")
                 ax5.axhline(0.0, color="k", linewidth=0.5)
 
                 if num_groups <= 10:
-                    ax3.legend(fontsize=8)
-                    ax4.legend(fontsize=8)
-                    ax5.legend(fontsize=8)
+                    ax3.legend(fontsize=6)
+                    ax4.legend(fontsize=6)
+                    ax5.legend(fontsize=6)
 
             ax3.set_title("turnout by group")
             ax4.set_title("mean assets by group")
@@ -727,7 +742,7 @@ class CohortElectionLearningDiagnostics(TextElement):
         ax.set_xticklabels(labels, rotation=45, ha="right")
         ax.set_title("Reward decomposition means")
         ax.set_ylabel("mean component")
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=6)
 
         # Panel D: altruism + p
         ax = axes[1][1]
@@ -739,7 +754,7 @@ class CohortElectionLearningDiagnostics(TextElement):
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
         ax.set_title("Mean altruism_factor and p_participation")
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=6)
 
         elig = stats["eligible"].astype(int)
         parts = stats["participants"].astype(int)

@@ -12,7 +12,6 @@ from src.models.participation_model import (
     social_welfare_functions,
 )
 from src.viz.factory import make_canvas, make_charts
-import random
 
 # The arguments accepted by ParticipationModel.__init__
 _ALLOWED_KW = {

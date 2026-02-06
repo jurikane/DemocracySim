@@ -156,7 +156,8 @@ class VoteAgent(Agent):
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
-                f"personality_group={self.personality_group}, assets={self.assets})")
+                f"pers_group_idx={self.personality_group_idx}, "
+                f"personality={self.personality}, assets={self.assets})")
 
     @property
     def position(self) -> tuple:
