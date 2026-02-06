@@ -313,6 +313,30 @@ class Area(Agent):
         assets = [float(getattr(a, "assets", 0.0)) for a in eligible]
         gini = int(gini_index_0_100(assets)) if assets else 0
 
+        # Per-personality_group metrics (area-level)
+        pg = getattr(self.model, "personality_groups", None)
+        num_groups = len(pg) if pg is not None else 0
+        group_turnout = [float("nan")] * num_groups
+        group_mean_assets = [float("nan")] * num_groups
+        group_mean_delta_rel = [float("nan")] * num_groups
+        group_mean_delta_rel_participants = [float("nan")] * num_groups
+        group_mean_delta_rel_abstainers = [float("nan")] * num_groups
+
+        if num_groups > 0:
+            for g in range(num_groups):
+                g_agents = [a for a in agents if int(getattr(a, "personality_group_idx", -1)) == g]
+                g_eligible = [a for a in eligible if int(getattr(a, "personality_group_idx", -1)) == g]
+                g_participants = [a for a in g_eligible if bool(getattr(a, "participating", False))]
+                g_abstainers = [a for a in g_eligible if not bool(getattr(a, "participating", False))]
+
+                if g_eligible:
+                    group_turnout[g] = float(len(g_participants) / len(g_eligible) * 100.0)
+                    group_mean_delta_rel[g] = _mean_attr(g_eligible, "election_delta_rel")
+                    group_mean_delta_rel_participants[g] = _mean_attr(g_participants, "election_delta_rel")
+                    group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
+                if g_agents:
+                    group_mean_assets[g] = _mean_attr(g_agents, "assets")
+
         self._diag_history.append(
             {
                 "turnout": float(self.voter_turnout),
@@ -325,6 +349,11 @@ class Area(Agent):
                 "mean_p_participation": mean_p_participation,
                 "mean_altruism": mean_altruism,
                 "gini": float(gini),
+                "group_turnout": group_turnout,
+                "group_mean_assets": group_mean_assets,
+                "group_mean_delta_rel": group_mean_delta_rel,
+                "group_mean_delta_rel_participants": group_mean_delta_rel_participants,
+                "group_mean_delta_rel_abstainers": group_mean_delta_rel_abstainers,
             }
         )
 

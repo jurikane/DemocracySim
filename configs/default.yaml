@@ -1,8 +1,8 @@
 model:
   # Elections
-  election_cost_rate: 0.1  # In percent of common assets
-  reward_rate_common: 0.1
-  reward_rate_personal: 0.1
+  election_cost_rate: 0.01  # In percent of common assets
+  reward_rate_common: 0.02
+  reward_rate_personal: 0.02
   reward_threshold_common: 0.5
   reward_threshold_personal: 0.5
   abstention_share: 1.0

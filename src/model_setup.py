@@ -12,6 +12,7 @@ from src.models.participation_model import (
     social_welfare_functions,
 )
 from src.viz.factory import make_canvas, make_charts
+import random
 
 # The arguments accepted by ParticipationModel.__init__
 _ALLOWED_KW = {
@@ -70,32 +71,35 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
     Create Mesa UI sliders/params so the web UI shows controls.
 
     """
-    params = {
-        "height": model_cfg.height,
-        "width": model_cfg.width,
-        "seed": mesa.visualization.Slider(
+    params = {}
+    if model_cfg.seed is not None:
+        params["seed"] = mesa.visualization.Slider(
             name="Seed (None = random)",
-            value=int(getattr(model_cfg, "seed", 42) or 42),
+            value=model_cfg.seed,
             min_value=0,
             max_value=200,
             step=1,
-        ),
+        )
+    # Add the rest of the params (except seed, which is optional) as sliders
+    params.update({
+        "height": model_cfg.height,
+        "width": model_cfg.width,
         "rule_idx": mesa.visualization.Slider(
-            name=f"Rule index {[r.__name__ for r in social_welfare_functions]}",
+            name=f"Rule idx {[r.__name__ for r in social_welfare_functions]}",
             value=model_cfg.rule_idx,
             min_value=0,
             max_value=len(social_welfare_functions) - 1,
             step=1,
         ),
         "distance_idx": mesa.visualization.Slider(
-            name=f"Dist-Function index {[f.__name__ for f in distance_functions]}",
+            name=f"Dist idx {[f.__name__ for f in distance_functions]}",
             value=model_cfg.distance_idx,
             min_value=0,
             max_value=len(distance_functions) - 1,
             step=1,
         ),
         "election_cost_rate": mesa.visualization.Slider(
-            name="Election cost/effort rate in % (wealth-scaled)",
+            name="Cost/Effort rate (wealth-scaled) to vote",
             value=model_cfg.election_cost_rate,
             min_value=0,
             max_value=1,
@@ -304,7 +308,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=0.99,
             step=0.1,
         ),
-    }
+    })
     return params
 
 

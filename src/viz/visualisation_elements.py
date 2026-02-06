@@ -95,10 +95,10 @@ class AreaDiagnosticsPanel(TextElement):
         1) area color distribution + dist_to_reality
         2) elected ranking
         3) mean common + mean personal rewards
-      Row 2 (Diagnostics):
-        4) turnout
-        5) dist_to_reality
-        6) mean_delta_rel (participants vs abstainers)
+            Row 2 (Diagnostics):
+                4) turnout by personality_group
+                5) mean assets by personality_group
+                6) mean delta_rel by personality_group
     """
 
     def __init__(self, max_steps: int = 10):
@@ -140,7 +140,7 @@ class AreaDiagnosticsPanel(TextElement):
         num_colors = len(color_distribution.iloc[0])
         num_areas = len(areas)
         fig, axes = plt.subplots(nrows=num_areas * 2, ncols=3,
-                     figsize=(14, 7.0 * num_areas), sharex=False)
+                     figsize=(14, 7.0 * num_areas), sharex=False) # type: ignore[arg-type]
 
         # Handle case of single area
         if num_areas == 1:
@@ -151,12 +151,9 @@ class AreaDiagnosticsPanel(TextElement):
             row_bot = row_top + 1
 
             # --- AreaStats (top row) ---
-            try:
-                area_cd = color_distribution.xs(area.unique_id, level=1)
-                area_dist = dist_to_reality.xs(area.unique_id, level=1)
-                area_elec = election_results.xs(area.unique_id, level=1)
-            except Exception:
-                continue
+            area_cd = color_distribution.xs(area.unique_id, level=1)
+            area_dist = dist_to_reality.xs(area.unique_id, level=1)
+            area_elec = election_results.xs(area.unique_id, level=1)
 
             # limit to last N steps for AreaStats
             area_cd = area_cd.tail(self.max_steps)
@@ -171,7 +168,7 @@ class AreaDiagnosticsPanel(TextElement):
             for color_idx in range(num_colors):
                 cdata = area_cd.apply(lambda x: x[color_idx])
                 ax0.plot(cdata.index, cdata.values, color=COLORS[color_idx])
-            ax0.set_title(f'Area {area.unique_id} dist + dist_to_reality')
+            ax0.set_title(f'Area {area.unique_id} color-dst | --- dist_to_reality')
             ax0.set_xlabel('Step')
             ax0.set_ylabel('Color dist')
 
@@ -207,22 +204,38 @@ class AreaDiagnosticsPanel(TextElement):
             if hist:
                 hist_len = len(hist)
                 step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
-                turnout = [h.get("turnout") for h in hist]
-                dist = [h.get("dist_to_reality") for h in hist]
-                delta_p = [h.get("mean_delta_rel_participants") for h in hist]
-                delta_a = [h.get("mean_delta_rel_abstainers") for h in hist]
 
-                ax3.plot(step_axis, turnout, color="black")
+                group_turnout = [h.get("group_turnout", []) for h in hist]
+                group_assets = [h.get("group_mean_assets", []) for h in hist]
+                group_delta_p = [h.get("group_mean_delta_rel_participants", []) for h in hist]
+                group_delta_a = [h.get("group_mean_delta_rel_abstainers", []) for h in hist]
+
+                num_groups = len(group_turnout[0]) if group_turnout and group_turnout[0] is not None else 0
+                cmap = plt.get_cmap("tab10")
+
+                for g in range(num_groups):
+                    t_series = [gt[g] if gt and len(gt) > g else float("nan") for gt in group_turnout]
+                    a_series = [ga[g] if ga and len(ga) > g else float("nan") for ga in group_assets]
+                    dp_series = [gd[g] if gd and len(gd) > g else float("nan") for gd in group_delta_p]
+                    da_series = [gd[g] if gd and len(gd) > g else float("nan") for gd in group_delta_a]
+                    color = cmap(g % 10)
+
+                    ax3.plot(step_axis, t_series, color=color, label=f"g{g}")
+                    ax4.plot(step_axis, a_series, color=color, label=f"g{g}")
+                    ax5.plot(step_axis, dp_series, color=color, label=f"g{g} p")
+                    ax5.plot(step_axis, da_series, color=color, linestyle=":", label=f"g{g} a")
+
                 ax3.set_ylabel("%")
-                ax4.plot(step_axis, dist, color="red")
-                ax5.plot(step_axis, delta_p, color="black", label="participants")
-                ax5.plot(step_axis, delta_a, color="gray", label="abstainers")
                 ax5.axhline(0.0, color="k", linewidth=0.5)
 
-            ax3.set_title("turnout")
-            ax4.set_title("dist_to_reality")
-            ax5.set_title("mean delta_rel")
-            ax5.legend(fontsize=8)
+                if num_groups <= 10:
+                    ax3.legend(fontsize=8)
+                    ax4.legend(fontsize=8)
+                    ax5.legend(fontsize=8)
+
+            ax3.set_title("turnout by group")
+            ax4.set_title("mean assets by group")
+            ax5.set_title("mean delta_rel by group")
 
         plt.tight_layout()
         return save_plot_to_base64(fig)
@@ -630,22 +643,22 @@ class CohortElectionLearningDiagnostics(TextElement):
             abst_n = int(np.sum(abst_mask))
             rate = float(part_n / elig_n) if elig_n > 0 else float("nan")
 
-            out["eligible"].append(elig_n)
-            out["participants"].append(part_n)
-            out["abstainers"].append(abst_n)
-            out["rate"].append(rate)
+            out["eligible"].append(elig_n)  # type: ignore[arg-type]
+            out["participants"].append(part_n)  # type: ignore[arg-type]
+            out["abstainers"].append(abst_n)  # type: ignore[arg-type]
+            out["rate"].append(rate)  # type: ignore[arg-type]
 
-            out["delta_p_mean"].append(self._safe_mean(delta[part_mask]))
-            out["delta_p_median"].append(self._safe_median(delta[part_mask]))
-            out["delta_a_mean"].append(self._safe_mean(delta[abst_mask]))
-            out["delta_a_median"].append(self._safe_median(delta[abst_mask]))
+            out["delta_p_mean"].append(self._safe_mean(delta[part_mask]))  # type: ignore[arg-type]
+            out["delta_p_median"].append(self._safe_median(delta[part_mask]))  # type: ignore[arg-type]
+            out["delta_a_mean"].append(self._safe_mean(delta[abst_mask]))  # type: ignore[arg-type]
+            out["delta_a_median"].append(self._safe_median(delta[abst_mask]))  # type: ignore[arg-type]
 
             # Fee meaningful only for participants
-            out["fee_mean"].append(self._safe_mean(fee[part_mask]))
-            out["common_mean"].append(self._safe_mean(common[mask]))
-            out["personal_mean"].append(self._safe_mean(personal[mask]))
-            out["altruism_mean"].append(self._safe_mean(altruism[mask]))
-            out["p_part_mean"].append(self._safe_mean(p_part[mask]))
+            out["fee_mean"].append(self._safe_mean(fee[part_mask]))  # type: ignore[arg-type]
+            out["common_mean"].append(self._safe_mean(common[mask]))  # type: ignore[arg-type]
+            out["personal_mean"].append(self._safe_mean(personal[mask]))  # type: ignore[arg-type]
+            out["altruism_mean"].append(self._safe_mean(altruism[mask]))  # type: ignore[arg-type]
+            out["p_part_mean"].append(self._safe_mean(p_part[mask]))  # type: ignore[arg-type]
 
         for g in show_groups:
             _add_bucket(_mask_for_group(g))
