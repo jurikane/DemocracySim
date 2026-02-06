@@ -324,6 +324,9 @@ class Area(Agent):
         group_mean_common_reward = [float("nan")] * num_groups
         group_mean_personal_reward = [float("nan")] * num_groups
         group_mean_fee = [float("nan")] * num_groups
+        group_mean_altruism = [float("nan")] * num_groups
+        group_mean_q_participation_participants = [float("nan")] * num_groups
+        group_mean_q_participation_abstainers = [float("nan")] * num_groups
 
         if num_groups > 0:
             for g in range(num_groups):
@@ -337,11 +340,14 @@ class Area(Agent):
                     group_mean_delta_rel[g] = _mean_attr(g_eligible, "election_delta_rel")
                     group_mean_delta_rel_participants[g] = _mean_attr(g_participants, "election_delta_rel")
                     group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
+                    group_mean_q_participation_participants[g] = _mean_attr(g_participants, "q_participation")
+                    group_mean_q_participation_abstainers[g] = _mean_attr(g_abstainers, "q_participation")
                 if g_agents:
                     group_mean_assets[g] = _mean_attr(g_agents, "assets")
                     group_mean_common_reward[g] = _mean_attr(g_agents, "_reward_common_comp")
                     group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
                     group_mean_fee[g] = _mean_attr(g_agents, "_fee")
+                    group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
 
         self._diag_history.append(
             {
@@ -363,6 +369,9 @@ class Area(Agent):
                 "group_mean_common_reward": group_mean_common_reward,
                 "group_mean_personal_reward": group_mean_personal_reward,
                 "group_mean_fee": group_mean_fee,
+                "group_mean_altruism": group_mean_altruism,
+                "group_mean_q_participation_participants": group_mean_q_participation_participants,
+                "group_mean_q_participation_abstainers": group_mean_q_participation_abstainers,
             }
         )
 

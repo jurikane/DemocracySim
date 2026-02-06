@@ -90,15 +90,19 @@ class AreaStats(TextElement):
 class AreaDiagnosticsPanel(TextElement):
     """Per-area diagnostics panel (Phase B).
 
-    Plots last N steps for each area with two rows of three columns:
+    Plots last N steps for each area with three rows of three columns:
       Row 1 (AreaStats):
         1) area color distribution + dist_to_reality
         2) elected ranking
         3) mean common + mean personal rewards
-            Row 2 (Diagnostics):
-                4) turnout by personality_group
-                5) mean assets by personality_group
-                6) mean delta_rel by personality_group
+      Row 2 (Diagnostics):
+        4) turnout by personality_group
+        5) mean assets by personality_group
+        6) mean delta_rel by personality_group
+      Row 3 (Reserved):
+        7) mean altruism by personality_group
+        8) mean q_participation by personality_group (participants dotted)
+        9) empty
     """
 
     def __init__(self, max_steps: int = 10):
@@ -139,16 +143,17 @@ class AreaDiagnosticsPanel(TextElement):
 
         num_colors = len(color_distribution.iloc[0])
         num_areas = len(areas)
-        fig, axes = plt.subplots(nrows=num_areas * 2, ncols=3,
-                     figsize=(14, 7.0 * num_areas), sharex=False) # type: ignore[arg-type]
-
-        # Handle case of single area
-        if num_areas == 1:
-            axes = [axes]
+        fig, axes = plt.subplots(
+            nrows=num_areas * 3,
+            ncols=3,
+            figsize=(14, 10.5 * num_areas),
+            sharex=False,  # type: ignore[arg-type]
+        )
 
         for i, area in enumerate(areas):
-            row_top = i * 2
-            row_bot = row_top + 1
+            row_top = i * 3
+            row_mid = row_top + 1
+            row_bot = row_top + 2
 
             # --- AreaStats (top row) ---
             area_cd = color_distribution.xs(area.unique_id, level=1)
@@ -211,10 +216,10 @@ class AreaDiagnosticsPanel(TextElement):
             ax2.set_xlabel("Step")
             ax2.legend(fontsize=6)
 
-            # --- Diagnostics (bottom row) ---
-            ax3 = axes[row_bot][0]
-            ax4 = axes[row_bot][1]
-            ax5 = axes[row_bot][2]
+            # --- Diagnostics (middle row) ---
+            ax3 = axes[row_mid][0]
+            ax4 = axes[row_mid][1]
+            ax5 = axes[row_mid][2]
 
             if hist:
                 hist_len = len(hist)
@@ -251,6 +256,39 @@ class AreaDiagnosticsPanel(TextElement):
             ax3.set_title("turnout by group")
             ax4.set_title("mean assets by group")
             ax5.set_title("mean delta_rel by group")
+
+            # --- Reserved (bottom row) ---
+            ax6 = axes[row_bot][0]
+            ax7 = axes[row_bot][1]
+            _ = axes[row_bot][2]
+
+            if hist:
+                hist_len = len(hist)
+                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
+
+                group_altruism = [h.get("group_mean_altruism", []) for h in hist]
+                group_q_p = [h.get("group_mean_q_participation_participants", []) for h in hist]
+                group_q_a = [h.get("group_mean_q_participation_abstainers", []) for h in hist]
+
+                num_groups = len(group_altruism[0]) if group_altruism and group_altruism[0] is not None else 0
+                cmap = plt.get_cmap("tab10")
+
+                for g in range(num_groups):
+                    a_series = [ga[g] if ga and len(ga) > g else float("nan") for ga in group_altruism]
+                    qp_series = [gp[g] if gp and len(gp) > g else float("nan") for gp in group_q_p]
+                    qa_series = [ga[g] if ga and len(ga) > g else float("nan") for ga in group_q_a]
+                    color = cmap(g % 10)
+
+                    ax6.plot(step_axis, a_series, color=color, label=f"g{g}")
+                    ax7.plot(step_axis, qp_series, color=color, linestyle=":", label=f"g{g} p")
+                    ax7.plot(step_axis, qa_series, color=color, label=f"g{g} a")
+
+                if num_groups <= 10:
+                    ax6.legend(fontsize=6)
+                    ax7.legend(fontsize=6)
+
+            ax6.set_title("mean altruism by group")
+            ax7.set_title("mean q_participation by group")
 
         plt.tight_layout()
         return save_plot_to_base64(fig)
@@ -765,4 +803,4 @@ class CohortElectionLearningDiagnostics(TextElement):
         )
         plt.tight_layout()
         return save_plot_to_base64(fig)
-
+    

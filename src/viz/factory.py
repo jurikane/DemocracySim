@@ -81,7 +81,8 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
         # Add agent info (tooltips)
         for voter in agent.agents:
             p[f"Agent {voter.unique_id}"] = \
-                f"personality_group: {voter.personality_group}, assets: {voter.assets}"
+                (f"pers_group_idx: {voter.personality_group_idx}, "
+                 f"personality: {voter.personality}, assets: {voter.assets}")
 
         return p
 
