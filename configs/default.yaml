@@ -55,6 +55,11 @@ visualization:
   draw_borders: true
   show_area_stats: false
   calibration_mode: false
+  show_agent_debug_panel: false
+  agent_debug_area_id: null
+  agent_debug_max_steps: 1
+  agent_debug_max_agents: 50
+  agent_debug_max_field_len: 180
 
 simulation:  # Config for headless runs
   runs: 3

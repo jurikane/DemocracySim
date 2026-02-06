@@ -38,6 +38,8 @@ class Area(Agent):
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
         self._diag_history: List[dict] = []  # Per-area diagnostics time series
+        self._debug_history: List[dict] = []  # Per-area debug snapshots (optional)
+        self._debug_last_votes: List[dict] = []  # Per-step vote records (optional)
 
     def __str__(self):
         return (f"Area(id={self.unique_id}, size={self._height}x{self._width}, "
@@ -242,6 +244,7 @@ class Area(Agent):
             for a in self.agents:
                 a.add_common_reward(-1)
                 a.reward_agent()  # Apply the penalty
+            self._capture_debug_snapshot(preference_profile, aggregated=None)
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         rule = self.model.voting_rule
@@ -271,6 +274,7 @@ class Area(Agent):
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
         self._update_diag_history()
+        self._capture_debug_snapshot(preference_profile, aggregated)
         return int((n / self.num_agents) * 100) # Voter turnout in percent
 
     def _update_diag_history(self) -> None:
@@ -379,6 +383,137 @@ class Area(Agent):
     def diag_history(self) -> List[dict]:
         return self._diag_history
 
+    @property
+    def debug_history(self) -> List[dict]:
+        return self._debug_history
+
+    def _debug_enabled(self) -> bool:
+        return bool(getattr(self.model, "_debug_agent_panel_enabled", False))
+
+    def _debug_max_steps(self) -> int:
+        max_steps = int(getattr(self.model, "_debug_agent_panel_max_steps", 1))
+        return max(1, max_steps)
+
+    def _snapshot_agent(self, agent) -> dict:
+        try:
+            p_participation = float(agent.participation_probability())
+        except Exception:
+            p_participation = float("nan")
+
+        known_cells = []
+        for cell in getattr(agent, "known_cells", []) or []:
+            if cell is None:
+                continue
+            known_cells.append(
+                {
+                    "pos": getattr(cell, "pos", None),
+                    "color": getattr(cell, "color", None),
+                }
+            )
+
+        personality_group = getattr(agent, "personality_group", None)
+        if isinstance(personality_group, np.ndarray):
+            personality_group = personality_group.tolist()
+
+        personality = getattr(agent, "personality", None)
+        if isinstance(personality, np.ndarray):
+            personality = personality.tolist()
+
+        est_real_dist = getattr(agent, "est_real_dist", None)
+        if isinstance(est_real_dist, np.ndarray):
+            est_real_dist = est_real_dist.tolist()
+
+        delta_abs = float(getattr(agent, "election_delta_abs", float("nan")))
+        assets_now = float(getattr(agent, "assets", float("nan")))
+
+        return {
+            "id": getattr(agent, "unique_id", None),
+            "pos": getattr(agent, "position", None),
+            "personality_group_idx": getattr(agent, "personality_group_idx", None),
+            "personality_group": personality_group,
+            "personality": personality,
+            "assets": assets_now,
+            "assets_pre_est": assets_now - delta_abs,
+            "eligible": bool(getattr(agent, "eligible_for_election", False)),
+            "participating": bool(getattr(agent, "participating", False)),
+            "num_elections_participated": getattr(agent, "num_elections_participated", None),
+            "fee": float(getattr(agent, "_fee", 0.0)),
+            "reward_common": float(getattr(agent, "_reward_common_comp", 0.0)),
+            "reward_personal": float(getattr(agent, "_reward_pers_comp", 0.0)),
+            "delta_abs": delta_abs,
+            "delta_rel": float(getattr(agent, "election_delta_rel", float("nan"))),
+            "q_participation": float(getattr(agent, "q_participation", float("nan"))),
+            "p_participation": p_participation,
+            "altruism_factor": float(getattr(agent, "altruism_factor", float("nan"))),
+            "est_real_dist": est_real_dist,
+            "confidence": float(getattr(agent, "confidence", float("nan"))),
+            "known_cells_count": len(known_cells),
+            "known_cells": known_cells,
+            "award_history_tail": list(getattr(agent, "award_history", [])[-5:]),
+            "participation_strategy": getattr(
+                getattr(agent, "participation_strategy", None), "__class__", type("X", (), {})
+            ).__name__,
+            "voting_strategy": getattr(
+                getattr(agent, "voting_strategy", None), "__class__", type("X", (), {})
+            ).__name__,
+        }
+
+    def _capture_debug_snapshot(self, preference_profile: np.ndarray, aggregated) -> None:
+        if not self._debug_enabled():
+            return
+
+        step = int(getattr(getattr(self.model, "scheduler", None), "steps", 0) or 0)
+        agents = sorted(self.agents, key=lambda a: int(getattr(a, "unique_id", 0)))
+        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
+        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
+        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
+
+        record = {
+            "step": step,
+            "area_id": getattr(self, "unique_id", None),
+            "num_agents": len(agents),
+            "num_eligible": len(eligible),
+            "num_participants": len(participants),
+            "num_abstainers": len(abstainers),
+            "dist_to_reality": float(self._dist_to_reality) if self._dist_to_reality is not None else float("nan"),
+            "voted_ordering": (
+                self._voted_ordering.tolist()
+                if isinstance(self._voted_ordering, np.ndarray)
+                else list(self._voted_ordering)
+                if self._voted_ordering is not None
+                else None
+            ),
+            "real_color_distribution": (
+                self.color_distribution.tolist()
+                if isinstance(self.color_distribution, np.ndarray)
+                else list(self.color_distribution)            ),
+            "preference_profile": (
+                preference_profile.tolist()
+                if isinstance(preference_profile, np.ndarray)
+                else list(preference_profile)
+            ),
+            "votes": list(self._debug_last_votes or []),
+            "aggregated_ordering": (
+                aggregated.tolist()
+                if isinstance(aggregated, np.ndarray)
+                else list(aggregated)
+                if aggregated is not None
+                else None
+            ),
+            "winning_option": int(aggregated[0]) if aggregated is not None and len(aggregated) > 0 else None,
+            "reward_threshold_common": float(getattr(self.model, "reward_threshold_common", float("nan"))),
+            "reward_threshold_personal": float(getattr(self.model, "reward_threshold_personal", float("nan"))),
+            "reward_rate_common": float(getattr(self.model, "reward_rate_common", float("nan"))),
+            "reward_rate_personal": float(getattr(self.model, "reward_rate_personal", float("nan"))),
+            "abstention_share": float(getattr(self.model, "abstention_share", float("nan"))),
+            "agents": [self._snapshot_agent(a) for a in agents],
+        }
+
+        self._debug_history.append(record)
+        max_steps = self._debug_max_steps()
+        if len(self._debug_history) > max_steps:
+            self._debug_history = self._debug_history[-max_steps:]
+
     def _tally_votes(self) -> np.ndarray:
         """
         Gathers votes from agents who choose to participate.
@@ -391,6 +526,8 @@ class Area(Agent):
             and each column corresponds to an option.
         """
         preference_profile = []
+        debug_enabled = self._debug_enabled()
+        debug_votes = [] if debug_enabled else None
         # Reset pool for this election step.
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_cost_rate
@@ -433,7 +570,24 @@ class Area(Agent):
                         est_dist=getattr(agent, "est_real_dist", None),
                         confidence=getattr(agent, "confidence", None),
                     )
+                if debug_enabled:
+                    scores = np.asarray(ranking, dtype=np.float64)
+                    try:
+                        ordering = np.argsort(scores, kind="stable").astype(int).tolist()
+                    except Exception:
+                        ordering = None
+                    debug_votes.append(
+                        {
+                            "agent_id": getattr(agent, "unique_id", None),
+                            "scores": scores.tolist(),
+                            "ordering": ordering,
+                        }
+                    )
                 # agent.vote returns a ScoreVector (oppose scores) for each option
+        if debug_enabled:
+            self._debug_last_votes = debug_votes or []
+        else:
+            self._debug_last_votes = []
         return np.array(preference_profile)
 
     def _distribute_rewards(self) -> None:

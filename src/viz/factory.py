@@ -97,6 +97,7 @@ def make_charts(cfg: AppConfig) -> list:
     num_colors = int(model_cfg["num_colors"])
     vis_cfg = cfg.visualization
     calibration_mode = bool(getattr(vis_cfg, "calibration_mode", False))
+    show_agent_debug_panel = bool(getattr(vis_cfg, "show_agent_debug_panel", False))
 
     color_distribution_chart = ChartModule(
         [{"Label": f"color_{i}",
@@ -130,6 +131,7 @@ def make_charts(cfg: AppConfig) -> list:
     from src.viz.visualisation_elements import (
         PersonalityGroupDistribution,
         AreaDiagnosticsPanel,
+        AreaAgentDebugPanel,
         AreaStats,
         VoterTurnoutElement,
         AreaGiniElement,
@@ -138,10 +140,17 @@ def make_charts(cfg: AppConfig) -> list:
     )
     if calibration_mode:
         # Calibration layout: area-focused first, then histograms, then global charts.
-        extras = [
-            AreaDiagnosticsPanel(),
-            CohortElectionLearningDiagnostics(),
-        ]
+        extras = [AreaDiagnosticsPanel()]
+        if show_agent_debug_panel:
+            extras.append(
+                AreaAgentDebugPanel(
+                    max_steps=int(getattr(vis_cfg, "agent_debug_max_steps", 1)),
+                    area_id=getattr(vis_cfg, "agent_debug_area_id", None),
+                    max_agents=int(getattr(vis_cfg, "agent_debug_max_agents", 50)),
+                    max_field_len=int(getattr(vis_cfg, "agent_debug_max_field_len", 180)),
+                )
+            )
+        extras.append(CohortElectionLearningDiagnostics())
         return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]
 
     extras = [

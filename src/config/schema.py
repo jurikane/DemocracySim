@@ -58,6 +58,11 @@ class VisualizationConfig(BaseModel):
     draw_borders: bool                 # Whether to draw area borders
     show_area_stats: Optional[bool] = True  # Show area statistics overlay
     calibration_mode: bool = False     # Reorder UI for calibration-focused layout
+    show_agent_debug_panel: bool = False  # Show per-agent debug panel
+    agent_debug_area_id: Optional[int] = None  # Area ID to show (None = first area)
+    agent_debug_max_steps: int = 1  # How many steps to retain/show in debug panel
+    agent_debug_max_agents: int = 50  # Limit agents rendered in debug panel
+    agent_debug_max_field_len: int = 180  # Max chars per field in debug panel
 
 class SimulationConfig(BaseModel):
     """
