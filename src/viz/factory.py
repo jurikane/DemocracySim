@@ -134,20 +134,17 @@ def make_charts(cfg: AppConfig) -> list:
         VoterTurnoutElement,
         AreaGiniElement,
         AreaPersonalityGroupDists,
-        AgentLearningHistograms,
         CohortElectionLearningDiagnostics,
     )
     if calibration_mode:
         # Calibration layout: area-focused first, then histograms, then global charts.
         extras = [
             AreaDiagnosticsPanel(),
-            AgentLearningHistograms(),
             CohortElectionLearningDiagnostics(),
         ]
         return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]
 
     extras = [
-        AgentLearningHistograms(),
         CohortElectionLearningDiagnostics(),
         PersonalityGroupDistribution(),
         AreaStats(),

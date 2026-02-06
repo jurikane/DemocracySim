@@ -380,7 +380,9 @@ class ReplayModel(mesa.Model):
             def __init__(self, vote_agent_str: str):
                 aid, personality_group = vote_agent_str.split(": ")
                 self.unique_id = int(aid)
+                self.personality_group_idx = "-" # Placeholder; the idx is not yet available in static info.
                 self.personality_group = personality_group
+                self.personality = "-"  # Placeholder; the actual personality vector is not yet available in static info.
                 self.assets = "-"
 
         return [_VoterStub(a_str) for a_str in agents_str.split(", ")]
