@@ -140,7 +140,7 @@ class AreaDiagnosticsPanel(TextElement):
         num_colors = len(color_distribution.iloc[0])
         num_areas = len(areas)
         fig, axes = plt.subplots(nrows=num_areas * 2, ncols=3,
-                                 figsize=(14, 3.5 * num_areas), sharex=False)
+                     figsize=(14, 7.0 * num_areas), sharex=False)
 
         # Handle case of single area
         if num_areas == 1:
