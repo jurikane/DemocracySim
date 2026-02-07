@@ -131,13 +131,12 @@ def make_charts(cfg: AppConfig) -> list:
     from src.viz.visualisation_elements import (
         PersonalityGroupDistribution,
         AreaDiagnosticsPanel,
-        AreaAgentDebugPanel,
-        AreaStats,
         VoterTurnoutElement,
         AreaGiniElement,
         AreaPersonalityGroupDists,
         CohortElectionLearningDiagnostics,
     )
+    from src.viz.debug_viz import AreaAgentDebugPanel
     if calibration_mode:
         # Calibration layout: area-focused first, then histograms, then global charts.
         extras = [AreaDiagnosticsPanel()]
@@ -156,7 +155,6 @@ def make_charts(cfg: AppConfig) -> list:
     extras = [
         CohortElectionLearningDiagnostics(),
         PersonalityGroupDistribution(),
-        AreaStats(),
         VoterTurnoutElement(),
         AreaGiniElement(),
         AreaPersonalityGroupDists(),

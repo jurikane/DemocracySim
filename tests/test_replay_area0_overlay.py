@@ -6,7 +6,7 @@ from scripts.run_headless import run_once
 from src.config.loader import load_config
 from src.config.schema import AppConfig
 from src.replay.replay_server import ReplayModel
-from src.viz.visualisation_elements import AreaStats
+from src.viz.visualisation_elements import AreaDiagnosticsPanel
 
 
 def test_replay_area_stats_includes_area_0(tmp_path):
@@ -29,12 +29,12 @@ def test_replay_area_stats_includes_area_0(tmp_path):
 
     model = ReplayModel(appcfg=appcfg, run_dir=run_dir)
 
-    model.step()  # activate AreaStats (it exits early at step==0)
+    model.step()  # activate AreaDiagnosticsPanel (it exits early at step==0)
 
     df = model.datacollector.get_agent_vars_dataframe()
     assert len(df) > 0
     assert 0 in df.index.get_level_values(1)
 
-    html = AreaStats().render(model)
+    html = AreaDiagnosticsPanel().render(model)
     assert isinstance(html, str)
     assert html != ""

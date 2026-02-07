@@ -19,7 +19,7 @@ def _sigmoid(x: float) -> float:
 # class Policy(Protocol):
 #     def decide_participation(self, agent, area) -> bool: ...
 #     def decide_altruism_factor(self, agent, area) -> float: ...
-#     def rank_options(self, agent, area, options: Any) -> np.ndarray: ...
+#     def score_options(self, agent, area, options: Any) -> np.ndarray: ...
 #
 # class ParticipationPolicy:
 #     """Legacy policy kept for compatibility with older tests/configs.
@@ -30,15 +30,15 @@ def _sigmoid(x: float) -> float:
 #         # Legacy: keep deterministic by using model.np_random (not agent.random)
 #         return float(agent.model.np_random.random())
 #
-#     def rank_options(self, agent, area, options: Any) -> np.ndarray:
-#         # Legacy ranking path (normalized). Not used by VoteAgent.vote().
+#     def score_options(self, agent, area, options: Any) -> np.ndarray:
+#         # Legacy score path (normalized). Not used by VoteAgent.vote().
 #         dist_func = agent.model.distance_func
-#         ranking = np.zeros(options.shape[0])
+#         scores = np.zeros(options.shape[0])
 #         color_search_pairs = agent.model.color_search_pairs
 #         for i, option in enumerate(options):
-#             ranking[i] = dist_func(agent.personality_group, option, color_search_pairs)
-#         ranking /= ranking.sum() if ranking.sum() else 1.0
-#         return ranking
+#             scores[i] = dist_func(agent.personality_group, option, color_search_pairs)
+#         scores /= scores.sum() if scores.sum() else 1.0
+#         return scores
 # ################################################################################
 
 
@@ -401,7 +401,7 @@ class VoteAgent(Agent):
         vals.sort()
         vals = vals[::-1]
 
-        # Assign values according to personality_group ranking.
+        # Assign values according to personality_group ordering.
         dist = np.zeros(num_colors, dtype=np.float64)
         for rank_pos in range(num_colors):
             color = int(personality_group[rank_pos])
@@ -415,4 +415,3 @@ class VoteAgent(Agent):
             dist /= s
 
         return dist.astype(np.float32)
-

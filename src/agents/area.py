@@ -6,6 +6,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell
     from src.agents.vote_agent import VoteAgent
+from src.utils.representations import scores_to_ordering
 
 
 class Area(Agent):
@@ -26,6 +27,7 @@ class Area(Agent):
             size_variance (float): A variance factor applied to height and width.
         """
         super().__init__(unique_id=unique_id,  model=model)
+        self.np_random = model.random  # Use the model's random generator for reproducibility
         self._set_dimensions(width, height, size_variance)
         self.agents: List["VoteAgent"] = []
         self._personality_group_distribution = None
@@ -248,11 +250,7 @@ class Area(Agent):
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         rule = self.model.voting_rule
-        voting_rng = getattr(self.model, "voting_rng", None)
-        try:
-            aggregated = rule(preference_profile, rng=voting_rng)
-        except TypeError:
-            aggregated = rule(preference_profile)
+        aggregated = rule(preference_profile, rng=self.model.voting_rng)
         # Save the "elected" ordering in self._voted_ordering
         winning_option = aggregated[0]
         self._voted_ordering = self.model.options[winning_option]
@@ -558,24 +556,21 @@ class Area(Agent):
                 agent.set_election_fee(cost)  # Fee will be applied when rewards are distributed
                 self._election_fee_pool += cost
                 # Ask the agent for her preference
-                ranking = agent.vote(area=self)
-                preference_profile.append(ranking)
+                scores = agent.vote(area=self)
+                preference_profile.append(scores)
 
                 # Emit participant vote context if a sink is configured.
                 if vote_sink is not None:
                     vote_sink(
                         area=self,
                         agent=agent,
-                        oppose_scores=ranking,
+                        oppose_scores=scores,
                         est_dist=getattr(agent, "est_real_dist", None),
                         confidence=getattr(agent, "confidence", None),
                     )
                 if debug_enabled:
-                    scores = np.asarray(ranking, dtype=np.float64)
-                    try:
-                        ordering = np.argsort(scores, kind="stable").astype(int).tolist()
-                    except Exception:
-                        ordering = None
+                    scores = np.asarray(scores, dtype=np.float64)
+                    ordering = scores_to_ordering(scores).astype(int).tolist()
                     debug_votes.append(
                         {
                             "agent_id": getattr(agent, "unique_id", None),

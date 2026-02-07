@@ -60,7 +60,7 @@ class TestParticipationModelUnit(unittest.TestCase):
         self.assertEqual(opts.shape[1], 2)
 
     def test_pers_dist_sums_to_one(self):
-        dist = ParticipationModel.pers_dist(5)
+        dist = ParticipationModel.pers_dist(5, rng=self.model.np_random)
         np.testing.assert_almost_equal(dist.sum(), 1.0)
 
     # --- Functional behavior ---

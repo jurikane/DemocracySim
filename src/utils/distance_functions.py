@@ -8,9 +8,9 @@ from src.utils.representations import (
     validate_rank_vector,
     validate_score_vector,
     validate_distribution,
+    ranks_to_ordering,
     ordering_to_ranks,
 )
-
 IntArray: TypeAlias = NDArray[np.int64]
 FloatArray: TypeAlias = NDArray[np.float64]
 
@@ -55,7 +55,7 @@ def kendall_tau_order(ordering_1: IntArray, ordering_2: IntArray,
         int: Normalized kendall tau distance
     """
     # The Kendall tau rank distance is a metric that counts the number
-    #     of pairwise disagreements between two ranking lists.
+    #     of pairwise disagreements between two orderings.
     #     The larger the distance, the more dissimilar the two lists are.
     #     Kendall tau distance is also called bubble-sort distance.
     ordering_1 = np.asarray(ordering_1, dtype=np.int64)
@@ -155,7 +155,7 @@ def kendall_tau_on_ranks(rank_arr_1: FloatArray, rank_arr_2: FloatArray,
 
     This function calculates the kendal tau distance between two rank vektors.
     (The Kendall tau rank distance is a metric that counts the number
-    of pairwise disagreements between two ranking lists.
+    of pairwise disagreements between two orderings.
     The larger the distance, the more dissimilar the two lists are.
     Kendall tau distance is also called bubble-sort distance).
     Rank vectors hold the rank of each option (option = index).
@@ -172,8 +172,8 @@ def kendall_tau_on_ranks(rank_arr_1: FloatArray, rank_arr_2: FloatArray,
         int: Kendall tau distance.
     """
     # Get the ordering (option names being 0 to length)
-    ordering_1 = np.argsort(rank_arr_1)
-    ordering_2 = np.argsort(rank_arr_2)
+    ordering_1 = ranks_to_ordering(rank_arr_1)
+    ordering_2 = ranks_to_ordering(rank_arr_2)
     # print("Ord1:", list(ordering_1), " Ord2:", list(ordering_2))
     # Create the mapping array
     mapping_array = np.empty_like(ordering_1)  # Empty array with same shape

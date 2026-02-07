@@ -54,7 +54,7 @@ majority_simple_cases = [
 def test_majority_rule():
     # Test predefined cases
     for pref_table, expected in majority_simple_cases:
-        res_ranking = majority_rule(pref_table)
+        res_ranking = majority_rule(pref_table, rng=np.random.default_rng())
         assert list(res_ranking) == expected
 
 def majority_rule_with_ties_all(pref_rel, expected_winners, iterations=1000):
@@ -69,7 +69,7 @@ def majority_rule_with_ties_all(pref_rel, expected_winners, iterations=1000):
     """
     winners_from_ties = {}
     for _ in range(iterations):
-        ranking = majority_rule(pref_rel)
+        ranking = majority_rule(pref_rel, rng=np.random.default_rng())
         winner = ranking[0]
         winners_from_ties[winner] = winners_from_ties.get(winner, 0) + 1
     winners = list(winners_from_ties.keys())
@@ -165,7 +165,7 @@ def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000):
     for _ in range(iterations):
         # Create random matrix
         matrix_rand = random_pref_profile(num_agents, num_options)
-        ranking = majority_rule(matrix_rand)
+        ranking = majority_rule(matrix_rand, rng=np.random.default_rng())
         winner = ranking[0]
         # Count winners
         winner_counts[winner] = winner_counts.get(winner, 0) + 1

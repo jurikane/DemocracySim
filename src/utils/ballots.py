@@ -19,9 +19,7 @@ def normalize_distribution(x: np.ndarray) -> np.ndarray:
     x = np.maximum(x, 0.0)
     s = float(x.sum())
     if s <= 0:
-        # fallback to uniform
-        x = np.ones_like(x, dtype=np.float32)
-        s = float(x.sum())
+        raise ValueError("distribution must have positive sum close to 1")
     return (x / s).astype(np.float32)
 
 

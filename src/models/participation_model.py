@@ -1,4 +1,3 @@
-import random
 from typing import TYPE_CHECKING, cast, List, Optional, Callable
 import mesa
 import numpy as np
@@ -10,6 +9,7 @@ from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors,
                                gini_index_0_100)
+from src.utils.rng import set_seed, np_rng, py_rng
 
 
 # Voting rules to be accessible by index
@@ -75,16 +75,16 @@ class ParticipationModel(mesa.Model):
         colors (ndarray): Array containing the unique color identifiers.
         voting_rule (Callable): A function defining the social welfare
             function to aggregate agent preferences. This callable typically
-            takes agent rankings as input and returns a single aggregate result.
+            takes agent score vectors as input and returns an ordering.
         distance_func (Callable): A function used to calculate a
-            distance metric when comparing rankings. It takes two rankings
+            distance metric when comparing orderings. It takes two orderings
             and returns a numeric distance score.
         mu (float): Mutation rate; the probability of each color cell to mutate
             after an elections.
         color_probs (ndarray):
             Probabilities used to determine individual color mutation outcomes.
-        options (ndarray): Matrix (array of arrays) where each subarray
-            represents an option (color-ranking) available to agents.
+        options (ndarray): Matrix where each row is an option ordering
+            (permutation) available to agents.
         option_vec (ndarray): Array holding the indices of the available options
             for computational efficiency.
         color_cells (list[ColorCell]): List of all color cells.
@@ -169,15 +169,12 @@ class ParticipationModel(mesa.Model):
         self.altruism_clip_max = float(altruism_clip_max)
         self.personal_opt_dist_concentration = personal_opt_dist_concentration
 
-        # Initialize RNGs early
+        # Initialize RNGs early (centralized)
+        set_seed(seed)
+        self.np_random = np_rng()
+        self.random = py_rng()
         if seed is not None:
-            self.random.seed(seed)  # Mesa RNG (Pythons random.Random
-            self.np_random = np.random.default_rng(seed)  # Central NumPy RNG
-            random.seed(seed)
-            np.random.seed(seed)  # For any legacy/global Numpy calls
             print(f"Set models random seed to {seed}")
-        else:
-            self.np_random = np.random.default_rng()
 
         # Step control
         self.max_steps: Optional[int] = max_steps
@@ -216,7 +213,7 @@ class ParticipationModel(mesa.Model):
         self.common_assets = common_assets
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
-        # Create search pairs once for faster iterations when comparing rankings
+        # Create search pairs once for faster iterations when comparing orderings
         # (Removed unused self.search_pairs to avoid O(options^2) memory growth.)
         self.option_vec = np.arange(self.options.shape[0])  # Also to speed up
         self.color_search_pairs = list(combinations(range(0, num_colors), 2))
@@ -566,7 +563,7 @@ class ParticipationModel(mesa.Model):
         # The closer the cell to the bias-point, the less often it is
         # to be replaced by a color chosen from the initial distribution:
         if abs(self.random.gauss(0, patch_power)) < bias_factor:
-            return self.color_by_dst(self._preset_color_dst)
+            return self.color_by_dst_rng(self._preset_color_dst)
         # Otherwise, apply the color patches logic
         neighbor_cells = self.grid.get_neighbors((cell.col, cell.row),
                                                  moore=True,
@@ -595,14 +592,12 @@ class ParticipationModel(mesa.Model):
         # Return the average color distributions
         self.av_area_color_dst = sums / self.num_areas
 
-    @ staticmethod
-    def pers_dist(size: int, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+    @staticmethod
+    def pers_dist(size: int, *, rng: np.random.Generator) -> np.ndarray:
         """
         Create a normalized non-negative distribution of length `size`.
         Generates a sorted absolute normal sample and normalizes to sum to one.
         """
-        if rng is None:
-            rng = np.random.default_rng()
         dist = rng.normal(0, 1, size)
         dist.sort()
         dist = np.abs(dist)
@@ -615,19 +610,19 @@ class ParticipationModel(mesa.Model):
     @staticmethod
     def create_all_options(n: int, include_ties=False) -> np.ndarray:
         """
-        Creates a matrix (an array of all possible ranking vectors),
-        if specified including ties.
+        Creates a matrix (an array) of all possible orderings (permutations),
+        optionally including ties (rank vectors).
         Rank values start from 0.
 
         Args:
             n (int): The number of items to rank (number of colors in our case)
-            include_ties (bool): If True, rankings include ties.
+            include_ties (bool): If True, include rank vectors with ties.
 
         Returns:
-            np.ndarray: A matrix containing all possible ranking vectors.
+            np.ndarray: A matrix containing all possible orderings or rank vectors.
         """
         if include_ties:
-            # Create all possible combinations and sort out invalid rankings
+            # Create all possible combinations and sort out invalid rank vectors
             # i.e. [1, 1, 1] or [1, 2, 2] aren't valid as no option is ranked first.
             r = np.array([np.array(comb) for comb in product(range(n), repeat=n)
                           if set(range(max(comb))).issubset(comb)])
@@ -657,7 +652,7 @@ class ParticipationModel(mesa.Model):
         """
         if abs(sum(color_distribution) - 1) > 1e-8:
             raise ValueError("The color_distribution array must sum to 1.")
-        r = float(np.random.random())
+        r = float(np_rng().random())
         cumulative_sum = 0.0
         for color_idx, prob in enumerate(color_distribution):
             if prob < 0:

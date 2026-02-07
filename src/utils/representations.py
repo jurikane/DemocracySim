@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from typing import Literal
-
 import numpy as np
+from src.utils.rng import np_rng
 
 
 def validate_ordering(x: np.ndarray, n: int | None = None) -> None:
@@ -75,23 +75,36 @@ def ordering_to_ranks(ordering: np.ndarray) -> np.ndarray:
     return ranks
 
 
-def ranks_to_ordering(ranks: np.ndarray, *, stable: bool = True) -> np.ndarray:
-    """Convert RankVector -> Ordering via argsort (ties allowed)."""
+def ranks_to_ordering(ranks: np.ndarray, eps = 1e-4) -> np.ndarray:
+    """Convert RankVector -> Ordering via argsort with deterministic tie-breaks."""
     arr = np.asarray(ranks)
     validate_rank_vector(arr, int(arr.size))
-    kind = "stable" if stable else "quicksort"
-    return np.argsort(arr, kind=kind).astype(np.int64)
+
+    has_ties = len(np.unique(arr)) != len(arr)
+    if has_ties:
+        if not eps or eps <= 0:
+            raise ValueError("Epsilon must be positive to break ties in ranks")
+        noise = np_rng().uniform(-eps, eps, size=arr.size)
+        return np.argsort(arr + noise, kind="stable").astype(np.int64)
+
+    return np.argsort(arr, kind="stable").astype(np.int64)
 
 
-def scores_to_ordering(scores: np.ndarray, *, stable: bool = True) -> np.ndarray:
+
+def scores_to_ordering(scores: np.ndarray, eps = 1e-4) -> np.ndarray:
     """Convert ScoreVector -> Ordering (lower score = better).
-
-    Ties are resolved by stable argsort if stable=True.
+    Uses RNG noise to break ties if eps > 0, otherwise raises error on ties.
     """
     arr = np.asarray(scores, dtype=np.float64)
     validate_score_vector(arr, int(arr.size))
-    kind = "stable" if stable else "quicksort"
-    return np.argsort(arr, kind=kind).astype(np.int64)
+
+    if eps and eps > 0:  # Often have ties so go for tie-breaking first
+        noise = np_rng().uniform(-eps, eps, size=arr.size)
+        return np.argsort(arr + noise, kind="stable").astype(np.int64)
+    elif len(np.unique(arr)) == len(arr): # check for ties
+        return np.argsort(arr, kind="stable").astype(np.int64)
+    else:
+        raise ValueError("Epsilon must be positive to break ties in ranks")
 
 
 def distribution_to_ordering(dist: np.ndarray, *, stable: bool = True) -> np.ndarray:

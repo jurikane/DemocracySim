@@ -24,7 +24,7 @@ approval_simple_cases = [
 def test_approval_voting():
     # Test predefined cases
     for pref_table, expected in approval_simple_cases:
-        res_ranking = approval_voting(pref_table)
+        res_ranking = approval_voting(pref_table, rng=np.random.default_rng())
         is_correct = False
         for exp in expected:
             if list(res_ranking) == exp:
@@ -64,7 +64,7 @@ def test_equally_possible():
     for pref_rel in all_equally_possible:
         winners = set()
         for _ in range(500):
-            winner = approval_voting(pref_rel)
+            winner = approval_voting(pref_rel, rng=np.random.default_rng())
             winners.add(winner[0])
         assert set(winners) == {0, 1, 2, 3}
 
