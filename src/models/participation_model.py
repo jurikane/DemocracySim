@@ -110,7 +110,7 @@ class ParticipationModel(mesa.Model):
         av_area_width (int): Average width of areas created in the simulation.
         area_size_variance (float): Variance in area sizes to introduce
             non-uniformity among election territories.
-        common_assets (int): Total resources to be distributed among all agents.
+        common_assets (float): Total resources to be distributed among all agents.
         av_area_color_dst (ndarray): Current (area)-average color distribution.
         election_cost_rate (float): Cost/effort associated with participating in elections (relative to assets).
         known_cells (int): Number of cells each agent knows the color of.
@@ -224,7 +224,7 @@ class ParticipationModel(mesa.Model):
         self.options = self.create_all_options(num_colors)
         # Simulation variables
         self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
-        self.common_assets = common_assets
+        self.common_assets = float(common_assets)
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing orderings
@@ -319,7 +319,7 @@ class ParticipationModel(mesa.Model):
         # Testing parameter validity
         if self.num_agents < 1:
             raise ValueError("The number of agents must be at least 1.")
-        assets = self.common_assets // self.num_agents  # TODO: always equal dist?
+        assets = self.common_assets / self.num_agents  # TODO: always equal dist?
         nr = len(self.personality_groups)
         for idx in range(self.num_agents):
             # Assign unique ID after areas

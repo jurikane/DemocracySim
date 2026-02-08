@@ -376,10 +376,9 @@ class Area(Agent):
                 continue
 
             # election_cost_rate is treated as a percent (0..100) of current assets.
-            cost = int(agent.assets * el_cost_rate)
-            # Ensure participating agents pay at least 1 if they have assets.
-            if cost == 0 and agent.assets >= 1 and not el_cost_rate == 0:
-                cost = 1
+            cost = float(agent.assets * el_cost_rate)
+            if cost < 0:
+                raise ValueError("Election cost rate must be non-negative.")
 
             if agent.ask_for_participation(area=self):
                 agent.mark_participating()

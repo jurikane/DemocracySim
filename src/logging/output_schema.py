@@ -85,7 +85,7 @@ STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "run_seed": "int32",
     "rule_idx": "int16",
     "step": "int32",
-    "collective_assets": "int64",
+    "collective_assets": "float32",
     "gini_index": "int16",
     "turnout": "float32",
     # Optional per-color model series: color_0...color_{C-1} float32

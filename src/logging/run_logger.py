@@ -292,7 +292,7 @@ class RunLoggerV2:
             "run_seed": np.int32(self.ctx.run_seed),
             "rule_idx": np.int16(self.ctx.rule_idx),
             "step": np.int32(step),
-            "collective_assets": np.int64(0),
+            "collective_assets": np.float32(0.0),
             "gini_index": np.int16(0),
             "turnout": np.float32(0.0),
         }
@@ -310,9 +310,9 @@ class RunLoggerV2:
 
         # Prefer snake_case (live + replay v2 use this)
         if "collective_assets" in last:
-            row["collective_assets"] = np.int64(last["collective_assets"])
+            row["collective_assets"] = np.float32(last["collective_assets"])
         elif "Collective assets" in last:
-            row["collective_assets"] = np.int64(last["Collective assets"])
+            row["collective_assets"] = np.float32(last["Collective assets"])
 
         if "gini_index" in last:
             row["gini_index"] = np.int16(last["gini_index"])

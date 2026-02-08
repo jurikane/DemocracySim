@@ -58,7 +58,7 @@ All Parquet tables include:
 | run_seed             |   int32 | run identifier (seed)      |
 | rule_idx             |   int16 | voting rule index          |
 | step                 |   int32 | **1..S**                   |
-| collective_assets    |   int64 | model sum of assets        |
+| collective_assets    | float32 | model sum of assets        |
 | gini_index           |   int16 | 0–100                      |
 | turnout              | float32 | global average turnout (%) |
 | color_0..color_{C-1} | float32 | optional, pre-mutation     |

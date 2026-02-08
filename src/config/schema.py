@@ -33,7 +33,7 @@ class ModelConfig(BaseModel):
     altruism_clip_max: float = 1.0
 
     num_agents: int        # Number of agents in the simulation
-    common_assets: int     # Initial collective assets
+    common_assets: float   # Initial collective assets
     num_colors: int        # Number of color options
     color_patches_steps: int  # Steps for color patch adjustment
     patch_power: float     # Power/radius of color patching

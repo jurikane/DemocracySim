@@ -59,7 +59,7 @@ class VoteAgent(Agent):
         pos,
         personality_group,
         personality_group_idx=None,
-        assets=1,
+        assets=1.0,
         add=True,
         participation_strategy=None,
         voting_strategy=None,
@@ -82,7 +82,7 @@ class VoteAgent(Agent):
         except ValueError:
             raise ValueError("Position must be a tuple of two integers.")
         self._position = col, row  # Store as (col, row) like mesa standard
-        self._assets = assets
+        self._assets = float(assets)
         self._num_elections_participated = 0
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
 
@@ -149,13 +149,13 @@ class VoteAgent(Agent):
         return self._position[1]
 
     @property
-    def assets(self) -> int:
+    def assets(self) -> float:
         """Return the assets of this agent."""
         return self._assets
 
     @assets.setter
     def assets(self, value):
-        self._assets = value
+        self._assets = float(value)
 
     @assets.deleter
     def assets(self):
