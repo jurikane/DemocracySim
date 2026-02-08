@@ -97,7 +97,9 @@ def make_charts(cfg: AppConfig) -> list:
     num_colors = int(model_cfg["num_colors"])
     vis_cfg = cfg.visualization
     calibration_mode = bool(getattr(vis_cfg, "calibration_mode", False))
+    show_area_stats = bool(getattr(vis_cfg, "show_area_stats", False))
     show_agent_debug_panel = bool(getattr(vis_cfg, "show_agent_debug_panel", False))
+    show_static_infos = bool(getattr(vis_cfg, "show_static_infos", False))
 
     color_distribution_chart = ChartModule(
         [{"Label": f"color_{i}",
@@ -137,27 +139,25 @@ def make_charts(cfg: AppConfig) -> list:
         CohortElectionLearningDiagnostics,
     )
     from src.viz.debug_viz import AreaAgentDebugPanel
-    if calibration_mode:
-        # Calibration layout: area-focused first, then histograms, then global charts.
-        extras = [AreaDiagnosticsPanel()]
-        if show_agent_debug_panel:
-            extras.append(
-                AreaAgentDebugPanel(
-                    max_steps=int(getattr(vis_cfg, "agent_debug_max_steps", 1)),
-                    area_id=getattr(vis_cfg, "agent_debug_area_id", None),
-                    max_agents=int(getattr(vis_cfg, "agent_debug_max_agents", 50)),
-                    max_field_len=int(getattr(vis_cfg, "agent_debug_max_field_len", 180)),
-                )
+    extras = []
+    if show_area_stats:
+        extras.append(AreaDiagnosticsPanel())
+    if show_agent_debug_panel:
+        extras.append(
+            AreaAgentDebugPanel(
+                max_steps=int(getattr(vis_cfg, "agent_debug_max_steps", 1)),
+                area_id=getattr(vis_cfg, "agent_debug_area_id", None),
+                max_agents=int(getattr(vis_cfg, "agent_debug_max_agents", 50)),
+                max_field_len=int(
+                    getattr(vis_cfg, "agent_debug_max_field_len", 180)),
             )
+        )
+    if show_static_infos:
+        extras.append(PersonalityGroupDistribution())
+        extras.append(AreaPersonalityGroupDists())
+        extras.append(VoterTurnoutElement())
+        extras.append(AreaGiniElement())
+    if calibration_mode:
         extras.append(CohortElectionLearningDiagnostics())
-        return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]
 
-    extras = [
-        CohortElectionLearningDiagnostics(),
-        PersonalityGroupDistribution(),
-        VoterTurnoutElement(),
-        AreaGiniElement(),
-        AreaPersonalityGroupDists(),
-    ]
-
-    return [color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, *extras]
+    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]

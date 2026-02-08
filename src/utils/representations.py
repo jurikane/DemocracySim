@@ -91,7 +91,12 @@ def ranks_to_ordering(ranks: np.ndarray, eps = 1e-4) -> np.ndarray:
 
 
 
-def scores_to_ordering(scores: np.ndarray, eps = 1e-4) -> np.ndarray:
+def scores_to_ordering(
+    scores: np.ndarray,
+    eps = 1e-4,
+    *,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
     """Convert ScoreVector -> Ordering (lower score = better).
     Uses RNG noise to break ties if eps > 0, otherwise raises error on ties.
     """
@@ -99,7 +104,9 @@ def scores_to_ordering(scores: np.ndarray, eps = 1e-4) -> np.ndarray:
     validate_score_vector(arr, int(arr.size))
 
     if eps and eps > 0:  # Often have ties so go for tie-breaking first
-        noise = np_rng().uniform(-eps, eps, size=arr.size)
+        if rng is None:
+            rng = np_rng()
+        noise = rng.uniform(-eps, eps, size=arr.size)
         return np.argsort(arr + noise, kind="stable").astype(np.int64)
     elif len(np.unique(arr)) == len(arr): # check for ties
         return np.argsort(arr, kind="stable").astype(np.int64)

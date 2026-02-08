@@ -20,7 +20,7 @@ def _series_at(idx: int, seqs: list) -> list[float]:
 
 def save_plot_to_base64(fig) -> str:
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    fig.savefig(buf, format="png")
     plt.close(fig)
     buf.seek(0)
     image_base64 = base64.b64encode(buf.read()).decode('utf-8')
@@ -155,7 +155,7 @@ class AreaDiagnosticsPanel(TextElement):
                     ax2.legend(fontsize=6)
             ax2.set_title("mean rewards/fees by group")
             ax2.set_xlabel("Step")
-            ax2.legend(fontsize=6)
+            #ax2.legend(fontsize=6)
 
             # --- Diagnostics (middle row) ---
             ax3 = axes[row_mid][0]
@@ -167,6 +167,7 @@ class AreaDiagnosticsPanel(TextElement):
                 step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
 
                 group_turnout = [h.get("group_turnout", []) for h in hist]
+                overall_turnout = [h.get("turnout", float("nan")) for h in hist]
                 group_assets = [h.get("group_mean_assets", []) for h in hist]
                 group_delta_p = [h.get("group_mean_delta_rel_participants", []) for h in hist]
                 group_delta_a = [h.get("group_mean_delta_rel_abstainers", []) for h in hist]
@@ -186,6 +187,7 @@ class AreaDiagnosticsPanel(TextElement):
                     ax5.plot(step_axis, dp_series, color=color, linestyle=":", label=f"g{g} p")
                     ax5.plot(step_axis, da_series, color=color, label=f"g{g} a")
 
+                ax3.plot(step_axis, overall_turnout, color="gray", linewidth=1.2, label="overall")
                 ax3.set_ylabel("%")
                 ax5.axhline(0.0, color="k", linewidth=0.5)
 

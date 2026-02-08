@@ -51,19 +51,19 @@ class AreaAgentDebugPanel(TextElement):
             "altruism_factor",
             "eligible",
             "participating",
-            "num_elections_participated",
             "q_participation",
             "p_participation",
             "fee",
+            "num_elections_participated",
             "reward_common",
             "reward_personal",
             "delta_abs",
             "delta_rel",
             "known_cells_count",
             "known_cells",
-            "award_history_tail",
             "participation_strategy",
             "voting_strategy",
+            "award_history_tail",
         ]
 
     def _truncate(self, s: str) -> str:
@@ -131,10 +131,10 @@ class AreaAgentDebugPanel(TextElement):
             f"abstention_share={self._fmt_value(rec.get('abstention_share'))}"
         )
 
-        pref = rec.get("preference_profile") or []
-        rows = len(pref)
-        cols = len(pref[0]) if rows > 0 else 0
-        lines.append(f"Preference profile shape: {rows} x {cols}")
+        #pref = rec.get("preference_profile") or []
+        #rows = len(pref)
+        #cols = len(pref[0]) if rows > 0 else 0
+        #lines.append(f"Preference profile shape: {rows} x {cols}")
         lines.append("Votes:")
         votes = rec.get("votes") or []
         if not votes:
@@ -144,7 +144,8 @@ class AreaAgentDebugPanel(TextElement):
                 lines.append(
                     f"  Agent {vote.get('agent_id')}: "
                     f"scores={self._fmt_value(vote.get('scores'))} "
-                    f"ordering={self._fmt_value(vote.get('ordering'))}"
+                    f"ordering (debug-tie-break!): "
+                    f"{self._fmt_value(vote.get('ordering'))}"
                 )
 
         lines.append("Agents:")
@@ -153,9 +154,15 @@ class AreaAgentDebugPanel(TextElement):
         for agent in shown_agents:
             agent_id = agent.get("id")
             lines.append(f"  Agent {agent_id}:")
-            for key in self.agent_key_order:
+            pair_of_entries = ""  # Save some lines by combining two fields
+            for cnt, key in enumerate(self.agent_key_order):
                 if key in agent:
-                    lines.append(f"    {key}: {self._fmt_value(agent.get(key))}")
+                    pair_of_entries += f"{key}: {self._fmt_value(agent.get(key))}  "
+                    if (cnt + 1) % 2 == 0:
+                        lines.append(f"    {pair_of_entries}")
+                        pair_of_entries = ""
+            if len(pair_of_entries) > 0:  # In case of odd number of fields
+                lines.append(f"    {pair_of_entries}")
         if len(agents) > self.max_agents:
             lines.append(f"  ... ({len(agents) - self.max_agents} more agents omitted)")
 
@@ -197,5 +204,4 @@ class AreaAgentDebugPanel(TextElement):
         text_blocks = [self._format_record(rec) for rec in records]
         text = ("\n\n" + ("-" * 60) + "\n\n").join(text_blocks)
         return f"<pre>{html.escape(text)}</pre>"
-
 

@@ -390,7 +390,7 @@ class ReplayModel(mesa.Model):
     # --- Properties expected by visualization elements ---
     @property
     def num_agents(self) -> int:
-        return 0
+        return len(self.voting_agents)
 
     @property
     def num_colors(self) -> int:

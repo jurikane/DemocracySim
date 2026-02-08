@@ -9,7 +9,15 @@ from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors,
                                gini_index_0_100)
-from src.utils.rng import set_seed, np_rng, py_rng
+from src.utils.rng import (
+    set_seed,
+    np_rng,
+    np_rng_viz,
+    np_rng_debug,
+    py_rng,
+    py_rng_viz,
+    py_rng_debug,
+)
 
 
 # Voting rules to be accessible by index
@@ -28,13 +36,14 @@ class CustomScheduler(mesa.time.BaseScheduler):
         model = self.model
         if TYPE_CHECKING:
             model = cast(ParticipationModel, model)
+        self.steps += 1
+        self.time += 1
         # Step through Area agents first (and in "random" order)
         model.random.shuffle(model.areas)
         for area in model.areas:
             area.step()
         # TODO: add global election?
-        self.steps += 1
-        self.time += 1
+
 
     @property
     def agents(self):
@@ -173,6 +182,11 @@ class ParticipationModel(mesa.Model):
         set_seed(seed)
         self.np_random = np_rng()
         self.random = py_rng()
+        # Dedicated streams for visualization/debug to avoid perturbing simulation RNG.
+        self.rng_viz = np_rng_viz()
+        self.rng_debug = np_rng_debug()
+        self.random_viz = py_rng_viz()
+        self.random_debug = py_rng_debug()
         if seed is not None:
             print(f"Set models random seed to {seed}")
 
@@ -224,8 +238,8 @@ class ParticipationModel(mesa.Model):
         self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents    # TODO change to using mesas AgentSet class!
         self.personality_groups = self.create_personality_groups(num_personality_groups)
         pg_dst = ParticipationModel.pers_dist(num_personality_groups, rng=self.np_random)
-        self.personality_group_distribution = pg_dst
-        self.initialize_voting_agents(id_start=num_areas)
+        self.initialize_voting_agents(intended_dst=pg_dst, id_start=num_areas)
+        self.personality_group_distribution = self._initialize_personality_group_distribution()  # Static
         # Area variables
         self.global_area = self.initialize_global_area()
         self.areas: List[Optional[Area]] = [None] * num_areas    # TODO change to using mesas AgentSet class!
@@ -292,7 +306,7 @@ class ParticipationModel(mesa.Model):
             # Add to the 'model.color_cells' list (for faster access)
             self.color_cells[idx] = cell  # TODO: change to using the grid(?)
 
-    def initialize_voting_agents(self, id_start=0) -> None:
+    def initialize_voting_agents(self, intended_dst, id_start = 0) -> None:
         """
         This method initializes as many voting agents as set in the model with
         a randomly chosen personality_group. It places them randomly on the grid.
@@ -300,11 +314,11 @@ class ParticipationModel(mesa.Model):
         standing on.
         Args:
             id_start (int): The starting ID for agents to ensure unique IDs.
+            intended_dst (np.ndarray): The intended distribution of personality groups.
         """
         # Testing parameter validity
         if self.num_agents < 1:
             raise ValueError("The number of agents must be at least 1.")
-        dist = self.personality_group_distribution
         assets = self.common_assets // self.num_agents  # TODO: always equal dist?
         nr = len(self.personality_groups)
         for idx in range(self.num_agents):
@@ -314,7 +328,7 @@ class ParticipationModel(mesa.Model):
             x = self.random.randrange(self.width)
             y = self.random.randrange(self.height)
             # Choose a personality_group based on the distribution
-            personality_group_idx = self.np_random.choice(nr, p=dist)
+            personality_group_idx = self.np_random.choice(nr, p=intended_dst)
             personality_group = self.personality_groups[personality_group_idx]
             # Create agent without appending (add to the pre-defined list)
             agent = VoteAgent(unique_id, self, (x, y), personality_group,
@@ -325,6 +339,12 @@ class ParticipationModel(mesa.Model):
             if TYPE_CHECKING:
                 cell = cast(ColorCell, cell)
             cell.add_agent(agent)
+
+    def _initialize_personality_group_distribution(self) -> np.ndarray:
+        counts = np.bincount(
+            [a.personality_group_idx for a in self.voting_agents],
+            minlength=len(self.personality_groups))
+        return counts / counts.sum()
 
     def init_color_probs(self, election_impact) -> np.ndarray:
         """

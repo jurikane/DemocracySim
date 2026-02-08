@@ -7,6 +7,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.agents.color_cell import ColorCell
     from src.agents.vote_agent import VoteAgent
 from src.utils.representations import scores_to_ordering
+from src.utils.rng import np_rng_debug
 
 
 class Area(Agent):
@@ -271,9 +272,11 @@ class Area(Agent):
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
+        area_voter_turnout = int((n / self.num_agents) * 100)
+        self._voter_turnout = area_voter_turnout  # Update in area state
         self._update_diag_history()
         self._capture_debug_snapshot(preference_profile, aggregated)
-        return int((n / self.num_agents) * 100) # Voter turnout in percent
+        return area_voter_turnout # Voter turnout in percent
 
     def _update_diag_history(self) -> None:
         """Append per-area diagnostics for the current step."""
@@ -293,7 +296,7 @@ class Area(Agent):
             for a in pool:
                 try:
                     vals.append(float(a.participation_probability()))
-                except Exception:
+                except ValueError:
                     vals.append(float("nan"))
             return _mean([v for v in vals if np.isfinite(v)])
 
@@ -395,19 +398,14 @@ class Area(Agent):
     def _snapshot_agent(self, agent) -> dict:
         try:
             p_participation = float(agent.participation_probability())
-        except Exception:
+        except ValueError:
             p_participation = float("nan")
 
-        known_cells = []
+        known_colors = []
         for cell in getattr(agent, "known_cells", []) or []:
             if cell is None:
                 continue
-            known_cells.append(
-                {
-                    "pos": getattr(cell, "pos", None),
-                    "color": getattr(cell, "color", None),
-                }
-            )
+            known_colors.append({"color": getattr(cell, "color", None),})
 
         personality_group = getattr(agent, "personality_group", None)
         if isinstance(personality_group, np.ndarray):
@@ -445,8 +443,8 @@ class Area(Agent):
             "altruism_factor": float(getattr(agent, "altruism_factor", float("nan"))),
             "est_real_dist": est_real_dist,
             "confidence": float(getattr(agent, "confidence", float("nan"))),
-            "known_cells_count": len(known_cells),
-            "known_cells": known_cells,
+            "known_cells_count": len(known_colors),
+            "known_cells": known_colors,
             "award_history_tail": list(getattr(agent, "award_history", [])[-5:]),
             "participation_strategy": getattr(
                 getattr(agent, "participation_strategy", None), "__class__", type("X", (), {})
@@ -570,7 +568,8 @@ class Area(Agent):
                     )
                 if debug_enabled:
                     scores = np.asarray(scores, dtype=np.float64)
-                    ordering = scores_to_ordering(scores).astype(int).tolist()
+                    debug_rng = getattr(self.model, "rng_debug", np_rng_debug())
+                    ordering = scores_to_ordering(scores, rng=debug_rng).astype(int).tolist()
                     debug_votes.append(
                         {
                             "agent_id": getattr(agent, "unique_id", None),
@@ -664,7 +663,7 @@ class Area(Agent):
         Returns:
             bool: True if at least one agent participated.
         """
-        self._voter_turnout = self._conduct_election()  # The main election logic
+        self._conduct_election()  # The main election logic
         if self.voter_turnout == 0:
             return False  # No one participated
 
