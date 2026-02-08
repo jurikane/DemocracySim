@@ -15,33 +15,6 @@ def _sigmoid(x: float) -> float:
     return float(z / (1.0 + z))
 
 
-# # TODO: remove legacy Policy interface in future ###############################
-# class Policy(Protocol):
-#     def decide_participation(self, agent, area) -> bool: ...
-#     def decide_altruism_factor(self, agent, area) -> float: ...
-#     def score_options(self, agent, area, options: Any) -> np.ndarray: ...
-#
-# class ParticipationPolicy:
-#     """Legacy policy kept for compatibility with older tests/configs.
-#
-#     NOTE: Voting is now handled by VotingStrategy (schema/thesis semantics).
-#     """
-#     def decide_altruism_factor(self, agent, area) -> float:
-#         # Legacy: keep deterministic by using model.np_random (not agent.random)
-#         return float(agent.model.np_random.random())
-#
-#     def score_options(self, agent, area, options: Any) -> np.ndarray:
-#         # Legacy score path (normalized). Not used by VoteAgent.vote().
-#         dist_func = agent.model.distance_func
-#         scores = np.zeros(options.shape[0])
-#         color_search_pairs = agent.model.color_search_pairs
-#         for i, option in enumerate(options):
-#             scores[i] = dist_func(agent.personality_group, option, color_search_pairs)
-#         scores /= scores.sum() if scores.sum() else 1.0
-#         return scores
-# ################################################################################
-
-
 if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell

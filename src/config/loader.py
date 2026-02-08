@@ -72,12 +72,6 @@ def load_config(config_file=None) -> AppConfig:
         with root_cfg.open("r") as f:
             return check_schema(f)
 
-    # 4) Legacy src/configs/
-    legacy_cfg = get_project_subfolder("src", "configs") / cfg_path.name
-    if legacy_cfg.exists():
-        with legacy_cfg.open("r") as f:
-            return check_schema(f)
-
     # If nothing found
-    tried = [str(p) for p in [cfg_path, cwd_path, root_cfg, legacy_cfg]]
+    tried = [str(p) for p in [cfg_path, cwd_path, root_cfg]]
     raise FileNotFoundError(f"Config not found. Tried: {', '.join(tried)}")

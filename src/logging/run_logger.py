@@ -342,14 +342,6 @@ class RunLoggerV2:
                 if suf.isdigit():
                     row[k] = np.float32(v)
 
-        # Legacy fallback: "Color 0"..."Color {C-1}"
-        for k, v in last.items():
-            if isinstance(k, str) and k.startswith("Color "):
-                parts = k.split(" ")
-                if len(parts) == 2 and parts[1].isdigit():
-                    idx = int(parts[1])
-                    row[f"color_{idx}"] = np.float32(v)
-
         if pre_colors is not None:
             for i, v in enumerate(pre_colors):
                 row[f"color_{i}"] = np.float32(v)

@@ -62,23 +62,6 @@ def test_load_config_project_root(mock_model_validate, tmp_path, monkeypatch):
     result = loader.load_config("test.yaml")
     assert result == "validated"
 
-def test_load_config_legacy(mock_model_validate, tmp_path, monkeypatch):
-    # Create fake project root
-    project_root = tmp_path / "project"
-    legacy_dir = project_root / "configs"
-    legacy_dir.mkdir(parents=True)
-    cfg_file = legacy_dir / "legacy.yaml"
-    cfg_file.write_text("key: value")
-
-    # Fake loader's __file__ so parents[2] == project_root
-    fake_loader_file = project_root / "tmp" / "config" / "loader.py"
-    fake_loader_file.parent.mkdir(parents=True)
-    fake_loader_file.write_text("# fake loader file")
-    monkeypatch.setattr(loader, "__file__", str(fake_loader_file))
-    # Load
-    result = loader.load_config("legacy.yaml")
-    assert result == "validated"
-
 def test_load_config_env_var(mock_model_validate):
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tmp:
         tmp.write("key: value")

@@ -421,16 +421,7 @@ class ReplayModel(mesa.Model):
         # Area rows for viz
         areas_block = rec.get("areas")
         if isinstance(areas_block, dict):
-            # For legacy runs, areas_block may be keyed by str; adapter supports int keys.
-            if areas_block and all(isinstance(k, str) for k in areas_block.keys()):
-                try:
-                    coerced = {int(k): v for k, v in areas_block.items()}
-                except ValueError:
-                    coerced = {}
-                # Legacy uses different keys; keep as-is.
-                self.datacollector.add_area_rows(step=step, areas=coerced)
-            else:
-                self.datacollector.add_area_rows(step=step, areas=areas_block)
+            self.datacollector.add_area_rows(step=step, areas=areas_block)
 
         self.scheduler.steps = step
 

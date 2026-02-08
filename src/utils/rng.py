@@ -31,11 +31,6 @@ class RNGManager:
         self.py_viz = random.Random(int(ss_viz.generate_state(1)[0]))
         self.py_debug = random.Random(int(ss_debug.generate_state(1)[0]))
 
-        # Legacy/global fallbacks: keep deterministic if someone uses np.random/random directly.
-        # Prefer using RNGManager's generators instead of global state.
-        random.seed(seed)
-        np.random.seed(seed)
-
 
 RNG = RNGManager()
 

@@ -41,9 +41,10 @@ class TestParticipationModelUnit(unittest.TestCase):
 
     def test_color_by_dst_respects_distribution(self):
         probs = np.array([0.1, 0.3, 0.6])
+        self.model.np_random = np.random.default_rng(0)
         counts = [0, 0, 0]
         for _ in range(1000):
-            c = ParticipationModel.color_by_dst(probs)
+            c = self.model.color_by_dst_rng(probs)
             counts[c] += 1
         self.assertGreater(counts[2], counts[1])
         self.assertGreater(counts[1], counts[0])
@@ -156,4 +157,3 @@ class TestParticipationModelUnit(unittest.TestCase):
     def test_step(self):
         # TODO: Add full step integration test
         pass
-

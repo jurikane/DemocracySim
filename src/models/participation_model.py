@@ -300,7 +300,7 @@ class ParticipationModel(mesa.Model):
             # Assign unique ID after areas and agents
             unique_id = id_start + idx
             # The colors are chosen by a predefined color distribution
-            color = self.color_by_dst(self._preset_color_dst)  # TODO change back to color_by_dst
+            color = self.color_by_dst_rng(self._preset_color_dst)
             # Create the cell (skip ids for area and voting agents)
             cell = ColorCell(unique_id, self, (col, row), color)
             # Add to the 'model.color_cells' list (for faster access)
@@ -649,39 +649,6 @@ class ParticipationModel(mesa.Model):
         else:
             r = np.array([np.array(p) for p in permutations(range(n))])
         return r
-
-    @staticmethod
-    def color_by_dst(color_distribution: np.ndarray) -> int:
-        """
-        Legacy helper: sample an index from a distribution using global RNG.
-        Select a color index according to given distribution using the model RNG.
-        Selects a color (int) based on the given color_distribution array,
-        where each entry represents the probability of selecting that index.
-        Args:
-            color_distribution (np.ndarray): Determines the probabilities
-        Returns:
-            int: The selected index based on the given probabilities.
-        Raises:
-            ValueError: If probabilities do not sum to 1 or contain negatives.
-        Example:
-            color_distribution = [0.2, 0.3, 0.5]
-            Color 1 will be selected with a probability of 0.3.
-
-        This is kept for backward compatibility with unit tests that call
-        ParticipationModel.color_by_dst(...) without constructing a model.
-        """
-        if abs(sum(color_distribution) - 1) > 1e-8:
-            raise ValueError("The color_distribution array must sum to 1.")
-        r = float(np_rng().random())
-        cumulative_sum = 0.0
-        for color_idx, prob in enumerate(color_distribution):
-            if prob < 0:
-                raise ValueError("color_distribution contains negative value.")
-            cumulative_sum += prob
-            if r < cumulative_sum:
-                return int(color_idx)
-        raise ValueError("Unexpected error in color_distribution.")
-
 
     def color_by_dst_rng(self, color_distribution: np.ndarray) -> int:
         """Deterministic sampling using the model's seeded RNG."""

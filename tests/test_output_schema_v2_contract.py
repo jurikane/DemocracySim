@@ -77,8 +77,7 @@ def test_schema_v2_required_artifacts_exist(v2_run_dir: Path) -> None:
 
     # Core run metadata
     assert (v2_run_dir / "meta.yaml").exists(), "meta.yaml missing"
-    # During incremental migration we keep legacy replay static.json intact and
-    # write schema-v2 metadata to static.json.
+    # static.json is required for schema v2 metadata.
     assert (v2_run_dir / "static.json").exists(), "static.json missing"
 
     # Required Parquet tables
