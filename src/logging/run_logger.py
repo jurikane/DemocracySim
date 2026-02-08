@@ -419,7 +419,7 @@ class RunLoggerV2:
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
                 "election_cost_rate": np.float32(float(model.election_cost_rate)),
-                "fee_pool": np.float32(getattr(self, "_election_fee_pool")),
+                "fee_pool": np.float32(getattr(area, "_election_fee_pool")),
                 "winning_option_id": np.int32(-1),
                 "dist_to_reality": np.float32(float(area.dist_to_reality)),
                 "gini_index": np.int16(0),

@@ -95,6 +95,8 @@ class ReplayData:
         step_indexing = self._static.get("step_indexing") if isinstance(self._static.get("step_indexing"), dict) else {}
         if isinstance(step_indexing.get("grid_file"), str):
             self._grid_pattern = step_indexing.get("grid_file")
+        if not self._grid_pattern:
+            raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
 
         self.step_files = []
         self._steps_df: Optional[pd.DataFrame] = None
@@ -131,8 +133,12 @@ class ReplayData:
         steps_path = self.run_dir / "steps.parquet"
         area_steps_path = self.run_dir / "area_steps.parquet"
 
-        self._steps_df = pd.read_parquet(steps_path) if steps_path.exists() else pd.DataFrame()
-        self._area_steps_df = pd.read_parquet(area_steps_path) if area_steps_path.exists() else pd.DataFrame()
+        if not steps_path.exists():
+            raise FileNotFoundError(f"Missing steps.parquet; run_dir={self.run_dir}")
+        if not area_steps_path.exists():
+            raise FileNotFoundError(f"Missing area_steps.parquet; run_dir={self.run_dir}")
+        self._steps_df = pd.read_parquet(steps_path)
+        self._area_steps_df = pd.read_parquet(area_steps_path)
 
     # -----------------
     # Loading
@@ -143,29 +149,45 @@ class ReplayData:
 
     def load_static(self) -> Dict[str, Any]:
         p = self.run_dir / "static.json"
-        if p.exists():
-            return json.loads(p.read_text())
-        return {}
+        if not p.exists():
+            raise FileNotFoundError(f"Missing static.json; replay requires schema v2 run dirs. run_dir={self.run_dir}")
+        data = json.loads(p.read_text())
+        if not isinstance(data, dict):
+            raise ValueError(f"static.json must be a JSON object. run_dir={self.run_dir}")
+        return data
 
     def load_grid(self, step: int) -> Optional[np.ndarray]:
         # Use pattern from static.json.
         if not self._grid_pattern:
-            return None
+            raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
         gf = self.grids_dir / (self._grid_pattern % int(step))
-        if gf.exists():
-            return np.load(str(gf))
-        return None
+        if not gf.exists():
+            raise FileNotFoundError(f"Missing grid snapshot: {gf}")
+        return np.load(str(gf))
 
     def _load_step_v2(self, index: int) -> Dict[str, Any]:
         steps_df = self._steps_df if self._steps_df is not None else pd.DataFrame()
         area_steps_df = self._area_steps_df if self._area_steps_df is not None else pd.DataFrame()
         if steps_df.empty:
-            return {"step": int(index), "model": {}, "areas": {}}
+            raise ValueError(f"steps.parquet is empty; run_dir={self.run_dir}")
+        if area_steps_df.empty:
+            raise ValueError(f"area_steps.parquet is empty; run_dir={self.run_dir}")
+        if "step" not in steps_df.columns:
+            raise KeyError("steps.parquet missing required column: step")
+        if "step" not in area_steps_df.columns:
+            raise KeyError("area_steps.parquet missing required column: step")
+        if "area_id" not in area_steps_df.columns:
+            raise KeyError("area_steps.parquet missing required column: area_id")
+
+        if not any(isinstance(c, str) and c.startswith("area_color_") for c in area_steps_df.columns):
+            raise KeyError("area_steps.parquet missing area_color_* columns")
+        if not any(isinstance(c, str) and c.startswith("elected_color_") for c in area_steps_df.columns):
+            raise KeyError("area_steps.parquet missing elected_color_* columns")
 
         # 'index' is the sequential position (0...len-1). The recorded 'step' value
         # is taken from parquet (schema v2 is 1-based).
         model_row_series = steps_df.iloc[int(index)]
-        step = int(model_row_series["step"]) if "step" in steps_df.columns else int(index)
+        step = int(model_row_series["step"])
         model_row = model_row_series.to_dict()
         model_row.pop("run_seed", None)
         model_row.pop("rule_idx", None)
@@ -173,27 +195,31 @@ class ReplayData:
         areas: Dict[int, Dict[str, Any]] = {}
         if not area_steps_df.empty and "step" in area_steps_df.columns:
             sdf = area_steps_df[area_steps_df["step"].astype(int) == step]
-            if not sdf.empty:
-                for _, r in sdf.iterrows():
-                    aid = int(r.get("area_id", -1))
-                    # Pack expanded vectors into python lists for viz convenience
-                    area_color = [
-                        float(r.get(f"area_color_{i}"))
-                        for i in _expanded_range(r, prefix="area_color")
-                    ]
-                    # Schema v2 stores elected_color_* columns.
-                    elected_color = [
-                        int(r.get(f"elected_color_{i}"))
-                        for i in _expanded_range(r, prefix="elected_color")
-                    ]
+            if sdf.empty:
+                raise ValueError(f"area_steps.parquet has no rows for step={step}")
+            for _, r in sdf.iterrows():
+                aid = int(r["area_id"])
+                # Pack expanded vectors into python lists for viz convenience
+                area_color = [
+                    float(r[f"area_color_{i}"])
+                    for i in _expanded_range(r, prefix="area_color")
+                ]
+                elected_color = [
+                    int(r[f"elected_color_{i}"])
+                    for i in _expanded_range(r, prefix="elected_color")
+                ]
+                if not area_color:
+                    raise KeyError("area_steps.parquet missing area_color_* values")
+                if not elected_color:
+                    raise KeyError("area_steps.parquet missing elected_color_* values")
 
-                    areas[aid] = {
-                        "turnout": float(r.get("turnout", 0.0) or 0.0),
-                        "dist_to_reality": float(r.get("dist_to_reality", 0.0) or 0.0),
-                        "gini_index": int(r.get("gini_index", 0) or 0),
-                        "area_color_distribution": area_color,
-                        "elected_color": elected_color,
-                    }
+                areas[aid] = {
+                    "turnout": float(r["turnout"]),
+                    "dist_to_reality": float(r["dist_to_reality"]),
+                    "gini_index": int(r["gini_index"]),
+                    "area_color_distribution": area_color,
+                    "elected_color": elected_color,
+                }
 
         return {"step": step, "model": model_row, "areas": areas}
 
@@ -202,36 +228,36 @@ class ReplayData:
         artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
         f_name = artifacts.get("area_borders", "area_borders.npy")
         p = self.run_dir / f_name
-        if p.exists():
-            return np.load(str(p))
-        return None
+        if not p.exists():
+            raise FileNotFoundError(f"Missing area_borders artifact: {p}")
+        return np.load(str(p))
 
     def load_agents_per_cell(self) -> Optional[np.ndarray]:
         static = self.load_static() or {}
         artifacts = static.get("artifacts")
         f_name = artifacts.get("agents_per_cell", "agents_per_cell.npy")
         p = self.run_dir / f_name
-        if p.exists():
-            return np.load(str(p))
-        return None
+        if not p.exists():
+            raise FileNotFoundError(f"Missing agents_per_cell artifact: {p}")
+        return np.load(str(p))
 
     def load_agent_strings_per_cell(self) -> Optional[np.ndarray]:
         static = self.load_static() or {}
         artifacts = static.get("artifacts")
         f_name = artifacts.get("agent_strings_per_cell", "agent_strings_per_cell.npy")
         p = self.run_dir / f_name
-        if p.exists():
-            return np.load(str(p))
-        return None
+        if not p.exists():
+            raise FileNotFoundError(f"Missing agent_strings_per_cell artifact: {p}")
+        return np.load(str(p))
 
     def load_cell_areas(self) -> Optional[np.ndarray]:
         static = self.load_static() or {}
         artifacts = static.get("artifacts")
         f_name = artifacts.get("cell_areas", "cell_areas.npy")
         p = self.run_dir / f_name
-        if p.exists():
-            return np.load(str(p))
-        return None
+        if not p.exists():
+            raise FileNotFoundError(f"Missing cell_areas artifact: {p}")
+        return np.load(str(p))
 
     def __len__(self) -> int:
         if self._schema == "v2":

@@ -243,16 +243,12 @@ class PersonalityGroupDistribution(TextElement):
         self.pers_dist_plot = None
 
     def create_once(self, model):
-        try:
-            dists = model.personality_group_distribution
-            personality_groups = model.personality_groups
-            num_personality_groups = personality_groups.shape[0]
-            num_agents = model.num_agents
-            colors = COLORS[:model.num_colors]
-            num_colors = len(personality_groups[0])
-        except(IndexError, TypeError):
-            self.pers_dist_plot = ""
-            return
+        dists = model.personality_group_distribution
+        personality_groups = model.personality_groups
+        num_personality_groups = personality_groups.shape[0]
+        num_agents = model.num_agents
+        colors = COLORS[:model.num_colors]
+        num_colors = len(personality_groups[0])
 
         fig, ax = plt.subplots(figsize=(6, 4))
         heights = dists
@@ -373,15 +369,11 @@ class AreaPersonalityGroupDists(TextElement):
         self.areas_pers_dist_plot = None
 
     def create_once(self, model):
-        try:
-            colors = COLORS[:model.num_colors]
-            personality_groups = model.personality_groups
-            num_colors = len(personality_groups[0])
-            num_personality_groups = personality_groups.shape[0]
-            num_areas = len(model.areas)
-        except (TypeError, IndexError, AttributeError, ValueError):
-            self.areas_pers_dist_plot = ""
-            return
+        colors = COLORS[:model.num_colors]
+        personality_groups = model.personality_groups
+        num_colors = len(personality_groups[0])
+        num_personality_groups = personality_groups.shape[0]
+        num_areas = len(model.areas)
 
         if num_areas == 0:
             self.areas_pers_dist_plot = ""
