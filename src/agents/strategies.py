@@ -32,7 +32,7 @@ class DefaultParticipationStrategy:
 
     def decide_participation(self, agent: Any, area: Any) -> bool:
         p = agent.participation_probability()
-        bias = float(getattr(agent.model, "bias_toward_participation", 0.0))
+        bias = float(agent.model.bias_toward_participation)
         if bias != 0.0:
             # Simple additive bias in probability space.
             p = float(np.clip(p + bias, 0.0, 1.0))
@@ -48,7 +48,7 @@ class DefaultVotingStrategy:
         # Assumes Area._tally_votes already populated agent.known_cells for this election.
         est_real_dist, _conf = agent.estimate_real_distribution(area)
 
-        altruism_factor = float(getattr(agent, "altruism_factor", 0.5))
+        altruism_factor = float(agent.altruism_factor)
         # - 0.0 => purely self-interest (personal_opt_dist)
         # - 1.0 => purely reality-tracking (est_real_dist)
 

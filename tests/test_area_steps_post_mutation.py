@@ -17,7 +17,7 @@ def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
     cfg_for_run.simulation.store_grid = False
 
     model = make_model(cfg_for_run.model)
-    rule_idx = int(getattr(cfg_for_run.model, "rule_idx", 0) or 0)
+    rule_idx = int(cfg_for_run.model.rule_idx)
     logger = RunLoggerV2(out_dir=tmp_path, run_seed=1, rule_idx=rule_idx, num_steps=1, store_grid=False)
 
     logger.attach_to_model(model)

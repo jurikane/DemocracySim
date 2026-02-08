@@ -176,21 +176,21 @@ class AreaAgentDebugPanel(TextElement):
         setattr(model, "_debug_agent_panel_enabled", True)
         setattr(model, "_debug_agent_panel_max_steps", int(self.max_steps))
 
-        step = int(getattr(getattr(model, "scheduler", None), "steps", 0) or 0)
+        step = int(model.scheduler.steps)
         if step == 0:
             return ""
 
-        areas = [a for a in getattr(model, "areas", []) if a is not None and a.unique_id != -1]
+        areas = [a for a in model.areas if a is not None and a.unique_id != -1]
         if not areas:
             return ""
-        areas = sorted(areas, key=lambda a: int(getattr(a, "unique_id", 0)))
+        areas = sorted(areas, key=lambda a: int(a.unique_id))
 
         area = None
         if self.area_id is None:
             area = areas[0]
         else:
             for a in areas:
-                if int(getattr(a, "unique_id", -1)) == int(self.area_id):
+                if int(a.unique_id) == int(self.area_id):
                     area = a
                     break
         if area is None:
@@ -204,4 +204,3 @@ class AreaAgentDebugPanel(TextElement):
         text_blocks = [self._format_record(rec) for rec in records]
         text = ("\n\n" + ("-" * 60) + "\n\n").join(text_blocks)
         return f"<pre>{html.escape(text)}</pre>"
-

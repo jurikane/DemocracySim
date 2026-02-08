@@ -298,56 +298,52 @@ class Area(Agent):
             p_participation = float("nan")
 
         known_colors = []
-        for cell in getattr(agent, "known_cells", []) or []:
+        for cell in agent.known_cells:
             if cell is None:
                 continue
-            known_colors.append({"color": getattr(cell, "color", None),})
+            known_colors.append({"color": cell.color})
 
-        personality_group = getattr(agent, "personality_group", None)
+        personality_group = agent.personality_group
         if isinstance(personality_group, np.ndarray):
             personality_group = personality_group.tolist()
 
-        personality = getattr(agent, "personality", None)
+        personality = agent.personality
         if isinstance(personality, np.ndarray):
             personality = personality.tolist()
 
-        est_real_dist = getattr(agent, "est_real_dist", None)
+        est_real_dist = agent.est_real_dist
         if isinstance(est_real_dist, np.ndarray):
             est_real_dist = est_real_dist.tolist()
 
-        delta_abs = float(getattr(agent, "election_delta_abs", float("nan")))
-        assets_now = float(getattr(agent, "assets", float("nan")))
+        delta_abs = float(agent.election_delta_abs)
+        assets_now = float(agent.assets)
 
         return {
-            "id": getattr(agent, "unique_id", None),
-            "pos": getattr(agent, "position", None),
-            "personality_group_idx": getattr(agent, "personality_group_idx", None),
+            "id": agent.unique_id,
+            "pos": agent.position,
+            "personality_group_idx": agent.personality_group_idx,
             "personality_group": personality_group,
             "personality": personality,
             "assets": assets_now,
             "assets_pre_est": assets_now - delta_abs,
-            "eligible": bool(getattr(agent, "eligible_for_election", False)),
-            "participating": bool(getattr(agent, "participating", False)),
-            "num_elections_participated": getattr(agent, "num_elections_participated", None),
-            "fee": float(getattr(agent, "_fee", 0.0)),
-            "reward_common": float(getattr(agent, "_reward_common_comp", 0.0)),
-            "reward_personal": float(getattr(agent, "_reward_pers_comp", 0.0)),
+            "eligible": bool(agent.eligible_for_election),
+            "participating": bool(agent.participating),
+            "num_elections_participated": agent.num_elections_participated,
+            "fee": float(agent._fee),
+            "reward_common": float(agent._reward_common_comp),
+            "reward_personal": float(agent._reward_pers_comp),
             "delta_abs": delta_abs,
-            "delta_rel": float(getattr(agent, "election_delta_rel", float("nan"))),
-            "q_participation": float(getattr(agent, "q_participation", float("nan"))),
+            "delta_rel": float(agent.election_delta_rel),
+            "q_participation": float(agent.q_participation),
             "p_participation": p_participation,
-            "altruism_factor": float(getattr(agent, "altruism_factor", float("nan"))),
+            "altruism_factor": float(agent.altruism_factor),
             "est_real_dist": est_real_dist,
-            "confidence": float(getattr(agent, "confidence", float("nan"))),
+            "confidence": float(agent.confidence),
             "known_cells_count": len(known_colors),
             "known_cells": known_colors,
-            "award_history_tail": list(getattr(agent, "award_history", [])[-5:]),
-            "participation_strategy": getattr(
-                getattr(agent, "participation_strategy", None), "__class__", type("X", (), {})
-            ).__name__,
-            "voting_strategy": getattr(
-                getattr(agent, "voting_strategy", None), "__class__", type("X", (), {})
-            ).__name__,
+            "award_history_tail": list(agent.award_history[-5:]),
+            "participation_strategy": agent.participation_strategy.__class__.__name__,
+            "voting_strategy": agent.voting_strategy.__class__.__name__,
         }
 
     def _tally_votes(self) -> np.ndarray:
@@ -403,16 +399,16 @@ class Area(Agent):
                         area=self,
                         agent=agent,
                         oppose_scores=scores,
-                        est_dist=getattr(agent, "est_real_dist", None),
-                        confidence=getattr(agent, "confidence", None),
+                        est_dist=agent.est_real_dist,
+                        confidence=agent.confidence,
                     )
                 if debug_enabled:
                     scores = np.asarray(scores, dtype=np.float64)
-                    debug_rng = getattr(self.model, "rng_debug", np_rng_debug())
+                    debug_rng = self.model.rng_debug
                     ordering = scores_to_ordering(scores, rng=debug_rng).astype(int).tolist()
                     debug_votes.append(
                         {
-                            "agent_id": getattr(agent, "unique_id", None),
+                            "agent_id": agent.unique_id,
                             "scores": scores.tolist(),
                             "ordering": ordering,
                         }
@@ -500,15 +496,15 @@ class Area(Agent):
     def _update_diag_history(self) -> None:
         """Append per-area diagnostics for the current step."""
         agents = [a for a in self.agents if a is not None]
-        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
-        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
-        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
+        eligible = [a for a in agents if a.eligible_for_election]
+        participants = [a for a in eligible if a.participating]
+        abstainers = [a for a in eligible if not a.participating]
 
         def _mean(vals):
             return float(np.mean(vals)) if len(vals) > 0 else float("nan")
 
         def _mean_attr(pool, attr):
-            return _mean([float(getattr(a, attr, 0.0)) for a in pool])
+            return _mean([float(getattr(a, attr)) for a in pool])
 
         def _mean_participation_prob(pool):
             vals = []
@@ -534,12 +530,12 @@ class Area(Agent):
 
         # Area gini (0-100)
         from src.utils.metrics import gini_index_0_100
-        assets = [float(getattr(a, "assets", 0.0)) for a in eligible]
+        assets = [float(a.assets) for a in eligible]
         gini = int(gini_index_0_100(assets)) if assets else 0
 
         # Per-personality_group metrics (area-level)
-        pg = getattr(self.model, "personality_groups", None)
-        num_groups = len(pg) if pg is not None else 0
+        pg = self.model.personality_groups
+        num_groups = len(pg)
         group_turnout = [float("nan")] * num_groups
         group_mean_assets = [float("nan")] * num_groups
         group_mean_delta_rel = [float("nan")] * num_groups
@@ -554,10 +550,10 @@ class Area(Agent):
 
         if num_groups > 0:
             for g in range(num_groups):
-                g_agents = [a for a in agents if int(getattr(a, "personality_group_idx", -1)) == g]
-                g_eligible = [a for a in eligible if int(getattr(a, "personality_group_idx", -1)) == g]
-                g_participants = [a for a in g_eligible if bool(getattr(a, "participating", False))]
-                g_abstainers = [a for a in g_eligible if not bool(getattr(a, "participating", False))]
+                g_agents = [a for a in agents if int(a.personality_group_idx) == g]
+                g_eligible = [a for a in eligible if int(a.personality_group_idx) == g]
+                g_participants = [a for a in g_eligible if a.participating]
+                g_abstainers = [a for a in g_eligible if not a.participating]
 
                 if g_eligible:
                     group_turnout[g] = float(len(g_participants) / len(g_eligible) * 100.0)
@@ -611,20 +607,15 @@ class Area(Agent):
         if not self._debug_enabled():
             return
 
-        step = int(
-            getattr(getattr(self.model, "scheduler", None), "steps", 0) or 0)
-        agents = sorted(self.agents,
-                        key=lambda a: int(getattr(a, "unique_id", 0)))
-        eligible = [a for a in agents if
-                    bool(getattr(a, "eligible_for_election", False))]
-        participants = [a for a in eligible if
-                        bool(getattr(a, "participating", False))]
-        abstainers = [a for a in eligible if
-                      not bool(getattr(a, "participating", False))]
+        step = int(self.model.scheduler.steps)
+        agents = sorted(self.agents, key=lambda a: int(a.unique_id))
+        eligible = [a for a in agents if a.eligible_for_election]
+        participants = [a for a in eligible if a.participating]
+        abstainers = [a for a in eligible if not a.participating]
 
         record = {
             "step": step,
-            "area_id": getattr(self, "unique_id", None),
+            "area_id": self.unique_id,
             "num_agents": len(agents),
             "num_eligible": len(eligible),
             "num_participants": len(participants),
@@ -658,16 +649,11 @@ class Area(Agent):
             "winning_option": int(
                 aggregated[0]) if aggregated is not None and len(
                 aggregated) > 0 else None,
-            "reward_threshold_common": float(
-                getattr(self.model, "reward_threshold_common", float("nan"))),
-            "reward_threshold_personal": float(
-                getattr(self.model, "reward_threshold_personal", float("nan"))),
-            "reward_rate_common": float(
-                getattr(self.model, "reward_rate_common", float("nan"))),
-            "reward_rate_personal": float(
-                getattr(self.model, "reward_rate_personal", float("nan"))),
-            "abstention_share": float(
-                getattr(self.model, "abstention_share", float("nan"))),
+            "reward_threshold_common": float(self.model.reward_threshold_common),
+            "reward_threshold_personal": float(self.model.reward_threshold_personal),
+            "reward_rate_common": float(self.model.reward_rate_common),
+            "reward_rate_personal": float(self.model.reward_rate_personal),
+            "abstention_share": float(self.model.abstention_share),
             "agents": [self._snapshot_agent(a) for a in agents],
         }
 

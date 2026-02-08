@@ -101,11 +101,11 @@ class RunLoggerV2:
     def write_static(self, model: Model) -> None:
         """Write static.json (schema v2 metadata) and static overlay artifacts."""
 
-        height = int(getattr(model, "height", 0) or 0)
-        width = int(getattr(model, "width", 0) or 0)
-        num_colors = int(getattr(model, "num_colors", 0) or 0)
-        num_areas = int(getattr(model, "num_areas", 0) or 0)
-        num_agents = int(getattr(model, "num_agents", 0) or 0)
+        height = int(model.height)
+        width = int(model.width)
+        num_colors = int(model.num_colors)
+        num_areas = int(model.num_areas)
+        num_agents = int(model.num_agents)
 
         static = {
             "schema": {
@@ -135,8 +135,8 @@ class RunLoggerV2:
         }
 
         # Optional: personality_group metadata if present (useful for replay UI)
-        raw_personality_groups = getattr(model, "personality_groups", None)
-        global_pers_dist = getattr(model, "personality_group_distribution", None)
+        raw_personality_groups = model.personality_groups
+        global_pers_dist = model.personality_group_distribution
         # get personality_groups distributions per area
         area_distributions = {}
         areas = list(model.areas)
@@ -144,18 +144,17 @@ class RunLoggerV2:
             area_infos = {}  # To save num_agents and personality_group_distribution
             a_id = area.unique_id
             num_agents = area.num_agents
-            dist = getattr(area, "personality_group_distribution", None)
+            dist = area.personality_group_distribution
             area_infos["num_agents"] = num_agents
             area_infos["personality_group_distribution"] = _to_python(np.asarray(dist))
             area_distributions[str(a_id)] = area_infos
-        if raw_personality_groups is not None and global_pers_dist is not None:
-            payload = {
-                "personality_groups": _to_python(np.asarray(raw_personality_groups)),
-                "global_distribution": _to_python(global_pers_dist),
-                "areas": area_distributions,
-            }
-            # v2 replay expects this key.
-            static["personality_group_info"] = payload
+        payload = {
+            "personality_groups": _to_python(np.asarray(raw_personality_groups)),
+            "global_distribution": _to_python(global_pers_dist),
+            "areas": area_distributions,
+        }
+        # v2 replay expects this key.
+        static["personality_group_info"] = payload
 
         # Optional: per-agent static personal_opt_dist
         agents = list(model.voting_agents)
@@ -164,10 +163,7 @@ class RunLoggerV2:
             for a in agents:
                 if a is None:
                     continue
-                dist = getattr(a, "personal_opt_dist", None)
-                if dist is None:
-                    continue
-                pod[str(a.unique_id)] = _to_python(np.asarray(dist, dtype=np.float32))
+                pod[str(a.unique_id)] = _to_python(np.asarray(a.personal_opt_dist, dtype=np.float32))
             if pod:
                 # static.json is a heterogeneous JSON payload; keep typing flexible here.
                 static["personal_opt_dist"] = pod  # type: ignore[assignment]
@@ -240,7 +236,7 @@ class RunLoggerV2:
         """Capture pre-mutation area snapshot for steps/area_steps.parquet."""
         if self._current_step is None:
             return
-        area_id = int(getattr(area, "unique_id", -1))
+        area_id = int(area.unique_id)
         snapshot_copy = dict(snapshot)
         for key in ("area_color", "elected_color"):
             val = snapshot_copy.get(key)
@@ -303,14 +299,7 @@ class RunLoggerV2:
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
 
-        dc = getattr(model, "datacollector", None)
-        if dc is None:
-            if pre_colors is not None:
-                for i, v in enumerate(pre_colors):
-                    row[f"color_{i}"] = np.float32(v)
-            return row
-
-        df = dc.get_model_vars_dataframe()
+        df = model.datacollector.get_model_vars_dataframe()
         if df is None or len(df) == 0:
             if pre_colors is not None:
                 for i, v in enumerate(pre_colors):
@@ -349,17 +338,17 @@ class RunLoggerV2:
         return row
 
     def _get_pre_mutation_global_colors(self, *, step: int, model: Model) -> Optional[np.ndarray]:
-        areas = [a for a in (getattr(model, "areas", []) or []) if a is not None]
+        areas = [a for a in model.areas if a is not None]
         if not areas:
             return None
-        num_colors = int(getattr(model, "num_colors", 0) or 0)
+        num_colors = int(model.num_colors)
         if num_colors <= 0:
             return None
 
         sums = np.zeros(num_colors, dtype=np.float32)
         missing: list[int] = []
         for area in areas:
-            area_id = int(getattr(area, "unique_id", -1))
+            area_id = int(area.unique_id)
             snapshot = self._area_snapshots_by_step_area.get((int(step), area_id))
             if snapshot is None:
                 missing.append(area_id)
@@ -386,12 +375,10 @@ class RunLoggerV2:
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        areas = list(getattr(model, "areas", []) or [])
-        num_colors = int(getattr(model, "num_colors", 0) or 0)
+        areas = list(model.areas)
+        num_colors = int(model.num_colors)
 
-        options = getattr(model, "options", None)
-        if options is not None:
-            options = np.asarray(options)
+        options = np.asarray(model.options)
 
         def _apply_election_vectors(*, r_dict, elected_color_vec, area_color_vec) -> None:
             """Fill expanded vector columns + winning_option_id into r dictionary.
@@ -419,7 +406,7 @@ class RunLoggerV2:
         for area in areas:
             if area is None:
                 continue
-            area_id = int(getattr(area, "unique_id", -1))
+            area_id = int(area.unique_id)
 
             # Base row
             r: Dict[str, Any] = {
@@ -431,10 +418,10 @@ class RunLoggerV2:
                 # Not tracked explicitly yet; default 0.
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
-                "election_cost_rate": np.float32(float(getattr(model, "election_cost_rate", 0.0) or 0.0)),
-                "fee_pool": np.float32(float(getattr(area, "_election_fee_pool", 0.0) or 0.0)),
+                "election_cost_rate": np.float32(float(model.election_cost_rate)),
+                "fee_pool": np.float32(getattr(self, "_election_fee_pool")),
                 "winning_option_id": np.int32(-1),
-                "dist_to_reality": np.float32(float(getattr(area, "dist_to_reality", 0.0) or 0.0)),
+                "dist_to_reality": np.float32(float(area.dist_to_reality)),
                 "gini_index": np.int16(0),
             }
 
@@ -446,9 +433,9 @@ class RunLoggerV2:
             r["eligible_voters"] = np.int32(int(snapshot.get("eligible_voters", area.num_agents)))
             r["participants"] = np.int32(int(snapshot.get("participants", 0)))
             r["turnout"] = np.float32(float(snapshot.get("turnout", area.voter_turnout)))
-            r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", getattr(model, "election_cost_rate", 0.0) or 0.0)))
-            r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool", 0.0) or 0.0)))
-            r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", getattr(area, "dist_to_reality", 0.0) or 0.0)))
+            r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", model.election_cost_rate)))
+            r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool"))))
+            r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", area.dist_to_reality)))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
             if cd is None:
@@ -463,9 +450,9 @@ class RunLoggerV2:
             )
 
             # area gini from agents' assets (same as old replay logger)
-            agents = list(getattr(area, "agents", []) or [])
+            agents = list(area.agents)
             if agents:
-                assets = [float(getattr(a, "assets", 0.0) or 0.0) for a in agents]
+                assets = [float(a.assets) for a in agents]
                 # reuse metric helper indirectly: gini_index_0_100 exists in utils.metrics
                 from src.utils.metrics import gini_index_0_100
 
@@ -477,7 +464,7 @@ class RunLoggerV2:
 
     def _extract_agent_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        agents = list(getattr(model, "voting_agents", []) or [])
+        agents = list(model.voting_agents)
         for a in agents:
             if a is None:
                 continue
@@ -486,12 +473,12 @@ class RunLoggerV2:
                     "run_seed": np.int32(self.ctx.run_seed),
                     "rule_idx": np.int16(self.ctx.rule_idx),
                     "step": np.int32(step),
-                    "agent_id": np.int32(int(getattr(a, "unique_id", -1))),
-                    "row": np.int16(int(getattr(a, "row", 0) or 0)),
-                    "col": np.int16(int(getattr(a, "col", 0) or 0)),
-                    "assets": np.float32(float(getattr(a, "assets", 0.0) or 0.0)),
-                    "num_elections_participated": np.int32(int(getattr(a, "num_elections_participated", 0) or 0)),
-                    "personality_group_idx": np.int16(int(getattr(a, "personality_group_idx", -1) or -1)),
+                    "agent_id": np.int32(int(a.unique_id)),
+                    "row": np.int16(int(a.row)),
+                    "col": np.int16(int(a.col)),
+                    "assets": np.float32(float(a.assets)),
+                    "num_elections_participated": np.int32(int(a.num_elections_participated)),
+                    "personality_group_idx": np.int16(a.personality_group_idx),
                 }
             )
         return rows

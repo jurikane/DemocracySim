@@ -19,8 +19,8 @@ def test_run_logger_v2_smoke():
     td.mkdir(parents=True, exist_ok=True)
 
     n = int(cfg.simulation.num_steps)
-    run_seed = int(getattr(cfg.simulation, 'base_seed', 42) or 42)
-    rule_idx = int(getattr(cfg.model, 'rule_idx', 0) or 0)
+    run_seed = int(cfg.simulation.base_seed)
+    rule_idx = int(cfg.model.rule_idx)
 
     v2 = RunLoggerV2(out_dir=td, num_steps=n, run_seed=run_seed, rule_idx=rule_idx, store_grid=True)
     v2.write_static(model)

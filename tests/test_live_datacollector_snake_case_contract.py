@@ -64,7 +64,7 @@ def test_live_datacollector_emits_snake_case_and_vectors():
     assert (model_df["collective_assets"] != 0).any(), "collective_assets is all zeros"
 
     # colors
-    num_colors = int(getattr(model, "num_colors", 0) or 0)
+    num_colors = int(model.num_colors)
     assert num_colors > 0
     for i in range(num_colors):
         col = f"color_{i}"

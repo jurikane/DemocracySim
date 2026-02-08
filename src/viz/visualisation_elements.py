@@ -51,14 +51,14 @@ class AreaDiagnosticsPanel(TextElement):
         self.max_steps = int(max_steps)
 
     def render(self, model) -> str:
-        step = getattr(model.scheduler, 'steps', 0)
+        step = model.scheduler.steps
         if step == 0:
             return ""
 
-        areas = [a for a in getattr(model, 'areas', []) if a is not None and a.unique_id != -1]
+        areas = [a for a in model.areas if a is not None and a.unique_id != -1]
         if not areas:
             return ""
-        areas = sorted(areas, key=lambda a: int(getattr(a, "unique_id", 0)))
+        areas = sorted(areas, key=lambda a: int(a.unique_id))
 
         # Diagnostics histories
         histories = []
@@ -244,14 +244,11 @@ class PersonalityGroupDistribution(TextElement):
 
     def create_once(self, model):
         try:
-            dists = getattr(model, 'personality_group_distribution', None)
-            personality_groups = getattr(model, 'personality_groups', None)
-            if dists is None or personality_groups is None:
-                self.pers_dist_plot = ""
-                return
+            dists = model.personality_group_distribution
+            personality_groups = model.personality_groups
             num_personality_groups = personality_groups.shape[0]
-            num_agents = getattr(model, 'num_agents', 0)
-            colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
+            num_agents = model.num_agents
+            colors = COLORS[:model.num_colors]
             num_colors = len(personality_groups[0])
         except(IndexError, TypeError):
             self.pers_dist_plot = ""
@@ -278,7 +275,7 @@ class PersonalityGroupDistribution(TextElement):
         self.pers_dist_plot = save_plot_to_base64(fig)
 
     def render(self, model) -> str:
-        if getattr(model.scheduler, 'steps', 0) == 0:
+        if model.scheduler.steps == 0:
             self.create_once(model)
         return self.pers_dist_plot or ""
 
@@ -345,14 +342,11 @@ class AreaGiniElement(_AreaTimeSeriesElement):
 
 class MatplotlibElement(TextElement):
     def render(self, model) -> str:
-        step = getattr(model.scheduler, 'steps', 0)
+        step = model.scheduler.steps
         if not show_area_stats or step == 0:
             return ""
-        try:
-            data = model.datacollector.get_model_vars_dataframe()
-            collective_assets = data.get("collective_assets")
-        except AttributeError:
-            collective_assets = None
+        data = model.datacollector.get_model_vars_dataframe()
+        collective_assets = data.get("collective_assets") if data is not None else None
         if collective_assets is None:
             return ""
         fig, ax = plt.subplots()
@@ -366,11 +360,11 @@ class MatplotlibElement(TextElement):
 
 class StepsTextElement(TextElement):
     def render(self, model) -> str:
-        step = getattr(model.scheduler, 'steps', 0)
-        first_agents = [str(a) for a in getattr(model, 'voting_agents', [])[:5]]
-        return (f"Step: {step} | cells: {len(getattr(model, 'color_cells', []))} | "
-                f"areas: {len(getattr(model, 'areas', []))} | First 5 voters of "
-                f"{len(getattr(model, 'voting_agents', []))}: {first_agents}")
+        step = model.scheduler.steps
+        first_agents = [str(a) for a in model.voting_agents[:5]]
+        return (f"Step: {step} | cells: {len(model.color_cells)} | "
+                f"areas: {len(model.areas)} | First 5 voters of "
+                f"{len(model.voting_agents)}: {first_agents}")
 
 
 class AreaPersonalityGroupDists(TextElement):
@@ -380,14 +374,11 @@ class AreaPersonalityGroupDists(TextElement):
 
     def create_once(self, model):
         try:
-            colors = COLORS[:getattr(model, 'num_colors', len(COLORS))]
-            personality_groups = getattr(model, 'personality_groups', None)
-            if personality_groups is None:
-                self.areas_pers_dist_plot = ""
-                return
+            colors = COLORS[:model.num_colors]
+            personality_groups = model.personality_groups
             num_colors = len(personality_groups[0])
             num_personality_groups = personality_groups.shape[0]
-            num_areas = len(getattr(model, 'areas', []))
+            num_areas = len(model.areas)
         except (TypeError, IndexError, AttributeError, ValueError):
             self.areas_pers_dist_plot = ""
             return
@@ -405,9 +396,9 @@ class AreaPersonalityGroupDists(TextElement):
             sharex=True,  # type: ignore[arg-type]
         )
         axes_flat = axes.flatten() if hasattr(axes, "flatten") else [axes]
-        for ax, area in zip(axes_flat, getattr(model, 'areas', [])):
-            p_dist = getattr(area, 'personality_group_distribution', [])
-            num_agents = getattr(area, 'num_agents', 0)
+        for ax, area in zip(axes_flat, model.areas):
+            p_dist = area.personality_group_distribution
+            num_agents = area.num_agents
             heights = [int(val * num_agents) for val in p_dist] if p_dist else []
             bars = ax.bar(range(num_personality_groups), heights, color='skyblue')
             max_height = max(heights) if heights else 1
@@ -425,13 +416,13 @@ class AreaPersonalityGroupDists(TextElement):
 
             ax.set_xlabel('"Personality Group" ID')
             ax.set_ylabel('Number of Agents')
-            ax.set_title(f'Area {getattr(area, "unique_id", "?")}')
+            ax.set_title(f'Area {area.unique_id}')
 
         plt.tight_layout()
         self.areas_pers_dist_plot = save_plot_to_base64(fig)
 
     def render(self, model) -> str:
-        if getattr(model.scheduler, 'steps', 0) == 0:
+        if model.scheduler.steps == 0:
             self.create_once(model)
         return self.areas_pers_dist_plot or ""
 
@@ -451,20 +442,16 @@ class AgentLearningHistograms(TextElement):
     """
 
     def render(self, model) -> str:
-        step = int(getattr(getattr(model, "scheduler", None), "steps", 0) or 0)
-        agents = [a for a in getattr(model, "voting_agents", []) if a is not None]
+        step = int(model.scheduler.steps)
+        agents = [a for a in model.voting_agents if a is not None]
         if not agents:
             return ""
 
-        # Collect vectors (robust to missing attributes during refactors)
-        try:
-            p = np.asarray([float(a.participation_probability()) for a in agents], dtype=np.float64)
-        except (AttributeError, TypeError, ValueError):
-            p = np.asarray([], dtype=np.float64)
-
-        q = np.asarray([float(getattr(a, "q_participation", 0.0)) for a in agents], dtype=np.float64)
-        altruism = np.asarray([float(getattr(a, "altruism_factor", 0.0)) for a in agents], dtype=np.float64)
-        assets = np.asarray([float(getattr(a, "assets", 0.0)) for a in agents], dtype=np.float64)
+        # Collect vectors (fail loudly if model/agent contract is broken)
+        p = np.asarray([float(a.participation_probability()) for a in agents], dtype=np.float64)
+        q = np.asarray([float(a.q_participation) for a in agents], dtype=np.float64)
+        altruism = np.asarray([float(a.altruism_factor) for a in agents], dtype=np.float64)
+        assets = np.asarray([float(a.assets) for a in agents], dtype=np.float64)
 
         # Require something meaningful
         if p.size == 0:
@@ -545,30 +532,24 @@ class CohortElectionLearningDiagnostics(TextElement):
         return float(np.median(x)) if x.size else float("nan")
 
     def _compute(self, model):
-        agents = [a for a in getattr(model, "voting_agents", []) if a is not None]
+        agents = [a for a in model.voting_agents if a is not None]
         if not agents:
             return None
 
         # Build per-agent rows (eligible only)
         rows = []
         for a in agents:
-            eligible = bool(getattr(a, "eligible_for_election", False))
+            eligible = bool(getattr(a, "eligible_for_election", False))  # Has to be robust to account for replay agent-stubs
             if not eligible:
                 continue
-            gid = getattr(a, "personality_group_idx", None)
-            if gid is None:
-                continue
-            try:
-                gid_i = int(gid)
-            except (TypeError, ValueError):
-                continue
+            gid_i = int(a.personality_group_idx)
 
-            participated = bool(getattr(a, "participating", False))
-            delta = float(getattr(a, "election_delta_abs", 0.0))
-            fee = float(getattr(a, "_fee", 0.0))
-            common = float(getattr(a, "_reward_common_comp", 0.0))
-            personal = float(getattr(a, "_reward_pers_comp", 0.0))
-            altruism = float(getattr(a, "altruism_factor", 0.0))
+            participated = a.participating
+            delta = a.election_delta_abs
+            fee = getattr(a, "_fee")
+            common = getattr(a, "_reward_common_comp")
+            personal = getattr(a, "_reward_pers_comp")
+            altruism = float(a.altruism_factor)
             try:
                 p_part = float(a.participation_probability())
             except ValueError:
@@ -671,7 +652,7 @@ class CohortElectionLearningDiagnostics(TextElement):
         return out
 
     def render(self, model) -> str:
-        step = int(getattr(getattr(model, "scheduler", None), "steps", 0) or 0)
+        step = int(model.scheduler.steps)
         if step == 0:
             # Avoid noisy empty plots before the first election has happened.
             return ""

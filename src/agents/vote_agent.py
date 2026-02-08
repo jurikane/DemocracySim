@@ -116,7 +116,7 @@ class VoteAgent(Agent):
         # Preferred naming: expose distribution as `.personality`
 
         # --- Adaptive participation learning (global per agent) ---
-        init_q = getattr(model, "participation_init_q", 0.0)
+        init_q = model.participation_init_q
         self.q_participation = float(init_q)
         self.participation_strategy = (
             participation_strategy if participation_strategy is not None else DefaultParticipationStrategy()
@@ -124,7 +124,7 @@ class VoteAgent(Agent):
         self.voting_strategy = voting_strategy if voting_strategy is not None else DefaultVotingStrategy()
 
         # --- Adaptive altruism (reality-weight) learning (per agent) ---
-        init_a = getattr(model, "altruism_init", 0.5)
+        init_a = model.altruism_init
         self.altruism_factor = float(init_a)
 
     def __str__(self):
@@ -336,15 +336,15 @@ class VoteAgent(Agent):
         """
         if not self.participating:
             return
-        alpha = float(getattr(self.model, "altruism_alpha", 0.0))
+        alpha = float(self.model.altruism_alpha)
         if alpha == 0.0:
             return
 
         a = float(self.altruism_factor)
         a = a + alpha * float(delta_assets)
 
-        lo = float(getattr(self.model, "altruism_clip_min", 0.0))
-        hi = float(getattr(self.model, "altruism_clip_max", 1.0))
+        lo = float(self.model.altruism_clip_min)
+        hi = float(self.model.altruism_clip_max)
         a = float(np.clip(a, lo, hi))
         self.altruism_factor = a
 
@@ -358,12 +358,12 @@ class VoteAgent(Agent):
         - argsort(personal_opt_dist)[::-1] equals personality_group
         """
         # Fallback if no proper model personality_group context exists (DummyModel).
-        num_colors = int(getattr(self.model, "num_colors") or 0)
+        num_colors = int(self.model.num_colors)
         if num_colors <= 0:
             return np.asarray([], dtype=np.float32)
 
         personality_group = np.asarray(self.personality_group)
-        conc = getattr(self.model, "personal_opt_dist_concentration", 1.0)
+        conc = self.model.personal_opt_dist_concentration
         conc = max(conc, 1e-8)  # Avoid zero concentration
 
         # Sample positive intensities, sort descending, then assign by rank position.

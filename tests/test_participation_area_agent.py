@@ -38,6 +38,15 @@ class DummyModel(Model):
         self.mu = 0.1
         self.color_probs = [1 / num_colors] * num_colors
         self.np_random = np.random.default_rng()
+        self.personal_opt_dist_concentration = 1.0
+        self.participation_init_q = 0.0
+        self.altruism_init = 0.5
+        self.participation_q_max = 50.0
+        self.bias_toward_participation = 0.0
+        self.altruism_alpha = 0.05
+        self.altruism_clip_min = 0.0
+        self.altruism_clip_max = 1.0
+
 
 ##################################
 # Unit tests for the Area class  #

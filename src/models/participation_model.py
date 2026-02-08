@@ -477,17 +477,17 @@ class ParticipationModel(mesa.Model):
         color_data = {f"color_{i}": get_color_distribution_function(i) for i in range(self.num_colors)}
 
         def mean_p_participation(m: "ParticipationModel") -> float:
-            agents = getattr(m, "voting_agents", [])
+            agents = m.voting_agents
             if not agents:
                 return 0.0
             vals = [float(a.participation_probability()) for a in agents if a is not None]
             return float(np.mean(vals)) if vals else 0.0
 
         def mean_altruism(m: "ParticipationModel") -> float:
-            agents = getattr(m, "voting_agents", [])
+            agents = m.voting_agents
             if not agents:
                 return 0.0
-            vals = [float(getattr(a, "altruism_factor", 0.0)) for a in agents if a is not None]
+            vals = [float(a.altruism_factor) for a in agents if a is not None]
             return float(np.mean(vals)) if vals else 0.0
 
         return mesa.DataCollector(

@@ -37,9 +37,7 @@ def get_grid_colors(model):
     Return the current grid state as an array of rows (row-major):
       result[y][x] == color at position (x, y)
     """
-    grid = getattr(model, "grid", None)
-    if grid is None:
-        return []
+    grid = model.grid
 
     h, w = grid.height, grid.width
     # Read in Mesa coord_iter() order (x-major), then reshape and transpose to (h, w)
@@ -60,7 +58,7 @@ def get_area_border_grid(model):
     grid = model.grid
     h, w = grid.height, grid.width
     flat = np.fromiter(
-        (getattr(cell, "is_border_cell", False) for cell, _pos in grid.coord_iter()),
+        (cell.is_border_cell for cell, _pos in grid.coord_iter()),
         dtype=bool,
         count=w * h,
     )
@@ -85,7 +83,7 @@ def get_voter_turnout(model):
     explicitly (and only then).
     """
     voter_turnout_sum = 0.0
-    num_areas = int(getattr(model, "num_areas", 0))
+    num_areas = int(model.num_areas)
     if num_areas == 0:
         return 0
     for area in model.areas:

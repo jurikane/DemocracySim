@@ -23,7 +23,6 @@ def v2_run_dir(tmp_path):
     # We'll clone the config so we don't mutate globals.
     cfg_for_run = cfg.model_copy(deep=True)
     if hasattr(cfg_for_run, "simulation"):
-        setattr(cfg_for_run.simulation, "num_steps", int(getattr(cfg_for_run.simulation, "num_steps", 2) or 2))
         # Ensure grids are available if replay expects them.
         setattr(cfg_for_run.simulation, "store_grid", True)
         setattr(cfg_for_run.simulation, "grid_interval", 1)

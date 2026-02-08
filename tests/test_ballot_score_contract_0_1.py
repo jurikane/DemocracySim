@@ -21,7 +21,7 @@ def test_ballot_scores_in_unit_interval_for_distance_functions(distance_idx: int
     assert area is not None
 
     # Match election pipeline semantics without depending on VoteAgent.update_known_cells.
-    k = int(getattr(model, "known_cells", 0) or 0)
+    k = int(model.known_cells)
     agent.known_cells = list(area.cells[:k]) if len(area.cells) >= k else list(area.cells)
 
     scores = np.asarray(agent.vote(area), dtype=np.float32)

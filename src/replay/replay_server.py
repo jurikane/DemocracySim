@@ -275,9 +275,9 @@ class ReplayModel(mesa.Model):
 
         # Build grid and color cells from static info
         static = self.data.load_static()
-        self._height = int(static.get("height", getattr(appcfg.model, "height", 1)))
-        self._width = int(static.get("width", getattr(appcfg.model, "width", 1)))
-        self._num_colors = int(static.get("num_colors", getattr(appcfg.model, "num_colors", 2)))
+        self._height = int(static["height"])
+        self._width = int(static["width"])
+        self._num_colors = int(static["num_colors"])
 
         # Populate static personality_group info expected by visualization elements
         # (must run before we build area stubs)
@@ -436,14 +436,12 @@ class ReplayModel(mesa.Model):
         To update efficiently (and order-stably), we transpose to (w,h) and
         flatten in C-order, matching coord_iter's order.
         """
-        grid = getattr(self, "grid", None)
-        if grid is None:
-            return
+        grid = self.grid
 
         h, w = int(arr.shape[0]), int(arr.shape[1])
 
-        if int(getattr(grid, "width", 0)) != w or int(getattr(grid, "height", 0)) != h:
-            return
+        if int(grid.width) != w or int(grid.height) != h:
+            raise ValueError(f"Grid snapshot shape {(h, w)} does not match grid {(grid.height, grid.width)}.")
 
         flat = arr.T.ravel()  # (h,w) -> (w,h) x-major flatten
 
