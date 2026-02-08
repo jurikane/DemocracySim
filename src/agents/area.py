@@ -254,7 +254,11 @@ class Area(Agent):
             for a in self.agents:
                 a.add_common_reward(-1)
                 a.reward_agent()  # Apply the penalty
+            self.num_agents_participated_last = 0
+            self._voter_turnout = 0
+            self._update_diag_history()
             self._capture_debug_snapshot(preference_profile, aggregated=None)
+            self._capture_area_snapshot_for_logger()
             return 0
         # Aggregate the preferences ⇒ returns an option ordering (indices into options)
         rule = self.model.voting_rule

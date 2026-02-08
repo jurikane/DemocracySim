@@ -58,10 +58,8 @@ def run_once(run_id: int, cfg, out_dir: Path):
 
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
-        # Schema v2 uses 1-based step indexing for recorded post-mutation snapshots.
-        # TODO: If steps.parquet/area_steps.parquet are switched to pre-mutation
-        # color distributions, keep grid snapshots post-mutation but document
-        # the timing difference explicitly in meta.yaml/static.json.
+        # Schema v2 uses 1-based step indexing. steps/area_steps color distributions
+        # are captured pre-mutation; grid snapshots remain post-mutation.
         v2_step = step + 1
         v2.begin_step(v2_step)
         model.step()

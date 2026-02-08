@@ -2,7 +2,7 @@
 
 **Schema name:** `output_schema_v2`  
 **Schema version:** `2`  
-**Step indexing meaning:** `post_election_post_mutation`
+**Step indexing meaning:** `post_election_pre_mutation`
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
@@ -17,18 +17,23 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `agents.parquet`
 - `votes.parquet`
 - `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience)
-- `grids/grid_0001.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots)
+- `grids/grid_0001.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots, **post-mutation**)
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
 ## Timing semantics (important)
 
-All Parquet tables are indexed as **post election + post reward + post mutation**.
+All Parquet tables are indexed as **post election + post reward**. Color
+distributions in `steps.parquet` and `area_steps.parquet` are captured
+**pre-mutation** (i.e., at vote time).
 
 Meaning for step `t` (where **t starts at 1**):
 - The election in each area has been conducted.
 - Rewards and participation costs have been applied.
-- Color-cell mutation has already been applied.
-- `area_color_*` in `area_steps.parquet` reflects the **post-mutation** distribution for that step.
+- Color-cell mutation may already be applied in the simulation state, but
+  color distributions are recorded from **pre-mutation** snapshots.
+- `area_color_*` in `area_steps.parquet` reflects the **pre-mutation** distribution for that step.
+- `color_*` in `steps.parquet` reflects the global **pre-mutation** distribution for that step.
+- Grid snapshots (`grids/grid_*.npy`) remain **post-mutation**.
 
 ### Replay step 0
 
@@ -56,7 +61,7 @@ All Parquet tables include:
 | collective_assets    |   int64 | model sum of assets        |
 | gini_index           |   int16 | 0–100                      |
 | turnout              | float32 | global average turnout (%) |
-| color_0..color_{C-1} | float32 | optional, C = num_colors   |
+| color_0..color_{C-1} | float32 | optional, pre-mutation     |
 
 ### `area_steps.parquet`
 
@@ -79,7 +84,7 @@ Merged area-state + election table.
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                 |
 | dist_to_reality                      | float32 | distance(real_order, voted_order)     |
 | gini_index                           |   int16 | area gini 0–100                       |
-| area_color_0..area_color_{C-1}       | float32 | **post-mutation distribution**        |
+| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**         |
 
 ### `agents.parquet`
 

@@ -163,7 +163,7 @@ def test_grids_are_loadable_numpy_arrays(v2_run_dir: Path) -> None:
 
 
 def test_schema_v2_step_indexing_is_one_based(v2_run_dir: Path) -> None:
-    """Schema v2 must use 1-based step indexing for recorded (post-mutation) snapshots.
+    """Schema v2 must use 1-based step indexing for recorded snapshots.
 
     Note: a pre-election grid snapshot at step=0 is allowed for UI convenience.
     Parquet tables remain strictly 1-based.

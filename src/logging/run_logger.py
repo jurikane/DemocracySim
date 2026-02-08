@@ -12,10 +12,9 @@ Responsibilities (Batch 1.0 only):
 Not implemented yet (future batches):
 - votes.parquet
 
-This module intentionally keeps core model logic unchanged. For area_steps.parquet,
-it prefers pre-mutation (post-election) snapshots if available; otherwise it falls
-back to post-mutation reads.
-TODO: Switch steps.parquet color distribution values to pre-mutation to align with area_steps.parquet.
+This module intentionally keeps core model logic unchanged. For steps.parquet and
+area_steps.parquet, color distributions are captured from pre-mutation (post-election)
+snapshots. Grid snapshots remain post-mutation.
 """
 
 from __future__ import annotations
@@ -76,7 +75,7 @@ class RunLoggerV2:
         self._agent_rows: List[Dict[str, Any]] = []
         self._votes_rows: List[Dict[str, Any]] = []
         self._current_step: Optional[int] = None
-        # Reserved for optional future artifacts; not used for area_steps.parquet
+        # Pre-mutation area snapshots keyed by (step, area_id)
         self._area_snapshots_by_step_area: Dict[tuple[int, int], Dict[str, Any]] = {}
 
     # -----------------
@@ -216,8 +215,9 @@ class RunLoggerV2:
             step: Recorded step number (schema v2 is 1-based).
             model: The ParticipationModel (post-mutation state).
             grid_snapshot: Optional HxW array to write to grids/ (1-based, post-mutation).
-        TODO: When steps.parquet is switched to pre-mutation color distributions,
-        update this docstring to reflect the new timing.
+        Notes:
+            steps.parquet and area_steps.parquet color distributions are derived
+            from pre-mutation snapshots captured during the election.
         """
         s = int(step)
         self._current_step = s
@@ -237,11 +237,18 @@ class RunLoggerV2:
         self._current_step = None
 
     def _on_area_snapshot(self, *, area: Area, snapshot: Dict[str, Any]) -> None:
-        """Capture pre-mutation area snapshot for area_steps.parquet."""
+        """Capture pre-mutation area snapshot for steps/area_steps.parquet."""
         if self._current_step is None:
             return
         area_id = int(getattr(area, "unique_id", -1))
-        self._area_snapshots_by_step_area[(int(self._current_step), area_id)] = snapshot
+        snapshot_copy = dict(snapshot)
+        for key in ("area_color", "elected_color"):
+            val = snapshot_copy.get(key)
+            if isinstance(val, np.ndarray):
+                snapshot_copy[key] = val.copy()
+            elif isinstance(val, list):
+                snapshot_copy[key] = list(val)
+        self._area_snapshots_by_step_area[(int(self._current_step), area_id)] = snapshot_copy
 
     def finalize(self) -> None:
         """Write Parquet artifacts (steps/area_steps/agents/votes)."""
@@ -294,12 +301,20 @@ class RunLoggerV2:
             "turnout": np.float32(0.0),
         }
 
+        pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
+
         dc = getattr(model, "datacollector", None)
         if dc is None:
+            if pre_colors is not None:
+                for i, v in enumerate(pre_colors):
+                    row[f"color_{i}"] = np.float32(v)
             return row
 
         df = dc.get_model_vars_dataframe()
         if df is None or len(df) == 0:
+            if pre_colors is not None:
+                for i, v in enumerate(pre_colors):
+                    row[f"color_{i}"] = np.float32(v)
             return row
 
         last = df.iloc[-1].to_dict()
@@ -335,7 +350,47 @@ class RunLoggerV2:
                     idx = int(parts[1])
                     row[f"color_{idx}"] = np.float32(v)
 
+        if pre_colors is not None:
+            for i, v in enumerate(pre_colors):
+                row[f"color_{i}"] = np.float32(v)
+
         return row
+
+    def _get_pre_mutation_global_colors(self, *, step: int, model: Model) -> Optional[np.ndarray]:
+        areas = [a for a in (getattr(model, "areas", []) or []) if a is not None]
+        if not areas:
+            return None
+        num_colors = int(getattr(model, "num_colors", 0) or 0)
+        if num_colors <= 0:
+            return None
+
+        sums = np.zeros(num_colors, dtype=np.float32)
+        missing: list[int] = []
+        for area in areas:
+            area_id = int(getattr(area, "unique_id", -1))
+            snapshot = self._area_snapshots_by_step_area.get((int(step), area_id))
+            if snapshot is None:
+                missing.append(area_id)
+                continue
+            area_color = snapshot.get("area_color", None)
+            if area_color is None:
+                missing.append(area_id)
+                continue
+            cdv = np.asarray(area_color, dtype=np.float32)
+            if cdv.size != num_colors:
+                raise RuntimeError(
+                    f"Pre-mutation snapshot for step {step} area {area_id} has "
+                    f"{cdv.size} colors, expected {num_colors}."
+                )
+            sums += cdv
+
+        if missing:
+            raise RuntimeError(
+                f"Missing pre-mutation area_color snapshot for step {step} "
+                f"(areas={sorted(missing)})."
+            )
+
+        return sums / float(len(areas))
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
@@ -392,18 +447,22 @@ class RunLoggerV2:
             }
 
             snapshot = self._area_snapshots_by_step_area.pop((int(step), area_id), None)
-            if snapshot is not None:
-                r["eligible_voters"] = np.int32(int(snapshot.get("eligible_voters", area.num_agents)))
-                r["participants"] = np.int32(int(snapshot.get("participants", 0)))
-                r["turnout"] = np.float32(float(snapshot.get("turnout", area.voter_turnout)))
-                r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", getattr(model, "election_cost_rate", 0.0) or 0.0)))
-                r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool", 0.0) or 0.0)))
-                r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", getattr(area, "dist_to_reality", 0.0) or 0.0)))
-                voted_ordering = snapshot.get("elected_color", None)
-                cd = snapshot.get("area_color", None)
-            else:
-                voted_ordering = getattr(area, "voted_ordering", None)
-                cd = getattr(area, "color_distribution", None)
+            if snapshot is None:
+                raise RuntimeError(
+                    f"Missing pre-mutation area snapshot for step {step}, area {area_id}."
+                )
+            r["eligible_voters"] = np.int32(int(snapshot.get("eligible_voters", area.num_agents)))
+            r["participants"] = np.int32(int(snapshot.get("participants", 0)))
+            r["turnout"] = np.float32(float(snapshot.get("turnout", area.voter_turnout)))
+            r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", getattr(model, "election_cost_rate", 0.0) or 0.0)))
+            r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool", 0.0) or 0.0)))
+            r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", getattr(area, "dist_to_reality", 0.0) or 0.0)))
+            voted_ordering = snapshot.get("elected_color", None)
+            cd = snapshot.get("area_color", None)
+            if cd is None:
+                raise RuntimeError(
+                    f"Missing pre-mutation area_color for step {step}, area {area_id}."
+                )
 
             _apply_election_vectors(
                 r_dict=r,
@@ -494,14 +553,6 @@ class RunLoggerV2:
             row[f"estim_dst_color_{i}"] = np.float32(dist[i])
 
         self._votes_rows.append(row)
-
-    def _on_area_snapshot(self, *, area: Area, snapshot: Dict[str, Any]) -> None:
-        """Receive a pre-mutation snapshot for one area (stored but not used)."""
-        if self._current_step is None:
-            return
-        step = int(self._current_step)
-        area_id = int(getattr(area, "unique_id", -1))
-        self._area_snapshots_by_step_area[(step, area_id)] = dict(snapshot)
 
     def _grid_filename(self, step: int) -> Path:
         pad = len(str(int(self.num_steps))) if self.num_steps is not None else 3

@@ -524,9 +524,7 @@ class ParticipationModel(mesa.Model):
         self.scheduler.step()
         # Update the global color distribution
         self.update_av_area_color_dst()
-        # Collect data for monitoring and data analysis
-        # TODO: If steps.parquet should log pre-mutation color distributions,
-        # move or duplicate this collection before mutation and log that instead.
+        # Collect data for monitoring and data analysis (post-mutation).
         self.datacollector.collect(self)
         # Enforce step limit after step executed
         if self.max_steps is not None and self.scheduler.steps >= self.max_steps:
