@@ -50,37 +50,6 @@ class Area(Agent):
                 f"num_agents={self.num_agents}, num_cells={self.num_cells}, "
                 f"color_distribution={self.color_distribution})")
 
-    def _set_dimensions(self, width, height, size_var):
-        """
-        Sets the area's dimensions based on the provided width, height, and variance factor.
-
-        This function adjusts the width and height by a random factor drawn from
-        the range [1 - size_var, 1 + size_var]. If size_var is zero, no variance
-        is applied.
-
-        Args:
-            width (int): The average width of the area.
-            height (int): The average height of the area.
-            size_var (float): A variance factor applied to width and height.
-                Must be in [0, 1].
-
-        Raises:
-            ValueError: If size_var is not between 0 and 1.
-        """
-        if size_var == 0:
-            self._width = width
-            self._height = height
-            self.width_off, self.height_off = 0, 0
-        elif size_var > 1 or size_var < 0:
-            raise ValueError("Size variance must be between 0 and 1")
-        else:  # Apply variance
-            w_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
-            h_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
-            self._width = max(1, int(width * w_var_factor))
-            self.width_off = abs(width - self._width)
-            self._height = max(1, int(height * h_var_factor))
-            self.height_off = abs(height - self._height)
-
     @property
     def num_agents(self):
         return len(self.agents)
@@ -108,6 +77,14 @@ class Area(Agent):
     @property
     def dist_to_reality(self):
         return self._dist_to_reality
+
+    @property
+    def diag_history(self) -> List[dict]:
+        return self._diag_history
+
+    @property
+    def debug_history(self) -> List[dict]:
+        return self._debug_history
 
     @property
     def idx_field(self):
@@ -177,6 +154,37 @@ class Area(Agent):
         self._update_color_distribution()
         self._update_personality_group_distribution()
 
+    def _set_dimensions(self, width, height, size_var):
+        """
+        Sets the area's dimensions based on the provided width, height, and variance factor.
+
+        This function adjusts the width and height by a random factor drawn from
+        the range [1 - size_var, 1 + size_var]. If size_var is zero, no variance
+        is applied.
+
+        Args:
+            width (int): The average width of the area.
+            height (int): The average height of the area.
+            size_var (float): A variance factor applied to width and height.
+                Must be in [0, 1].
+
+        Raises:
+            ValueError: If size_var is not between 0 and 1.
+        """
+        if size_var == 0:
+            self._width = width
+            self._height = height
+            self.width_off, self.height_off = 0, 0
+        elif size_var > 1 or size_var < 0:
+            raise ValueError("Size variance must be between 0 and 1")
+        else:  # Apply variance
+            w_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
+            h_var_factor = self.random.uniform(1 - size_var, 1 + size_var)
+            self._width = max(1, int(width * w_var_factor))
+            self.width_off = abs(width - self._width)
+            self._height = max(1, int(height * h_var_factor))
+            self.height_off = abs(height - self._height)
+
     def _update_personality_group_distribution(self) -> None:
         """
         This method calculates the areas current distribution of personality groups.
@@ -214,8 +222,7 @@ class Area(Agent):
         """
         self.cells.append(cell)
 
-
-    def _conduct_election(self) -> int:
+    def conduct_election(self) -> int:
         """
         Simulates the election within the area and manages rewards.
 
@@ -263,139 +270,24 @@ class Area(Agent):
             # Eligible agents are exactly those evaluated in _tally_votes()
             if a.eligible_for_election:
                 a.apply_participation_update(a.election_delta_rel)
-
+        # TODO put those two loops together
         # Adaptive altruism learning update (participant-only)
         for a in self.agents:
             if a.participating:
                 a.apply_altruism_update(a.election_delta_rel)
-
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
         area_voter_turnout = int((n / self.num_agents) * 100)
         self._voter_turnout = area_voter_turnout  # Update in area state
+        # Logging and diagnostics
         self._update_diag_history()
         self._capture_debug_snapshot(preference_profile, aggregated)
+        self._capture_area_snapshot_for_logger()
         return area_voter_turnout # Voter turnout in percent
 
-    def _update_diag_history(self) -> None:
-        """Append per-area diagnostics for the current step."""
-        agents = [a for a in self.agents if a is not None]
-        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
-        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
-        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
-
-        def _mean(vals):
-            return float(np.mean(vals)) if len(vals) > 0 else float("nan")
-
-        def _mean_attr(pool, attr):
-            return _mean([float(getattr(a, attr, 0.0)) for a in pool])
-
-        def _mean_participation_prob(pool):
-            vals = []
-            for a in pool:
-                try:
-                    vals.append(float(a.participation_probability()))
-                except ValueError:
-                    vals.append(float("nan"))
-            return _mean([v for v in vals if np.isfinite(v)])
-
-        # Per-election delta (relative) means
-        mean_delta_rel_participants = _mean_attr(participants, "election_delta_rel")
-        mean_delta_rel_abstainers = _mean_attr(abstainers, "election_delta_rel")
-
-        # Reward components (absolute)
-        mean_common_reward = _mean_attr(eligible, "_reward_common_comp")
-        mean_personal_reward = _mean_attr(eligible, "_reward_pers_comp")
-
-        # Learning signals
-        mean_q_participation = _mean_attr(eligible, "q_participation")
-        mean_p_participation = _mean_participation_prob(eligible)
-        mean_altruism = _mean_attr(eligible, "altruism_factor")
-
-        # Area gini (0-100)
-        from src.utils.metrics import gini_index_0_100
-        assets = [float(getattr(a, "assets", 0.0)) for a in eligible]
-        gini = int(gini_index_0_100(assets)) if assets else 0
-
-        # Per-personality_group metrics (area-level)
-        pg = getattr(self.model, "personality_groups", None)
-        num_groups = len(pg) if pg is not None else 0
-        group_turnout = [float("nan")] * num_groups
-        group_mean_assets = [float("nan")] * num_groups
-        group_mean_delta_rel = [float("nan")] * num_groups
-        group_mean_delta_rel_participants = [float("nan")] * num_groups
-        group_mean_delta_rel_abstainers = [float("nan")] * num_groups
-        group_mean_common_reward = [float("nan")] * num_groups
-        group_mean_personal_reward = [float("nan")] * num_groups
-        group_mean_fee = [float("nan")] * num_groups
-        group_mean_altruism = [float("nan")] * num_groups
-        group_mean_q_participation_participants = [float("nan")] * num_groups
-        group_mean_q_participation_abstainers = [float("nan")] * num_groups
-
-        if num_groups > 0:
-            for g in range(num_groups):
-                g_agents = [a for a in agents if int(getattr(a, "personality_group_idx", -1)) == g]
-                g_eligible = [a for a in eligible if int(getattr(a, "personality_group_idx", -1)) == g]
-                g_participants = [a for a in g_eligible if bool(getattr(a, "participating", False))]
-                g_abstainers = [a for a in g_eligible if not bool(getattr(a, "participating", False))]
-
-                if g_eligible:
-                    group_turnout[g] = float(len(g_participants) / len(g_eligible) * 100.0)
-                    group_mean_delta_rel[g] = _mean_attr(g_eligible, "election_delta_rel")
-                    group_mean_delta_rel_participants[g] = _mean_attr(g_participants, "election_delta_rel")
-                    group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
-                    group_mean_q_participation_participants[g] = _mean_attr(g_participants, "q_participation")
-                    group_mean_q_participation_abstainers[g] = _mean_attr(g_abstainers, "q_participation")
-                if g_agents:
-                    group_mean_assets[g] = _mean_attr(g_agents, "assets")
-                    group_mean_common_reward[g] = _mean_attr(g_agents, "_reward_common_comp")
-                    group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
-                    group_mean_fee[g] = _mean_attr(g_agents, "_fee")
-                    group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
-
-        self._diag_history.append(
-            {
-                "turnout": float(self.voter_turnout),
-                "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
-                "mean_delta_rel_participants": mean_delta_rel_participants,
-                "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
-                "mean_common_reward": mean_common_reward,
-                "mean_personal_reward": mean_personal_reward,
-                "mean_q_participation": mean_q_participation,
-                "mean_p_participation": mean_p_participation,
-                "mean_altruism": mean_altruism,
-                "gini": float(gini),
-                "group_turnout": group_turnout,
-                "group_mean_assets": group_mean_assets,
-                "group_mean_delta_rel": group_mean_delta_rel,
-                "group_mean_delta_rel_participants": group_mean_delta_rel_participants,
-                "group_mean_delta_rel_abstainers": group_mean_delta_rel_abstainers,
-                "group_mean_common_reward": group_mean_common_reward,
-                "group_mean_personal_reward": group_mean_personal_reward,
-                "group_mean_fee": group_mean_fee,
-                "group_mean_altruism": group_mean_altruism,
-                "group_mean_q_participation_participants": group_mean_q_participation_participants,
-                "group_mean_q_participation_abstainers": group_mean_q_participation_abstainers,
-            }
-        )
-
-    @property
-    def diag_history(self) -> List[dict]:
-        return self._diag_history
-
-    @property
-    def debug_history(self) -> List[dict]:
-        return self._debug_history
-
-    def _debug_enabled(self) -> bool:
-        return bool(getattr(self.model, "_debug_agent_panel_enabled", False))
-
-    def _debug_max_steps(self) -> int:
-        max_steps = int(getattr(self.model, "_debug_agent_panel_max_steps", 1))
-        return max(1, max_steps)
-
-    def _snapshot_agent(self, agent) -> dict:
+    @staticmethod
+    def _snapshot_agent(agent) -> dict:
         try:
             p_participation = float(agent.participation_probability())
         except ValueError:
@@ -453,62 +345,6 @@ class Area(Agent):
                 getattr(agent, "voting_strategy", None), "__class__", type("X", (), {})
             ).__name__,
         }
-
-    def _capture_debug_snapshot(self, preference_profile: np.ndarray, aggregated) -> None:
-        if not self._debug_enabled():
-            return
-
-        step = int(getattr(getattr(self.model, "scheduler", None), "steps", 0) or 0)
-        agents = sorted(self.agents, key=lambda a: int(getattr(a, "unique_id", 0)))
-        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
-        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
-        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
-
-        record = {
-            "step": step,
-            "area_id": getattr(self, "unique_id", None),
-            "num_agents": len(agents),
-            "num_eligible": len(eligible),
-            "num_participants": len(participants),
-            "num_abstainers": len(abstainers),
-            "dist_to_reality": float(self._dist_to_reality) if self._dist_to_reality is not None else float("nan"),
-            "voted_ordering": (
-                self._voted_ordering.tolist()
-                if isinstance(self._voted_ordering, np.ndarray)
-                else list(self._voted_ordering)
-                if self._voted_ordering is not None
-                else None
-            ),
-            "real_color_distribution": (
-                self.color_distribution.tolist()
-                if isinstance(self.color_distribution, np.ndarray)
-                else list(self.color_distribution)            ),
-            "preference_profile": (
-                preference_profile.tolist()
-                if isinstance(preference_profile, np.ndarray)
-                else list(preference_profile)
-            ),
-            "votes": list(self._debug_last_votes or []),
-            "aggregated_ordering": (
-                aggregated.tolist()
-                if isinstance(aggregated, np.ndarray)
-                else list(aggregated)
-                if aggregated is not None
-                else None
-            ),
-            "winning_option": int(aggregated[0]) if aggregated is not None and len(aggregated) > 0 else None,
-            "reward_threshold_common": float(getattr(self.model, "reward_threshold_common", float("nan"))),
-            "reward_threshold_personal": float(getattr(self.model, "reward_threshold_personal", float("nan"))),
-            "reward_rate_common": float(getattr(self.model, "reward_rate_common", float("nan"))),
-            "reward_rate_personal": float(getattr(self.model, "reward_rate_personal", float("nan"))),
-            "abstention_share": float(getattr(self.model, "abstention_share", float("nan"))),
-            "agents": [self._snapshot_agent(a) for a in agents],
-        }
-
-        self._debug_history.append(record)
-        max_steps = self._debug_max_steps()
-        if len(self._debug_history) > max_steps:
-            self._debug_history = self._debug_history[-max_steps:]
 
     def _tally_votes(self) -> np.ndarray:
         """
@@ -657,36 +493,214 @@ class Area(Agent):
         cell_set = set(self.cells)
         return [c for c in cell_list if c in cell_set]
 
-    def run_election(self) -> bool:
-        """Run the election only (no mutation).
+    def _update_diag_history(self) -> None:
+        """Append per-area diagnostics for the current step."""
+        agents = [a for a in self.agents if a is not None]
+        eligible = [a for a in agents if bool(getattr(a, "eligible_for_election", False))]
+        participants = [a for a in eligible if bool(getattr(a, "participating", False))]
+        abstainers = [a for a in eligible if not bool(getattr(a, "participating", False))]
 
-        Returns:
-            bool: True if at least one agent participated.
-        """
-        self._conduct_election()  # The main election logic
-        if self.voter_turnout == 0:
-            return False  # No one participated
+        def _mean(vals):
+            return float(np.mean(vals)) if len(vals) > 0 else float("nan")
 
+        def _mean_attr(pool, attr):
+            return _mean([float(getattr(a, attr, 0.0)) for a in pool])
+
+        def _mean_participation_prob(pool):
+            vals = []
+            for a in pool:
+                try:
+                    vals.append(float(a.participation_probability()))
+                except ValueError:
+                    vals.append(float("nan"))
+            return _mean([v for v in vals if np.isfinite(v)])
+
+        # Per-election delta (relative) means
+        mean_delta_rel_participants = _mean_attr(participants, "election_delta_rel")
+        mean_delta_rel_abstainers = _mean_attr(abstainers, "election_delta_rel")
+
+        # Reward components (absolute)
+        mean_common_reward = _mean_attr(eligible, "_reward_common_comp")
+        mean_personal_reward = _mean_attr(eligible, "_reward_pers_comp")
+
+        # Learning signals
+        mean_q_participation = _mean_attr(eligible, "q_participation")
+        mean_p_participation = _mean_participation_prob(eligible)
+        mean_altruism = _mean_attr(eligible, "altruism_factor")
+
+        # Area gini (0-100)
+        from src.utils.metrics import gini_index_0_100
+        assets = [float(getattr(a, "assets", 0.0)) for a in eligible]
+        gini = int(gini_index_0_100(assets)) if assets else 0
+
+        # Per-personality_group metrics (area-level)
+        pg = getattr(self.model, "personality_groups", None)
+        num_groups = len(pg) if pg is not None else 0
+        group_turnout = [float("nan")] * num_groups
+        group_mean_assets = [float("nan")] * num_groups
+        group_mean_delta_rel = [float("nan")] * num_groups
+        group_mean_delta_rel_participants = [float("nan")] * num_groups
+        group_mean_delta_rel_abstainers = [float("nan")] * num_groups
+        group_mean_common_reward = [float("nan")] * num_groups
+        group_mean_personal_reward = [float("nan")] * num_groups
+        group_mean_fee = [float("nan")] * num_groups
+        group_mean_altruism = [float("nan")] * num_groups
+        group_mean_q_participation_participants = [float("nan")] * num_groups
+        group_mean_q_participation_abstainers = [float("nan")] * num_groups
+
+        if num_groups > 0:
+            for g in range(num_groups):
+                g_agents = [a for a in agents if int(getattr(a, "personality_group_idx", -1)) == g]
+                g_eligible = [a for a in eligible if int(getattr(a, "personality_group_idx", -1)) == g]
+                g_participants = [a for a in g_eligible if bool(getattr(a, "participating", False))]
+                g_abstainers = [a for a in g_eligible if not bool(getattr(a, "participating", False))]
+
+                if g_eligible:
+                    group_turnout[g] = float(len(g_participants) / len(g_eligible) * 100.0)
+                    group_mean_delta_rel[g] = _mean_attr(g_eligible, "election_delta_rel")
+                    group_mean_delta_rel_participants[g] = _mean_attr(g_participants, "election_delta_rel")
+                    group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
+                    group_mean_q_participation_participants[g] = _mean_attr(g_participants, "q_participation")
+                    group_mean_q_participation_abstainers[g] = _mean_attr(g_abstainers, "q_participation")
+                if g_agents:
+                    group_mean_assets[g] = _mean_attr(g_agents, "assets")
+                    group_mean_common_reward[g] = _mean_attr(g_agents, "_reward_common_comp")
+                    group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
+                    group_mean_fee[g] = _mean_attr(g_agents, "_fee")
+                    group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
+
+        self._diag_history.append(
+            {
+                "turnout": float(self.voter_turnout),
+                "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
+                "mean_delta_rel_participants": mean_delta_rel_participants,
+                "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
+                "mean_common_reward": mean_common_reward,
+                "mean_personal_reward": mean_personal_reward,
+                "mean_q_participation": mean_q_participation,
+                "mean_p_participation": mean_p_participation,
+                "mean_altruism": mean_altruism,
+                "gini": float(gini),
+                "group_turnout": group_turnout,
+                "group_mean_assets": group_mean_assets,
+                "group_mean_delta_rel": group_mean_delta_rel,
+                "group_mean_delta_rel_participants": group_mean_delta_rel_participants,
+                "group_mean_delta_rel_abstainers": group_mean_delta_rel_abstainers,
+                "group_mean_common_reward": group_mean_common_reward,
+                "group_mean_personal_reward": group_mean_personal_reward,
+                "group_mean_fee": group_mean_fee,
+                "group_mean_altruism": group_mean_altruism,
+                "group_mean_q_participation_participants": group_mean_q_participation_participants,
+                "group_mean_q_participation_abstainers": group_mean_q_participation_abstainers,
+            }
+        )
+
+    def _debug_enabled(self) -> bool:
+        return bool(getattr(self.model, "_debug_agent_panel_enabled", False))
+
+    def _debug_max_steps(self) -> int:
+        max_steps = int(getattr(self.model, "_debug_agent_panel_max_steps", 1))
+        return max(1, max_steps)
+
+    def _capture_debug_snapshot(self, pref_profile: np.ndarray, aggregated) -> None:
+        """Capture a detailed snapshot of the area's state for debugging purposes."""
+        if not self._debug_enabled():
+            return
+
+        step = int(
+            getattr(getattr(self.model, "scheduler", None), "steps", 0) or 0)
+        agents = sorted(self.agents,
+                        key=lambda a: int(getattr(a, "unique_id", 0)))
+        eligible = [a for a in agents if
+                    bool(getattr(a, "eligible_for_election", False))]
+        participants = [a for a in eligible if
+                        bool(getattr(a, "participating", False))]
+        abstainers = [a for a in eligible if
+                      not bool(getattr(a, "participating", False))]
+
+        record = {
+            "step": step,
+            "area_id": getattr(self, "unique_id", None),
+            "num_agents": len(agents),
+            "num_eligible": len(eligible),
+            "num_participants": len(participants),
+            "num_abstainers": len(abstainers),
+            "dist_to_reality": float(
+                self._dist_to_reality) if self._dist_to_reality is not None else float(
+                "nan"),
+            "voted_ordering": (
+                self._voted_ordering.tolist()
+                if isinstance(self._voted_ordering, np.ndarray)
+                else list(self._voted_ordering)
+                if self._voted_ordering is not None
+                else None
+            ),
+            "real_color_distribution": (
+                self.color_distribution.tolist()
+                if isinstance(self.color_distribution, np.ndarray)
+                else list(self.color_distribution)),
+            "preference_profile": (
+                pref_profile.tolist() if isinstance(pref_profile, np.ndarray)
+                else list(pref_profile)
+            ),
+            "votes": list(self._debug_last_votes or []),
+            "aggregated_ordering": (
+                aggregated.tolist()
+                if isinstance(aggregated, np.ndarray)
+                else list(aggregated)
+                if aggregated is not None
+                else None
+            ),
+            "winning_option": int(
+                aggregated[0]) if aggregated is not None and len(
+                aggregated) > 0 else None,
+            "reward_threshold_common": float(
+                getattr(self.model, "reward_threshold_common", float("nan"))),
+            "reward_threshold_personal": float(
+                getattr(self.model, "reward_threshold_personal", float("nan"))),
+            "reward_rate_common": float(
+                getattr(self.model, "reward_rate_common", float("nan"))),
+            "reward_rate_personal": float(
+                getattr(self.model, "reward_rate_personal", float("nan"))),
+            "abstention_share": float(
+                getattr(self.model, "abstention_share", float("nan"))),
+            "agents": [self._snapshot_agent(a) for a in agents],
+        }
+
+        self._debug_history.append(record)
+        max_steps = self._debug_max_steps()
+        if len(self._debug_history) > max_steps:
+            self._debug_history = self._debug_history[-max_steps:]
+
+    def _capture_area_snapshot_for_logger(self) -> None:
         # --- optional schema v2 hook: snapshot right before mutation (pre-mutation)
-        # NOTE: default logging does NOT use this snapshot for area_steps.parquet.
-        area_snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
-        if area_snapshot_sink is not None:
-            area_snapshot_sink(
+        snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
+        if snapshot_sink is not None:
+            election_cost_rate = self.model.election_cost_rate
+            fee_pool = self._election_fee_pool
+            eligible_voters = self.num_agents
+            participants = self.num_agents_participated_last
+            turnout = self.voter_turnout
+            dist_to_reality = self.dist_to_reality
+            area_color = None
+            if self.color_distribution is not None:
+                area_color = self.color_distribution.copy()
+            elected_color = None
+            if self.voted_ordering is not None:
+                elected_color = self.voted_ordering.copy()
+            snapshot_sink(
                 area=self,
                 snapshot={
-                    "election_cost_rate": float(self.model.election_cost_rate),
-                    "fee_pool": float(getattr(self, "_election_fee_pool", 0.0)),
-                    "eligible_voters": int(self.num_agents),
-                    "participants": int(self.num_agents_participated_last),
-                    "turnout": float(self.voter_turnout),
-                    "dist_to_reality": float(self.dist_to_reality),
-                    "area_color": np.asarray(self.color_distribution)
-                    if self.color_distribution is not None else None,
-                    "elected_color": np.asarray(self.voted_ordering)
-                    if self.voted_ordering is not None else None,
+                    "election_cost_rate": election_cost_rate,
+                    "fee_pool": fee_pool,
+                    "eligible_voters": eligible_voters,
+                    "participants": participants,
+                    "turnout": turnout,
+                    "dist_to_reality": dist_to_reality,
+                    "area_color": area_color,
+                    "elected_color": elected_color
                 },
             )
-        return True
 
     def mutate_cells(self) -> None:
         """Mutate cell colors based on the last election outcome."""
@@ -718,5 +732,5 @@ class Area(Agent):
         mutate the cells' colors according to the election outcome
         and update the color distribution of the area.
         """
-        self.run_election()
+        self.conduct_election()
         self.mutate_cells()

@@ -5,6 +5,8 @@ produced by headless batch runs.
 
 Key rules:
 - Step indexing semantics: post-election, post-reward, **post-mutation**.
+  TODO: After switching steps.parquet color distributions to pre-mutation,
+  update this note and STEP_INDEXING accordingly.
 - Step-based data is stored in Parquet tables (no per-step JSON files).
 - Dense arrays (grids/overlays) remain in separate artifacts (e.g. in .npy).
 - No `run_id`. Every table includes:
@@ -32,6 +34,7 @@ SCHEMA_VERSION: Final[int] = 2
 
 # Indexing meaning for all step-based tables in this schema.
 # (Election has run, rewards distributed, mutation has been applied.)
+# TODO: Change to reflect pre-mutation color distributions once implemented.
 STEP_INDEXING: Final[str] = "post_election_post_mutation"
 
 

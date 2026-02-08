@@ -12,8 +12,10 @@ Responsibilities (Batch 1.0 only):
 Not implemented yet (future batches):
 - votes.parquet
 
-This module intentionally keeps core model logic unchanged and reads values from the
-model/areas/agents after each model.step() (post-mutation state).
+This module intentionally keeps core model logic unchanged. For area_steps.parquet,
+it prefers pre-mutation (post-election) snapshots if available; otherwise it falls
+back to post-mutation reads.
+TODO: Switch steps.parquet color distribution values to pre-mutation to align with area_steps.parquet.
 """
 
 from __future__ import annotations
@@ -198,7 +200,7 @@ class RunLoggerV2:
                 - vote sink: used by Area._tally_votes() to emit participant vote rows.
         """
         setattr(model, "_schema_v2_vote_sink", self._on_vote)
-        # NOTE: pre-mutation area snapshots are not used for area_steps.parquet.
+        setattr(model, "_schema_v2_area_snapshot_sink", self._on_area_snapshot)
 
     def detach_from_model(self, model: Model) -> None:
         """Detach schema-v2 sinks from the model."""
@@ -214,6 +216,8 @@ class RunLoggerV2:
             step: Recorded step number (schema v2 is 1-based).
             model: The ParticipationModel (post-mutation state).
             grid_snapshot: Optional HxW array to write to grids/ (1-based, post-mutation).
+        TODO: When steps.parquet is switched to pre-mutation color distributions,
+        update this docstring to reflect the new timing.
         """
         s = int(step)
         self._current_step = s
@@ -231,6 +235,13 @@ class RunLoggerV2:
     def end_step(self) -> None:
         """Clear current step after finishing a model step."""
         self._current_step = None
+
+    def _on_area_snapshot(self, *, area: Area, snapshot: Dict[str, Any]) -> None:
+        """Capture pre-mutation area snapshot for area_steps.parquet."""
+        if self._current_step is None:
+            return
+        area_id = int(getattr(area, "unique_id", -1))
+        self._area_snapshots_by_step_area[(int(self._current_step), area_id)] = snapshot
 
     def finalize(self) -> None:
         """Write Parquet artifacts (steps/area_steps/agents/votes)."""
@@ -380,12 +391,25 @@ class RunLoggerV2:
                 "gini_index": np.int16(0),
             }
 
-            # Post-mutation reads only (canonical timing for area_steps.parquet).
-            voted_ordering = getattr(area, "voted_ordering", None)
-            cd = getattr(area, "color_distribution", None)
-            _apply_election_vectors(r_dict=r,
-                                    elected_color_vec=voted_ordering,
-                                    area_color_vec=cd)
+            snapshot = self._area_snapshots_by_step_area.pop((int(step), area_id), None)
+            if snapshot is not None:
+                r["eligible_voters"] = np.int32(int(snapshot.get("eligible_voters", area.num_agents)))
+                r["participants"] = np.int32(int(snapshot.get("participants", 0)))
+                r["turnout"] = np.float32(float(snapshot.get("turnout", area.voter_turnout)))
+                r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", getattr(model, "election_cost_rate", 0.0) or 0.0)))
+                r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool", 0.0) or 0.0)))
+                r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", getattr(area, "dist_to_reality", 0.0) or 0.0)))
+                voted_ordering = snapshot.get("elected_color", None)
+                cd = snapshot.get("area_color", None)
+            else:
+                voted_ordering = getattr(area, "voted_ordering", None)
+                cd = getattr(area, "color_distribution", None)
+
+            _apply_election_vectors(
+                r_dict=r,
+                elected_color_vec=voted_ordering,
+                area_color_vec=cd,
+            )
 
             # area gini from agents' assets (same as old replay logger)
             agents = list(getattr(area, "agents", []) or [])

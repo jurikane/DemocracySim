@@ -11,12 +11,12 @@ class TestConductElection(unittest.TestCase):
 
     def test_election_returns_integer_turnout(self):
         area = self.model.areas[0]
-        turnout = area._conduct_election()
+        turnout = area.conduct_election()
         self.assertIsInstance(turnout, int)
 
     def test_no_participation_scenario(self):
         for agent in self.model.voting_agents:
             agent.assets = 0
         area = self.model.areas[0]
-        turnout = area._conduct_election()
+        turnout = area.conduct_election()
         self.assertEqual(turnout, 0)

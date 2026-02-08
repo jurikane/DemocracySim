@@ -9,11 +9,8 @@ from src.model_setup import make_model
 from src.logging.run_logger import RunLoggerV2
 
 
-def test_area_steps_use_post_mutation_state(tmp_path: Path) -> None:
-    """Ensure area_steps rows are derived from post-mutation area state.
-
-    This test injects a bogus pre-mutation snapshot and verifies it is ignored.
-    """
+def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
+    """Ensure area_steps rows use pre-mutation snapshots when provided."""
     cfg = load_config("toy.yaml")
     cfg_for_run = cfg.model_copy(deep=True)
     cfg_for_run.simulation.num_steps = 1
@@ -27,16 +24,18 @@ def test_area_steps_use_post_mutation_state(tmp_path: Path) -> None:
     logger.begin_step(1)
     model.step()
 
-    # Inject a bogus pre-mutation snapshot (should be ignored for area_steps).
+    # Inject a pre-mutation snapshot (should be used for area_steps).
     area = next(a for a in model.areas if a is not None)
     num_colors = int(model.num_colors)
+    snapshot_area_color = [0.0] * num_colors
+    snapshot_elected_color = list(range(num_colors))
     logger._area_snapshots_by_step_area[(1, int(area.unique_id))] = {
-        "area_color": [0.0] * num_colors,
-        "elected_color": [0] * num_colors,
-        "turnout": 0.0,
-        "participants": 0,
-        "eligible_voters": 0,
-        "dist_to_reality": 0.0,
+        "area_color": snapshot_area_color,
+        "elected_color": snapshot_elected_color,
+        "turnout": 12.5,
+        "participants": 1,
+        "eligible_voters": int(area.num_agents),
+        "dist_to_reality": 0.123,
     }
 
     logger.log_step(step=1, model=model, grid_snapshot=None)
@@ -46,9 +45,12 @@ def test_area_steps_use_post_mutation_state(tmp_path: Path) -> None:
     assert rows, "Expected at least one area_steps row"
     row = rows[0]
 
-    # area_color_* should match current post-mutation area.color_distribution
+    assert np.isclose(float(row["turnout"]), 12.5)
+    assert int(row["participants"]) == 1
+    assert np.isclose(float(row["dist_to_reality"]), 0.123)
+    # area_color_* should match the pre-mutation snapshot, not the current area state
     for i in range(num_colors):
         assert np.isclose(
             float(row[f"area_color_{i}"]),
-            float(area.color_distribution[i]),
+            float(snapshot_area_color[i]),
         )

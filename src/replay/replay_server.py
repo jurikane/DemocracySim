@@ -347,6 +347,9 @@ class ReplayModel(mesa.Model):
 
         # Do NOT auto-advance recorded steps here. The first call to step() will
         # advance to the first recorded step (step=1).
+        # TODO: If steps/area_steps move to pre-mutation color distributions,
+        # keep grid snapshots post-mutation but document the timing difference
+        # in replay docs to avoid confusion.
 
     def _check_npy_arr(self, arr) -> bool:
         if arr is not None and arr.shape == (self._height, self._width):

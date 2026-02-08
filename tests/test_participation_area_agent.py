@@ -142,16 +142,16 @@ class TestAreaIntegration(unittest.TestCase):
         # Test with majority_rule and spearman
         self.model.voting_rule = majority_rule
         self.model.distance_func = spearman
-        area._conduct_election()
+        area.conduct_election()
         # Test with approval_voting and spearman
         self.model.voting_rule = approval_voting
-        area._conduct_election()
+        area.conduct_election()
         # Test with approval_voting and kendall_tau
         self.model.distance_func = kendall_tau
-        area._conduct_election()
+        area.conduct_election()
         # Test with majority_rule and kendall_tau
         self.model.voting_rule = majority_rule
-        area._conduct_election()
+        area.conduct_election()
         # TODO
 
     def test_adding_new_area_and_agent_within_it(self):

@@ -4,6 +4,7 @@ from datetime import datetime
 import yaml
 from tqdm import tqdm
 import argparse
+import numpy as np
 
 from src.config.loader import load_config, get_project_root
 from src.model_setup import make_model
@@ -50,7 +51,6 @@ def run_once(run_id: int, cfg, out_dir: Path):
             (out_dir / "grids").mkdir(parents=True, exist_ok=True)
             pad = len(str(int(n_steps)))
             initial_grid = get_grid_colors(model)
-            import numpy as np
             np.save(str(out_dir / "grids" / f"grid_{0:0{pad}d}.npy"), np.asarray(initial_grid))
 
     except Exception as e:
@@ -59,6 +59,9 @@ def run_once(run_id: int, cfg, out_dir: Path):
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
         # Schema v2 uses 1-based step indexing for recorded post-mutation snapshots.
+        # TODO: If steps.parquet/area_steps.parquet are switched to pre-mutation
+        # color distributions, keep grid snapshots post-mutation but document
+        # the timing difference explicitly in meta.yaml/static.json.
         v2_step = step + 1
         v2.begin_step(v2_step)
         model.step()
