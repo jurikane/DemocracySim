@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast, List, Optional
 from mesa import Agent
 # New (minimal) strategy split: participation and voting
 from src.agents.strategies import DefaultParticipationStrategy, DefaultVotingStrategy
+from src.utils.distance_functions import distribution_distance_l1
 
 
 def _sigmoid(x: float) -> float:
@@ -289,12 +290,43 @@ class VoteAgent(Agent):
         - lower = better
         - NOT normalized
 
-        Sampling of known_cells happens only in Area._tally_votes().
+        Sampling of known_cells happens in Area.step().
         """
         if TYPE_CHECKING:
             self.model = cast(ParticipationModel, self.model)
         options = self.model.options
         return self.voting_strategy.score_options(self, area, options)
+
+    def _knowledge_distribution(self, area: Area) -> np.ndarray:
+        """Return the agent's knowledge-based distribution (fallback to area)."""
+        if not self.known_cells:
+            raise
+        dist, _ = self.estimate_real_distribution(area)
+        return np.asarray(dist, dtype=np.float64)
+
+    def compute_satisfaction_value(self, *, area: Area, model: ParticipationModel) -> float:
+        """Compute satisfaction value (distance) between personality and a target distribution."""
+        personality = np.asarray(self.personality, dtype=np.float64)
+        area_dist = np.asarray(area.color_distribution, dtype=np.float64)
+        global_av_dist = np.asarray(getattr(model, "_av_area_color_dst"), dtype=np.float64)
+
+        mode = model.satisfaction_mode
+        if mode == "global":
+            target = global_av_dist
+            dissatisfaction = distribution_distance_l1(personality, target)
+        elif mode == "area":
+            dissatisfaction = distribution_distance_l1(personality, area_dist)
+        elif mode == "knowledge":
+            target = self._knowledge_distribution(area)
+            dissatisfaction = distribution_distance_l1(personality, target)
+        elif mode == "combination":
+            d_global = distribution_distance_l1(personality, global_av_dist)
+            d_area = distribution_distance_l1(personality, area_dist)
+            d_knowledge = distribution_distance_l1(personality, self._knowledge_distribution(area))
+            dissatisfaction = (d_global + d_area + d_knowledge) / 3.0
+        else:
+            raise ValueError(f"Unsupported satisfaction_mode: {mode}")
+        return float(dissatisfaction)
 
     def estimate_real_distribution(self, area: Area) -> tuple[np.ndarray, float]:
         """

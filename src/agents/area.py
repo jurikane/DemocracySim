@@ -725,5 +725,7 @@ class Area(Agent):
         # Update knowledge for all agents before any learning/election logic.
         for agent in self.agents:
             agent.update_known_cells(area=self)
+            # Satisfaction is computed from current (pre-election) distributions.
+            agent.satisfaction_value = agent.compute_satisfaction_value(area=self, model=self.model)
         self.conduct_election()
         self.mutate_cells()

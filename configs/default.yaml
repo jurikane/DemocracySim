@@ -52,7 +52,7 @@ model:
   altruism_learning: false
   altruism_static: 0.5
   # Satisfaction value (learning signal stub; used by altruism learning)
-  satisfaction_mode: global
+  satisfaction_mode: area
   satisfaction_baseline_alpha: 0.1
 
 visualization:

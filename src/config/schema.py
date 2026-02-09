@@ -36,7 +36,7 @@ class ModelConfig(BaseModel):
 
     # --- Satisfaction value (learning signal stub; used by altruism learning) ---
     # Modes (planned): "global", "area", "knowledge", "combination"
-    satisfaction_mode: str = "global"
+    satisfaction_mode: str = "area"
     satisfaction_baseline_alpha: float = 0.1
 
     num_agents: int        # Number of agents in the simulation

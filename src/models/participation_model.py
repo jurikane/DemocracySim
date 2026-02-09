@@ -222,7 +222,7 @@ class ParticipationModel(mesa.Model):
         self._horizontal_bias = self.random.uniform(0, 1)
         # Color distribution (global)
         self._preset_color_dst = self.create_color_distribution(heterogeneity)
-        self._av_area_color_dst = self._preset_color_dst
+        self._av_area_color_dst = self._preset_color_dst  # TODO: Deal with overlaps
         # Elections
         self.election_cost_rate = election_cost_rate
         # Reward scaling knobs
