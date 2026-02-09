@@ -1,4 +1,5 @@
 from __future__ import annotations
+import warnings
 import numpy as np
 from typing import TYPE_CHECKING, cast, List, Optional
 from mesa import Agent
@@ -88,8 +89,10 @@ class VoteAgent(Agent):
         # NOTE: computed each step; initialized to 0.0 until first update.
         self.satisfaction_value: float = 0.0
         # EMA baseline placeholder (computed each step alongside satisfaction).
-        self.satisfaction_baseline: float = 0.0
-        self.previous_satisfaction_value: float | None = None
+        # Initialized as NaN until first update.
+        self.satisfaction_baseline: float = float("nan")
+        # Satisfaction signal for learning (sv - baseline).
+        self.satisfaction_signal: float = 0.0
         self._num_elections_participated = 0
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
 
@@ -231,8 +234,6 @@ class VoteAgent(Agent):
         self._participating = False
         self._delta_abs = 0.0
         self._delta_rel = 0.0
-        self.satisfaction_value = 0.0
-        self.satisfaction_baseline = 0.0
 
     def mark_participating(self) -> None:
         self._participating = True
@@ -298,9 +299,9 @@ class VoteAgent(Agent):
         return self.voting_strategy.score_options(self, area, options)
 
     def _knowledge_distribution(self, area: Area) -> np.ndarray:
-        """Return the agent's knowledge-based distribution (fallback to area)."""
+        """Return the agent's knowledge-based distribution."""
         if not self.known_cells:
-            raise
+            raise ValueError("Agent has no known cells to estimate distribution.")
         dist, _ = self.estimate_real_distribution(area)
         return np.asarray(dist, dtype=np.float64)
 
@@ -308,25 +309,33 @@ class VoteAgent(Agent):
         """Compute satisfaction value (distance) between personality and a target distribution."""
         personality = np.asarray(self.personality, dtype=np.float64)
         area_dist = np.asarray(area.color_distribution, dtype=np.float64)
-        global_av_dist = np.asarray(getattr(model, "_av_area_color_dst"), dtype=np.float64)
+        # Compute current global average from areas (pre-election state).
+        areas = list(model.areas)
+        if areas:
+            sums = np.zeros(model.num_colors, dtype=np.float64)
+            for a in areas:
+                sums += np.asarray(a.color_distribution, dtype=np.float64)
+            global_av_dist = sums / float(len(areas))
+        else:
+            global_av_dist = area_dist
 
         mode = model.satisfaction_mode
         if mode == "global":
             target = global_av_dist
-            dissatisfaction = distribution_distance_l1(personality, target)
+            sv = distribution_distance_l1(personality, target)
         elif mode == "area":
-            dissatisfaction = distribution_distance_l1(personality, area_dist)
+            sv = distribution_distance_l1(personality, area_dist)
         elif mode == "knowledge":
             target = self._knowledge_distribution(area)
-            dissatisfaction = distribution_distance_l1(personality, target)
+            sv = distribution_distance_l1(personality, target)
         elif mode == "combination":
             d_global = distribution_distance_l1(personality, global_av_dist)
             d_area = distribution_distance_l1(personality, area_dist)
             d_knowledge = distribution_distance_l1(personality, self._knowledge_distribution(area))
-            dissatisfaction = (d_global + d_area + d_knowledge) / 3.0
+            sv = (d_global + d_area + d_knowledge) / 3.0
         else:
             raise ValueError(f"Unsupported satisfaction_mode: {mode}")
-        return float(dissatisfaction)
+        return float(sv)
 
     def estimate_real_distribution(self, area: Area) -> tuple[np.ndarray, float]:
         """
@@ -371,11 +380,11 @@ class VoteAgent(Agent):
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = q
 
-    def apply_altruism_update(self, satisfaction_value: float) -> None:
+    def apply_altruism_update(self, satisfaction_signal: float) -> None:
         """Participant-only learning of altruism_factor (reality-weight).
 
         Update rule:
-            a = a + altruism_alpha * satisfaction_value
+            a = a + altruism_alpha * satisfaction_signal
             a = clip(a, [altruism_clip_min, altruism_clip_max])
         """
         if not self.participating:
@@ -383,11 +392,11 @@ class VoteAgent(Agent):
         alpha = float(self.model.altruism_alpha)
         if alpha == 0.0:
             return
-        if not np.isfinite(satisfaction_value):
+        if not np.isfinite(satisfaction_signal):
             return
 
         a = float(self.altruism_factor)
-        a = a + alpha * float(satisfaction_value)
+        a = a + alpha * float(satisfaction_signal)
 
         lo = float(self.model.altruism_clip_min)
         hi = float(self.model.altruism_clip_max)

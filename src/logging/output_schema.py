@@ -79,6 +79,8 @@ STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "collective_assets",
     "gini_index",
     "turnout",
+    "mean_altruism",
+    "mean_satisfaction",
 )
 
 STEPS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -88,6 +90,8 @@ STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "collective_assets": "float32",
     "gini_index": "int16",
     "turnout": "float32",
+    "mean_altruism": "float32",
+    "mean_satisfaction": "float32",
     # Optional per-color model series: color_0...color_{C-1} float32
 }
 
@@ -161,6 +165,10 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "assets",
     "num_elections_participated",
     "personality_group_idx",
+    "altruism_factor",
+    "satisfaction_value",
+    "satisfaction_baseline",
+    "satisfaction_signal",
 )
 
 AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -174,6 +182,10 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "assets": "float32",
     "num_elections_participated": "int32",
     "personality_group_idx": "int16",
+    "altruism_factor": "float32",
+    "satisfaction_value": "float32",
+    "satisfaction_baseline": "float32",
+    "satisfaction_signal": "float32",
 }
 
 AGENTS_TABLE: Final[TableSchema] = TableSchema(

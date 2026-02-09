@@ -23,7 +23,8 @@ def test_satisfaction_modes_and_combination() -> None:
     agent.known_cells = [area0.cells[0], area0.cells[1]]
 
     # Global distribution is mean of areas
-    global_dist = np.asarray(getattr(model, "_av_area_color_dst"), dtype=np.float64)
+    global_dist = (area0.color_distribution + area1.color_distribution) / 2.0
+    model._av_area_color_dst = global_dist
 
     d_area = distribution_distance_l1(agent.personal_opt_dist, area0.color_distribution)
     d_global = distribution_distance_l1(agent.personal_opt_dist, global_dist)
@@ -42,3 +43,25 @@ def test_satisfaction_modes_and_combination() -> None:
     expected = (d_area + d_global + d_knowledge) / 3.0
     assert np.isclose(agent.compute_satisfaction_value(area=area0, model=model), expected)
 
+
+def test_satisfaction_baseline_alpha_one_equals_last_step_delta() -> None:
+    model, _ = create_test_model(num_agents=40, num_colors=2, num_areas=1, num_personality_groups=2)
+    model.satisfaction_baseline_alpha = 1.0
+    area = model.areas[0]
+    agent = area.agents[0]
+
+    agent.satisfaction_baseline = 0.0
+
+    # First observation initializes baseline, signal is 0.
+    sv1 = 0.2
+    agent.satisfaction_value = sv1
+    agent.satisfaction_baseline = sv1
+    agent.satisfaction_signal = 0.0
+
+    # Second observation: signal should be sv2 - sv1 when alpha=1.
+    sv2 = 0.7
+    baseline = agent.satisfaction_baseline
+    agent.satisfaction_signal = sv2 - baseline
+    agent.satisfaction_baseline = (1.0 - model.satisfaction_baseline_alpha) * baseline + model.satisfaction_baseline_alpha * sv2
+
+    assert np.isclose(agent.satisfaction_signal, sv2 - sv1)

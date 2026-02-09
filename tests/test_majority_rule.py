@@ -145,13 +145,14 @@ def test_with_ties_unequal():
 
 # Random matrix
 
-def random_pref_profile(num_agents, num_options):
-    rand_matrix = np.random.rand(num_agents, num_options)
+def random_pref_profile(num_agents, num_options, rng=None):
+    rng = rng or np.random.default_rng()
+    rand_matrix = rng.random((num_agents, num_options))
     # Normalize the matrix
     matrix_rand = rand_matrix / rand_matrix.sum(axis=1, keepdims=True)
     return matrix_rand
 
-def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000):
+def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000, rng=None):
     """
     Run majority rule with ties multiple times, check winners
     and calculate the coefficient of variation (CV) of the winners.
@@ -161,11 +162,12 @@ def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000):
     -------
     :return: Dictionary of winner counts {option: count}.
     """
+    rng = rng or np.random.default_rng()
     winner_counts = {}
     for _ in range(iterations):
         # Create random matrix
-        matrix_rand = random_pref_profile(num_agents, num_options)
-        ranking = majority_rule(matrix_rand, rng=np.random.default_rng())
+        matrix_rand = random_pref_profile(num_agents, num_options, rng=rng)
+        ranking = majority_rule(matrix_rand, rng=rng)
         winner = ranking[0]
         # Count winners
         winner_counts[winner] = winner_counts.get(winner, 0) + 1
@@ -180,8 +182,9 @@ def test_with_random_matrix_small():
     # Keep num options small to expect all options to win at least once.
     num_options = np.random.randint(2, 90)
     iterations = 100*num_options
+    rng = np.random.default_rng(0)
     start_time = time.time()
-    wc = majority_rule_with_rand_matrix(num_agents, num_options, iterations)
+    wc = majority_rule_with_rand_matrix(num_agents, num_options, iterations, rng=rng)
     stop_time = time.time()
     # Extract winners from winner-counts dictionary and sort them
     sorted_winners = list(wc.keys())
@@ -207,8 +210,9 @@ def test_with_random_matrix_large():
     num_agents = np.random.randint(1000, 3000)
     num_options = np.random.randint(2000, 3000)
     # Run majority rule test with random matrix
+    rng = np.random.default_rng(0)
     start_time = time.time()
-    wc = majority_rule_with_rand_matrix(num_agents, num_options, num_its)
+    wc = majority_rule_with_rand_matrix(num_agents, num_options, num_its, rng=rng)
     stop_time = time.time()
     # Len of winners should be approximately equal to the number of iterations
     # because with a large number of options, winners should be mostly unique.

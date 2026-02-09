@@ -51,6 +51,7 @@ class AreaAgentDebugPanel(TextElement):
             "altruism_factor",
             "satisfaction_value",
             "satisfaction_baseline",
+            "satisfaction_signal",
             "eligible",
             "participating",
             "q_participation",

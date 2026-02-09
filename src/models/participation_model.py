@@ -505,6 +505,12 @@ class ParticipationModel(mesa.Model):
                 return 0.0
             vals = [float(a.altruism_factor) for a in agents if a is not None]
             return float(np.mean(vals)) if vals else 0.0
+        def mean_satisfaction(m: "ParticipationModel") -> float:
+            agents = m.voting_agents
+            if not agents:
+                return 0.0
+            vals = [float(a.satisfaction_value) for a in agents if a is not None]
+            return float(np.mean(vals)) if vals else 0.0
 
         return mesa.DataCollector(
             model_reporters={
@@ -513,6 +519,7 @@ class ParticipationModel(mesa.Model):
                 "turnout": get_voter_turnout,
                 "mean_p_participation": mean_p_participation,
                 "mean_altruism": mean_altruism,
+                "mean_satisfaction": mean_satisfaction,
                 **color_data,
                 "grid_colors": get_grid_colors,
             },
@@ -624,7 +631,8 @@ class ParticipationModel(mesa.Model):
         """
         sums = np.zeros(self.num_colors)
         for area in self.areas:
-            sums += area.color_distribution
+            if area.unique_id != -1:  # Exclude global area
+                sums += area.color_distribution
         # Return the average color distributions
         self.av_area_color_dst = sums / self.num_areas
 

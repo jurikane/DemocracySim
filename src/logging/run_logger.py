@@ -295,6 +295,8 @@ class RunLoggerV2:
             "collective_assets": np.float32(0.0),
             "gini_index": np.int16(0),
             "turnout": np.float32(0.0),
+            "mean_altruism": np.float32(0.0),
+            "mean_satisfaction": np.float32(0.0),
         }
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
@@ -323,6 +325,10 @@ class RunLoggerV2:
             row["turnout"] = np.float32(last["turnout"])
         elif "Voter turnout globally (in percent)" in last:
             row["turnout"] = np.float32(last["Voter turnout globally (in percent)"])
+        if "mean_altruism" in last:
+            row["mean_altruism"] = np.float32(last["mean_altruism"])
+        if "mean_satisfaction" in last:
+            row["mean_satisfaction"] = np.float32(last["mean_satisfaction"])
 
         # Optional per-color series: snake_case color_0...color_{C-1} (preferred)
         for k, v in last.items():
@@ -479,6 +485,10 @@ class RunLoggerV2:
                     "assets": np.float32(float(a.assets)),
                     "num_elections_participated": np.int32(int(a.num_elections_participated)),
                     "personality_group_idx": np.int16(a.personality_group_idx),
+                    "altruism_factor": np.float32(float(a.altruism_factor)),
+                    "satisfaction_value": np.float32(float(a.satisfaction_value)),
+                    "satisfaction_baseline": np.float32(float(a.satisfaction_baseline)),
+                    "satisfaction_signal": np.float32(float(a.satisfaction_signal)),
                 }
             )
         return rows

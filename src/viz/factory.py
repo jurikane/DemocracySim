@@ -128,6 +128,12 @@ def make_charts(cfg: AppConfig) -> list:
         ],
         data_collector_name="datacollector",
     )
+    satisfaction_chart = ChartModule(
+        [
+            {"Label": "mean_satisfaction", "Color": "Green"},
+        ],
+        data_collector_name="datacollector",
+    )
 
     # Advanced matplotlib-based elements
     from src.viz.visualisation_elements import (
@@ -160,4 +166,4 @@ def make_charts(cfg: AppConfig) -> list:
     if calibration_mode:
         extras.append(CohortElectionLearningDiagnostics())
 
-    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart]
+    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, satisfaction_chart]

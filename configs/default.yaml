@@ -53,6 +53,7 @@ model:
   altruism_static: 0.5
   # Satisfaction value (learning signal stub; used by altruism learning)
   satisfaction_mode: area
+  # EMA alpha for baseline (1.0 => baseline becomes last step's value)
   satisfaction_baseline_alpha: 0.1
 
 visualization:
