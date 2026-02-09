@@ -9,6 +9,8 @@ class TestDistributeRewards(unittest.TestCase):
 
     def test_distribute(self):
         area = self.model.areas[0]
+        for agent in area.agents:
+            agent.update_known_cells(area)
         area.conduct_election()  # Ensure there's a result
         area._distribute_rewards()
         for agent in area.agents:

@@ -10,6 +10,8 @@ class TestTallyVotes(unittest.TestCase):
 
     def test_tally_votes_array(self):
         area = self.model.areas[0]
+        for agent in area.agents:
+            agent.update_known_cells(area)
         votes = area._tally_votes()
         self.assertIsInstance(votes, np.ndarray)
 

@@ -275,10 +275,11 @@ class Area(Agent):
             if a.eligible_for_election:
                 a.apply_participation_update(a.election_delta_rel)
         # TODO put those two loops together
-        # Adaptive altruism learning update (participant-only)
-        for a in self.agents:
-            if a.participating:
-                a.apply_altruism_update(a.election_delta_rel)
+        # Adaptive altruism learning update (participant-only, optional)
+        if self.model.altruism_learning:
+            for a in self.agents:
+                if a.participating:
+                    a.apply_altruism_update(a.satisfaction_value)
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
@@ -337,6 +338,8 @@ class Area(Agent):
             "q_participation": float(agent.q_participation),
             "p_participation": p_participation,
             "altruism_factor": float(agent.altruism_factor),
+            "satisfaction_value": float(agent.satisfaction_value),
+            "satisfaction_baseline": float(agent.satisfaction_baseline),
             "est_real_dist": est_real_dist,
             "confidence": float(agent.confidence),
             "known_cells_count": len(known_colors),
@@ -383,8 +386,6 @@ class Area(Agent):
             if agent.ask_for_participation(area=self):
                 agent.mark_participating()
                 agent.num_elections_participated += 1
-                # Give agents their (new) known fields
-                agent.update_known_cells(area=self)
                 # Collect the participation _fee into the area pool
                 agent.set_election_fee(cost)  # Fee will be applied when rewards are distributed
                 self._election_fee_pool += cost
@@ -721,5 +722,8 @@ class Area(Agent):
         mutate the cells' colors according to the election outcome
         and update the color distribution of the area.
         """
+        # Update knowledge for all agents before any learning/election logic.
+        for agent in self.agents:
+            agent.update_known_cells(area=self)
         self.conduct_election()
         self.mutate_cells()

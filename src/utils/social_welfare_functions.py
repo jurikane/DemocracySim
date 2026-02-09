@@ -162,7 +162,7 @@ def approval_voting(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.n
     """
     pref_table = imp_prepr_for_approval(pref_table)
     approval_counts = np.sum(pref_table, axis=0)
-    eps = 1e-4
+    eps = 1e-6
     noise = rng.uniform(-eps, eps, len(approval_counts))
     return np.argsort(-(approval_counts + noise))
 

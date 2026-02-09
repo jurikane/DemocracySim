@@ -9,15 +9,13 @@ def test_altruism_learning_participant_only_direction_rules() -> None:
     """Contract test for altruism learning (participant-only, directional).
 
     Rules:
-    - participating + positive delta => altruism_factor increases
-    - participating + negative delta => altruism_factor decreases
+    - participating + positive satisfaction => altruism_factor increases
+    - participating + negative satisfaction => altruism_factor decreases
     - not participating => no change
 
     Update rule:
-        a = a + altruism_alpha * delta
+        a = a + altruism_alpha * satisfaction_value
         clip to [altruism_clip_min, altruism_clip_max]
-
-    Note: delta is now treated as a relative per-election signal.
     """
 
     model, _ = create_test_model(
@@ -29,6 +27,7 @@ def test_altruism_learning_participant_only_direction_rules() -> None:
         altruism_init=0.5,
         altruism_clip_min=0.0,
         altruism_clip_max=1.0,
+        altruism_learning=True,
         max_steps=1,
     )
 
@@ -38,23 +37,23 @@ def test_altruism_learning_participant_only_direction_rules() -> None:
     a._participating = True
 
     a.altruism_factor = 0.6
-    a.apply_altruism_update(delta_assets=+1.0)
+    a.apply_altruism_update(satisfaction_value=+1.0)
     assert a.altruism_factor > 0.6
 
     a.altruism_factor = 0.6
-    a.apply_altruism_update(delta_assets=-1.0)
+    a.apply_altruism_update(satisfaction_value=-1.0)
     assert a.altruism_factor < 0.6
 
     a.altruism_factor = 0.4
-    a.apply_altruism_update(delta_assets=+1.0)
+    a.apply_altruism_update(satisfaction_value=+1.0)
     assert a.altruism_factor > 0.4
 
     a.altruism_factor = 0.4
-    a.apply_altruism_update(delta_assets=-1.0)
+    a.apply_altruism_update(satisfaction_value=-1.0)
     assert a.altruism_factor < 0.4
 
     # Not participating => no update
     a.altruism_factor = 0.6
     a._participating = False
-    a.apply_altruism_update(delta_assets=+1.0)
+    a.apply_altruism_update(satisfaction_value=+1.0)
     assert np.isclose(a.altruism_factor, 0.6)

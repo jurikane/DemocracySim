@@ -75,7 +75,7 @@ def ordering_to_ranks(ordering: np.ndarray) -> np.ndarray:
     return ranks
 
 
-def ranks_to_ordering(ranks: np.ndarray, eps = 1e-4) -> np.ndarray:
+def ranks_to_ordering(ranks: np.ndarray, eps = 1e-6) -> np.ndarray:
     """Convert RankVector -> Ordering via argsort with deterministic tie-breaks."""
     arr = np.asarray(ranks)
     validate_rank_vector(arr, int(arr.size))
@@ -93,7 +93,7 @@ def ranks_to_ordering(ranks: np.ndarray, eps = 1e-4) -> np.ndarray:
 
 def scores_to_ordering(
     scores: np.ndarray,
-    eps = 1e-4,
+    eps = 1e-6,
     *,
     rng: np.random.Generator | None = None,
 ) -> np.ndarray:

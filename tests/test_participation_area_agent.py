@@ -46,6 +46,8 @@ class DummyModel(Model):
         self.altruism_alpha = 0.05
         self.altruism_clip_min = 0.0
         self.altruism_clip_max = 1.0
+        self.altruism_learning = False
+        self.altruism_static = 0.5
 
 
 ##################################
@@ -151,6 +153,8 @@ class TestAreaIntegration(unittest.TestCase):
         # Test with majority_rule and spearman
         self.model.voting_rule = majority_rule
         self.model.distance_func = spearman
+        for agent in area.agents:
+            agent.update_known_cells(area)
         area.conduct_election()
         # Test with approval_voting and spearman
         self.model.voting_rule = approval_voting

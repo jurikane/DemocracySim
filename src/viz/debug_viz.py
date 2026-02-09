@@ -49,6 +49,8 @@ class AreaAgentDebugPanel(TextElement):
             "est_real_dist",
             "confidence",
             "altruism_factor",
+            "satisfaction_value",
+            "satisfaction_baseline",
             "eligible",
             "participating",
             "q_participation",

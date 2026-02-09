@@ -51,6 +51,10 @@ _ALLOWED_KW = {
     "altruism_init",
     "altruism_clip_min",
     "altruism_clip_max",
+    "altruism_learning",
+    "altruism_static",
+    "satisfaction_mode",
+    "satisfaction_baseline_alpha",
     # Per-agent personal_opt_dist
     "personal_opt_dist_concentration",
 }
@@ -254,6 +258,27 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "altruism_clip_max": mesa.visualization.Slider(
             name="Altruism clip max",
             value=model_cfg.altruism_clip_max,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "altruism_learning": mesa.visualization.Slider(
+            name="Altruism learning (0/1)",
+            value=int(bool(model_cfg.altruism_learning)),
+            min_value=0,
+            max_value=1,
+            step=1,
+        ),
+        "altruism_static": mesa.visualization.Slider(
+            name="Altruism static (used when learning=0)",
+            value=model_cfg.altruism_static,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "satisfaction_baseline_alpha": mesa.visualization.Slider(
+            name="Satisfaction baseline alpha (EMA)",
+            value=model_cfg.satisfaction_baseline_alpha,
             min_value=0.0,
             max_value=1.0,
             step=0.01,

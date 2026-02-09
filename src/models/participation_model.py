@@ -159,6 +159,10 @@ class ParticipationModel(mesa.Model):
         altruism_init: float = 0.5,
         altruism_clip_min: float = 0.0,
         altruism_clip_max: float = 1.0,
+        altruism_learning: bool = False,
+        altruism_static: float = 0.5,
+        satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
+        satisfaction_baseline_alpha: float = 0.1,
         personal_opt_dist_concentration: float = 1.0,
     ):
         super().__init__()
@@ -176,6 +180,18 @@ class ParticipationModel(mesa.Model):
         self.altruism_init = float(altruism_init)
         self.altruism_clip_min = float(altruism_clip_min)
         self.altruism_clip_max = float(altruism_clip_max)
+        self.altruism_learning = bool(altruism_learning)
+        self.altruism_static = float(altruism_static)
+        if not (0.0 <= self.altruism_static <= 1.0):
+            raise ValueError("altruism_static must be in [0,1].")
+        self.satisfaction_mode = str(satisfaction_mode)
+        if self.satisfaction_mode not in {"global", "area", "knowledge", "combination"}:
+            raise ValueError(
+                "satisfaction_mode must be one of: global, area, knowledge, combination."
+            )
+        self.satisfaction_baseline_alpha = float(satisfaction_baseline_alpha)
+        if not (0.0 <= self.satisfaction_baseline_alpha <= 1.0):
+            raise ValueError("satisfaction_baseline_alpha must be in [0,1].")
         self.personal_opt_dist_concentration = personal_opt_dist_concentration
 
         # Initialize RNGs early (centralized)

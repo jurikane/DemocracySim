@@ -11,6 +11,8 @@ class TestConductElection(unittest.TestCase):
 
     def test_election_returns_integer_turnout(self):
         area = self.model.areas[0]
+        for agent in area.agents:
+            agent.update_known_cells(area)
         turnout = area.conduct_election()
         self.assertIsInstance(turnout, int)
 

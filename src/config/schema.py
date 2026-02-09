@@ -31,6 +31,13 @@ class ModelConfig(BaseModel):
     altruism_init: float = 0.5
     altruism_clip_min: float = 0.0
     altruism_clip_max: float = 1.0
+    altruism_learning: bool = False
+    altruism_static: float = 0.5
+
+    # --- Satisfaction value (learning signal stub; used by altruism learning) ---
+    # Modes (planned): "global", "area", "knowledge", "combination"
+    satisfaction_mode: str = "global"
+    satisfaction_baseline_alpha: float = 0.1
 
     num_agents: int        # Number of agents in the simulation
     common_assets: float   # Initial collective assets

@@ -83,6 +83,12 @@ class VoteAgent(Agent):
             raise ValueError("Position must be a tuple of two integers.")
         self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = float(assets)
+        # Satisfaction value placeholder (learning signal for altruism).
+        # NOTE: computed each step; initialized to 0.0 until first update.
+        self.satisfaction_value: float = 0.0
+        # EMA baseline placeholder (computed each step alongside satisfaction).
+        self.satisfaction_baseline: float = 0.0
+        self.previous_satisfaction_value: float | None = None
         self._num_elections_participated = 0
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
 
@@ -124,8 +130,11 @@ class VoteAgent(Agent):
         self.voting_strategy = voting_strategy if voting_strategy is not None else DefaultVotingStrategy()
 
         # --- Adaptive altruism (reality-weight) learning (per agent) ---
-        init_a = model.altruism_init
-        self.altruism_factor = float(init_a)
+        if model.altruism_learning:
+            init_a = model.altruism_init
+            self.altruism_factor = float(init_a)
+        else:
+            self.altruism_factor = float(model.altruism_static)
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -221,6 +230,8 @@ class VoteAgent(Agent):
         self._participating = False
         self._delta_abs = 0.0
         self._delta_rel = 0.0
+        self.satisfaction_value = 0.0
+        self.satisfaction_baseline = 0.0
 
     def mark_participating(self) -> None:
         self._participating = True
@@ -328,10 +339,11 @@ class VoteAgent(Agent):
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = q
 
-    def apply_altruism_update(self, delta_assets: float) -> None:
+    def apply_altruism_update(self, satisfaction_value: float) -> None:
         """Participant-only learning of altruism_factor (reality-weight).
+
         Update rule:
-            a = a + altruism_alpha * delta_assets
+            a = a + altruism_alpha * satisfaction_value
             a = clip(a, [altruism_clip_min, altruism_clip_max])
         """
         if not self.participating:
@@ -339,9 +351,11 @@ class VoteAgent(Agent):
         alpha = float(self.model.altruism_alpha)
         if alpha == 0.0:
             return
+        if not np.isfinite(satisfaction_value):
+            return
 
         a = float(self.altruism_factor)
-        a = a + alpha * float(delta_assets)
+        a = a + alpha * float(satisfaction_value)
 
         lo = float(self.model.altruism_clip_min)
         hi = float(self.model.altruism_clip_max)
