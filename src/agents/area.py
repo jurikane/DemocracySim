@@ -7,7 +7,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.agents.color_cell import ColorCell
     from src.agents.vote_agent import VoteAgent
 from src.utils.representations import scores_to_ordering
-from src.utils.rng import np_rng_debug
+# from src.utils.rng import np_rng_debug
 
 
 class Area(Agent):
@@ -273,7 +273,16 @@ class Area(Agent):
         for a in self.agents:
             # Eligible agents are exactly those evaluated in _tally_votes()
             if a.eligible_for_election:
-                a.apply_participation_update(a.election_delta_rel)
+                delta = float(a.election_delta_rel)
+                if not np.isfinite(a.participation_baseline):
+                    a.participation_baseline = delta
+                    a.participation_signal = 0.0  # No surprise on the first experience
+                else:
+                    baseline = a.participation_baseline
+                    a.participation_signal = delta - baseline
+                    alpha = float(self.model.participation_baseline_alpha)
+                    a.participation_baseline = (1.0 - alpha) * baseline + alpha * delta
+                a.apply_participation_update(a.participation_signal)
         # TODO put those two loops together
         # Adaptive altruism learning update (participant-only, optional)
         if self.model.altruism_learning:
@@ -330,9 +339,9 @@ class Area(Agent):
             "eligible": bool(agent.eligible_for_election),
             "participating": bool(agent.participating),
             "num_elections_participated": agent.num_elections_participated,
-            "fee": float(agent._fee),
-            "reward_common": float(agent._reward_common_comp),
-            "reward_personal": float(agent._reward_pers_comp),
+            "fee": float(getattr(agent, "_fee")),
+            "reward_common": float(getattr(agent, "_reward_common_comp")),
+            "reward_personal": float(getattr(agent, "_reward_pers_comp")),
             "delta_abs": delta_abs,
             "delta_rel": float(agent.election_delta_rel),
             "q_participation": float(agent.q_participation),

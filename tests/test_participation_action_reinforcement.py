@@ -8,7 +8,7 @@ from tests.factory import create_test_model
 def test_action_reinforcement_positive_delta_participant_up_abstainer_down() -> None:
     """Contract: naive action reinforcement.
 
-    With delta_assets > 0:
+    With participation_signal > 0:
     - participating agent should increase q => p increases
     - abstained agent should decrease q => p decreases
 
@@ -38,8 +38,8 @@ def test_action_reinforcement_positive_delta_participant_up_abstainer_down() -> 
 
     delta = 2.0
     # Learning now uses relative delta; magnitude doesn't matter for monotonicity.
-    a0.apply_participation_update(delta)
-    a1.apply_participation_update(delta)
+    a0.apply_participation_update(participation_signal=delta)
+    a1.apply_participation_update(participation_signal=delta)
 
     p0_after = a0.participation_probability()
     p1_after = a1.participation_probability()
@@ -69,8 +69,8 @@ def test_action_reinforcement_negative_delta_participant_down_abstainer_up() -> 
     a1._participating = False
 
     delta = -2.0
-    a0.apply_participation_update(delta)
-    a1.apply_participation_update(delta)
+    a0.apply_participation_update(participation_signal=delta)
+    a1.apply_participation_update(participation_signal=delta)
 
     p0_after = a0.participation_probability()
     p1_after = a1.participation_probability()

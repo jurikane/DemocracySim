@@ -39,7 +39,9 @@ model:
   participation_beta: 1.0
   participation_init_q: 0.0
   participation_q_max: 50.0
-  bias_toward_participation: 0.25
+  bias_toward_participation: 0.0
+  # EMA alpha for participation baseline (1.0 => baseline becomes last step's value)
+  participation_baseline_alpha: 0.1
 
   # Per-agent personal_opt_dist (static)
   personal_opt_dist_concentration: 1.0

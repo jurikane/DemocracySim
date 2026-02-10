@@ -155,6 +155,7 @@ class ParticipationModel(mesa.Model):
         participation_init_q: float = 0.0,
         participation_q_max: float = 50.0,
         bias_toward_participation: float = 0.0,
+        participation_baseline_alpha: float = 0.1,
         altruism_alpha: float = 0.05,
         altruism_init: float = 0.5,
         altruism_clip_min: float = 0.0,
@@ -175,6 +176,9 @@ class ParticipationModel(mesa.Model):
         self.participation_init_q = float(participation_init_q)
         self.participation_q_max = float(participation_q_max)
         self.bias_toward_participation = float(bias_toward_participation)
+        self.participation_baseline_alpha = float(participation_baseline_alpha)
+        if not (0.0 <= self.participation_baseline_alpha <= 1.0):
+            raise ValueError("participation_baseline_alpha must be in [0,1].")
         # Adaptive altruism learning parameters (global per agent)
         self.altruism_alpha = float(altruism_alpha)  # Learning rate. How fast q changes in response to the signal.
         self.altruism_init = float(altruism_init)

@@ -10,9 +10,13 @@ def test_reset_reward_variables_does_not_reset_satisfaction() -> None:
     agent.satisfaction_value = 0.42
     agent.satisfaction_baseline = 0.31
     agent.satisfaction_signal = 0.11
+    agent.participation_baseline = 0.25
+    agent.participation_signal = 0.05
 
     agent.reset_reward_variables()
 
     assert agent.satisfaction_value == 0.42
     assert agent.satisfaction_baseline == 0.31
     assert agent.satisfaction_signal == 0.11
+    assert agent.participation_baseline == 0.25
+    assert agent.participation_signal == 0.05

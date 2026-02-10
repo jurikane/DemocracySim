@@ -56,6 +56,8 @@ class AreaAgentDebugPanel(TextElement):
             "participating",
             "q_participation",
             "p_participation",
+            "participation_baseline",
+            "participation_signal",
             "fee",
             "num_elections_participated",
             "reward_common",

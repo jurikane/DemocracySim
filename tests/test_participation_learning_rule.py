@@ -47,14 +47,14 @@ def test_learning_direction_positive_delta_increases_probability():
     # Participated: positive delta should increase q/p.
     agent.q_participation = q0
     agent._participating = True
-    agent.apply_participation_update(delta_assets=+10.0)
+    agent.apply_participation_update(participation_signal=+10.0)
     q_pos = float(agent.q_participation)
     p_pos = agent.participation_probability()
 
     # Abstained: same positive delta should decrease q/p.
     agent.q_participation = q0
     agent._participating = False
-    agent.apply_participation_update(delta_assets=+10.0)
+    agent.apply_participation_update(participation_signal=+10.0)
     q_abs = float(agent.q_participation)
     p_abs = agent.participation_probability()
 
@@ -62,6 +62,23 @@ def test_learning_direction_positive_delta_increases_probability():
     assert p_pos > 0.5
     assert q_abs < q0
     assert p_abs < 0.5
+
+
+def test_participation_update_uses_signal_directly() -> None:
+    model, _ = create_test_model(
+        seed=1,
+        participation_alpha=1.0,
+        participation_beta=1.0,
+        participation_init_q=0.0,
+        participation_q_max=100.0,
+    )
+
+    agent = model.voting_agents[0]
+    agent.q_participation = 0.0
+    agent._participating = True
+
+    agent.apply_participation_update(participation_signal=0.5)
+    assert np.isclose(float(agent.q_participation), 0.5)
 
 
 def test_determinism_same_seed_produces_same_participation_counts():

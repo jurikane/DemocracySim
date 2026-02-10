@@ -485,6 +485,8 @@ class RunLoggerV2:
                     "assets": np.float32(float(a.assets)),
                     "num_elections_participated": np.int32(int(a.num_elections_participated)),
                     "personality_group_idx": np.int16(a.personality_group_idx),
+                    "participation_baseline": np.float32(float(a.participation_baseline)),
+                    "participation_signal": np.float32(float(a.participation_signal)),
                     "altruism_factor": np.float32(float(a.altruism_factor)),
                     "satisfaction_value": np.float32(float(a.satisfaction_value)),
                     "satisfaction_baseline": np.float32(float(a.satisfaction_baseline)),

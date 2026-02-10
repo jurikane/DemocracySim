@@ -128,6 +128,9 @@ class VoteAgent(Agent):
         # --- Adaptive participation learning (global per agent) ---
         init_q = model.participation_init_q
         self.q_participation = float(init_q)
+        # EMA baseline and signal for participation learning.
+        self.participation_baseline: float = float("nan")
+        self.participation_signal: float = 0.0
         self.participation_strategy = (
             participation_strategy if participation_strategy is not None else DefaultParticipationStrategy()
         )
@@ -363,18 +366,21 @@ class VoteAgent(Agent):
         q = self.q_participation
         return _sigmoid(beta * q)
 
-    def apply_participation_update(self, delta_assets: float) -> None:
+    def apply_participation_update(self, participation_signal: float) -> None:
         """Naive action reinforcement update for q_participation.
 
         Contract (thesis baseline): reinforce last action.
-        - participating + positive delta => q up (p up)
-        - abstained     + positive delta => q down (p down)
-        - participating + negative delta => q down
-        - abstained     + negative delta => q up
+        - participating + positive signal => q up (p up)
+        - abstained     + positive signal => q down (p down)
+        - participating + negative signal => q down
+        - abstained     + negative signal => q up
+
+        Note: participation_signal is baseline-corrected (delta_rel - EMA baseline).
+        With baseline alpha = 1.0, the signal equals last-step delta.
         """
         alpha = self.model.participation_alpha
         sign = 1.0 if self._participating else -1.0
-        q = self.q_participation + alpha * sign * delta_assets
+        q = self.q_participation + alpha * sign * participation_signal
         q_max = self.model.participation_q_max
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))

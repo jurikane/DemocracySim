@@ -54,6 +54,25 @@ uncertainty, where agents adapt based on perceived success rather than causal
 attribution.
 
 
+Baseline-Corrected Learning Signal (EMA)
+----------------------------------------
+
+To reduce noise in outcome signals, the model can use a baseline-
+corrected signal for participation learning. Each agent maintains an EMA
+baseline of recent outcome deltas (relative asset change). 
+The learning signal is then:
+
+  signal = delta_rel - baseline
+
+The baseline updates as:
+
+  baseline = (1 - alpha) * baseline + alpha * delta_rel
+
+This makes "good vs bad" relative to recent expectations. 
+Setting alpha=1.0 makes the baseline equal to the previous step, 
+so the signal becomes the last-step delta.
+
+
 Herding, Free-Riding, and Instability Are Expected Outcomes
 -----------------------------------------------------------
 

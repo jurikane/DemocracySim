@@ -45,7 +45,16 @@ def test_satisfaction_modes_and_combination() -> None:
 
 
 def test_satisfaction_baseline_alpha_one_equals_last_step_delta() -> None:
-    model, _ = create_test_model(num_agents=40, num_colors=2, num_areas=1, num_personality_groups=2)
+    model, _ = create_test_model(
+        num_agents=40,
+        num_colors=2,
+        num_areas=1,
+        num_personality_groups=2,
+        height=10,
+        width=10,
+        av_area_height=10,
+        av_area_width=10,
+    )
     model.satisfaction_baseline_alpha = 1.0
     area = model.areas[0]
     agent = area.agents[0]
