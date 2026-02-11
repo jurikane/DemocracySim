@@ -6,7 +6,8 @@ class ModelConfig(BaseModel):
     """
     Configuration for the core simulation model.
     """
-    election_cost_rate: float  # Cost for participating in an election in % of assets
+    # Cost/effort rate for participating in an election, as a fraction of current assets (0..1).
+    election_cost_rate: float
     election_impact_on_mutation: float  # Impact of election on mutation rate
     mu: float              # Mutation rate
     rule_idx: int          # Index of the voting rule to use

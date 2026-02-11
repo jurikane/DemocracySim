@@ -3,12 +3,15 @@ import mesa
 import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
-from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
+from src.utils.social_welfare_functions import (majority_rule, approval_voting,
+                                                utilitarian_rule, borda_rule)
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
-                               get_voter_turnout, get_grid_colors,
-                               gini_index_0_100)
+                               get_voter_turnout, get_grid_colors)
+from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
+                                get_area_dist_to_reality, get_area_color_distribution,
+                                get_election_results, get_area_gini_index)
 from src.utils.rng import (
     set_seed,
     np_rng,
@@ -19,13 +22,13 @@ from src.utils.rng import (
     py_rng_debug,
 )
 
-
 # Voting rules to be accessible by index
 social_welfare_functions = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
 social_welfare_function_short_names = ["Majority", "Approval", "Utilitarian", "Borda"]
 # Distance functions
 # (explicitly ordering-based)
 distance_functions = [spearman_fr_order, kendall_tau_order]
+distance_function_short_names = ["SpearmanFootrule", "KendallTau"]
 
 
 class CustomScheduler(mesa.time.BaseScheduler):
@@ -242,23 +245,30 @@ class ParticipationModel(mesa.Model):
         self._av_area_color_dst = self._preset_color_dst.copy()  # TODO: Deal with overlaps and size diffs
         self.global_color_dst = self._preset_color_dst.copy()
         # Elections
-        vr, vr_names, vr_name, vr_impl_names, vr_impl_name = self._get_voting_rule_config(rule_idx)
+        vr, vr_names, vr_name, vr_i_names, vr_i_name = self._get_voting_rule_conf(rule_idx)
+        self.rule_idx = rule_idx
         self.voting_rule = vr
         self.voting_rule_names = vr_names
         self.voting_rule_name = vr_name
         # Implementation names are stored alongside display names so runs can be
         # reproduced even if UI labels change.
-        self.voting_rule_impl_names = vr_impl_names
-        self.voting_rule_impl_name = vr_impl_name
-        self.election_cost_rate = election_cost_rate
+        self.voting_rule_implementation_names = vr_i_names
+        self.voting_rule_implementation_name = vr_i_name
+        self.election_cost_rate = is_rate_btw_0_and_1(election_cost_rate)
         # Reward scaling knobs
-        self.reward_rate_common = float(reward_rate_common)
-        self.reward_rate_personal = float(reward_rate_personal)
-        self.reward_threshold_common = float(reward_threshold_common)
-        self.reward_threshold_personal = float(reward_threshold_personal)
-        self.abstention_share = max(0.0, min(1.0, float(abstention_share)))       
+        self.reward_rate_common = is_rate_btw_0_and_1(reward_rate_common)
+        self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
+        self.reward_threshold_common = is_rate_btw_0_and_1(reward_threshold_common)
+        self.reward_threshold_personal = is_rate_btw_0_and_1(reward_threshold_personal)
+        self.abstention_share = is_rate_btw_0_and_1(abstention_share)
         self.voting_rng = self.np_random
-        self.distance_func = distance_functions[distance_idx]
+        self.distance_idx = distance_idx
+        dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
+        self.distance_func = dist
+        self.distance_func_names = d_names
+        self.distance_func_name = d_name
+        self.distance_func_implementation_names = d_i_names
+        self.distance_func_implementation_name = d_i_name
         self.options = self.create_all_options(num_colors)
         # Simulation variables
         self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
@@ -463,7 +473,7 @@ class ParticipationModel(mesa.Model):
         missing = self.num_areas - len(x_coords) * len(y_coords)
         for _ in range(missing):
             # Avoid placing the "additional" area exactly on the regular grid anchors;
-            # otherwise tests/diagnostics can't distinguish them and we may duplicate placements.
+            # otherwise tests/diagnostics can't distinguish them, and we may duplicate placements.
             for _attempt in range(1000):
                 rx = int(self.random.randrange(self.grid.width))
                 ry = int(self.random.randrange(self.grid.height))
@@ -766,7 +776,7 @@ class ParticipationModel(mesa.Model):
         raise ValueError("Unexpected error in color_distribution.")
 
     @staticmethod
-    def _get_voting_rule_config(rule_idx):
+    def _get_voting_rule_conf(rule_idx):
         # Wrap voting rules so they use deterministic RNG
         # Keep self.voting_rule as the base function for tests.
         if rule_idx < 0 or rule_idx >= len(social_welfare_functions):
@@ -785,9 +795,34 @@ class ParticipationModel(mesa.Model):
         impl_name = str(vr.__name__)
         return vr, display_names, display_name, impl_names, impl_name
 
+    @staticmethod
+    def _get_dist_conf(distance_idx: int):
+        """
+        Return (callable, display_names, display_name, impl_names, impl_name) for distance_idx.
+        Selects an ordering distance (for valid ColorOrderings (permutations)) used in:
+          ballot scoring (ScoreVector entries are distances to options)
+          rewards (dist_to_reality, personal distance)
+        """
+        if distance_idx < 0 or distance_idx >= len(distance_functions):
+            raise ValueError(
+                f"distance_idx out of range: {distance_idx} (valid: 0..{len(distance_functions)-1})"
+            )
+        f = distance_functions[distance_idx]
+        impl_names = [fn.__name__ for fn in distance_functions]
+        impl_name = str(f.__name__)
 
-def get_color_distribution_function(color: int) -> Callable[
-    [ParticipationModel], float]:
+        if len(distance_function_short_names) == len(distance_functions):
+            display_names = distance_function_short_names
+            display_name = distance_function_short_names[distance_idx]
+        else:
+            display_names = impl_names
+            display_name = impl_name
+
+        return f, display_names, display_name, impl_names, impl_name
+
+
+
+def get_color_distribution_function(color: int) -> Callable[[ParticipationModel], float]:
     """
     Returns a lambda to extract a single color's distribution from the model.
 
@@ -798,36 +833,3 @@ def get_color_distribution_function(color: int) -> Callable[
         Callable[[ParticipationModel], float]: Extractor.
     """
     return lambda m: float(m.global_color_dst[color])
-
-
-def get_area_voter_turnout(area: Area) -> Optional[float]:
-    return area.voter_turnout if isinstance(area, Area) else None
-
-
-def get_area_dist_to_reality(area: Area) -> Optional[float]:
-    return area.dist_to_reality if isinstance(area, Area) else None
-
-
-def get_area_color_distribution(area: Area) -> Optional[list[float]]:
-    return area.color_distribution.tolist() if isinstance(area, Area) else None
-
-
-def get_election_results(area: Area) -> Optional[list[int]]:
-    """
-    Returns the voted ordering as a list or None if not available.
-
-    Returns:
-        list[int] | None
-    """
-    if isinstance(area, Area) and area.voted_ordering is not None:
-        return area.voted_ordering.tolist()
-    return None
-
-
-def get_area_gini_index(area: Area) -> Optional[float]:
-    """Per-area Gini index (0-100) computed from agents' assets.
-    """
-    if not isinstance(area, Area):
-        return None
-    assets = [a.assets for a in area.agents]
-    return float(gini_index_0_100(assets))

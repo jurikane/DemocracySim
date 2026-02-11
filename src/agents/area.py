@@ -396,7 +396,7 @@ class Area(Agent):
                 agent.mark_ineligible_for_election()
                 continue
 
-            # election_cost_rate is treated as a percent (0..100) of current assets.
+            # election_cost_rate is a fraction (0..1) of current assets.
             cost = float(agent.assets * el_cost_rate)
             if cost < 0:
                 raise ValueError("Election cost rate must be non-negative.")

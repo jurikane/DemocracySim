@@ -10,7 +10,8 @@ from src.models.participation_model import (
     ParticipationModel,
     distance_functions,
     social_welfare_functions,
-    social_welfare_function_short_names
+    social_welfare_function_short_names,
+    distance_function_short_names
 )
 from src.viz.factory import make_canvas, make_charts
 
@@ -90,21 +91,21 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "height": model_cfg.height,
         "width": model_cfg.width,
         "rule_idx": mesa.visualization.Slider(
-            name=f"Rule idx {social_welfare_function_short_names}",
+            name=f"Rule {social_welfare_function_short_names}",
             value=model_cfg.rule_idx,
             min_value=0,
             max_value=len(social_welfare_functions) - 1,
             step=1,
         ),
         "distance_idx": mesa.visualization.Slider(
-            name=f"Dist idx {[f.__name__ for f in distance_functions]}",
+            name=f"Dist {distance_function_short_names}",
             value=model_cfg.distance_idx,
             min_value=0,
             max_value=len(distance_functions) - 1,
             step=1,
         ),
         "election_cost_rate": mesa.visualization.Slider(
-            name="Cost/Effort rate (wealth-scaled) to vote",
+            name="Vote-Cost/Effort rate (wealth-scaled)",
             value=model_cfg.election_cost_rate,
             min_value=0,
             max_value=1,

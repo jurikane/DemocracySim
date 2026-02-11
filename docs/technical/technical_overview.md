@@ -24,12 +24,25 @@ Current implemented rules:
 
 ---
 
+## Distance Functions (Fixed for Thesis Runs)
+
+The model uses an ordering distance `distance_idx` for:
+
+- ballot scoring (distance between the agent’s target ordering and each option ordering)
+- reward signals (e.g. `dist_to_reality`)
+
+Implemented distances (normalized to `[0,1]`):
+
+- `spearman_fr_order` (Spearman footrule)
+- `kendall_tau_order` (Kendall tau)
+
 ## Features
 
 - **Agents**:
   - Independently acting entities modeled with preferences, budgets, and decision-making strategies.
   - Can participate in elections, have personal preferences and limited information about surroundings.
   - Trained with decision-tree methods to simulate behavior.
+  - Participation costs are modeled via `election_cost_rate` (fraction of current assets paid when voting).
 
 - **Environment**:
   - Structured as a grid divided into "territories" or "areas."

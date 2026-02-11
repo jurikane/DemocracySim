@@ -30,6 +30,11 @@ To make `rule_idx` unambiguous across code changes, schema v2 stores:
 - `meta.yaml`: `run.rule_idx`, `run.rule_name`, `run.rule_impl_name`
 - `static.json`: `voting_rules.names`, `voting_rules.impl_names`, plus the selected index/name
 
+The distance function (`distance_idx`) is also recorded for auditability:
+
+- `meta.yaml`: `run.distance_idx`, `run.distance_name`, `run.distance_impl_name`
+- `static.json`: `distance_functions.names`, `distance_functions.impl_names`, plus the selected index/name
+
 ## Timing semantics (important)
 
 Recorded step `t` (where **t starts at 1**) corresponds to the election-time state:
@@ -81,22 +86,22 @@ Merged area-state + election table.
 
 **Primary key:** `(run_seed, rule_idx, step, area_id)`
 
-| column                               |   dtype | notes                                 |
-|--------------------------------------|--------:|---------------------------------------|
-| run_seed                             |   int32 |                                       |
-| rule_idx                             |   int16 |                                       |
-| step                                 |   int32 |                                       |
-| area_id                              |   int32 |                                       |
-| eligible_voters                      |   int32 | area.num_agents                       |
-| participants                         |   int32 | number who voted                      |
-| turnout                              | float32 | participants/eligible_voters * 100    |
-| election_cost_rate                   | float32 | from config/model                     |
-| fee_pool                             | float32 | matches simulation internal type      |
-| winning_option_id                    |   int32 | option row index into `model.options` |
-| elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                 |
-| dist_to_reality                      | float32 | distance(real_order, voted_order)     |
-| gini_index                           |   int16 | area gini 0–100                       |
-| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**         |
+| column                               |   dtype | notes                                          |
+|--------------------------------------|--------:|------------------------------------------------|
+| run_seed                             |   int32 |                                                |
+| rule_idx                             |   int16 |                                                |
+| step                                 |   int32 |                                                |
+| area_id                              |   int32 |                                                |
+| eligible_voters                      |   int32 | area.num_agents                                |
+| participants                         |   int32 | number who voted                               |
+| turnout                              | float32 | participants/eligible_voters * 100             |
+| election_cost_rate                   | float32 | fraction of assets paid by participants (0..1) |
+| fee_pool                             | float32 | matches simulation internal type               |
+| winning_option_id                    |   int32 | option row index into `model.options`          |
+| elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
+| dist_to_reality                      | float32 | distance(real_order, voted_order)              |
+| gini_index                           |   int16 | area gini 0–100                                |
+| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                  |
 
 ### `agents.parquet`
 
