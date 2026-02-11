@@ -4,9 +4,9 @@ This module is the *single source of truth* for the on-disk output format
 produced by headless batch runs.
 
 Key rules:
-- Step indexing semantics: post-election, post-reward, **pre-mutation** for
-  color distributions in steps.parquet and area_steps.parquet. Grid snapshots
-  remain post-mutation.
+- Step indexing semantics: recorded step t is post-election/reward for step t,
+  and pre-mutation of step t (mutation is applied at the start of step t+1).
+  Grid snapshots are the election-time state for step t.
 - Step-based data is stored in Parquet tables (no per-step JSON files).
 - Dense arrays (grids/overlays) remain in separate artifacts (e.g. in .npy).
 - No `run_id`. Every table includes:
@@ -33,7 +33,7 @@ SCHEMA_NAME: Final[str] = "output_schema_v2"
 SCHEMA_VERSION: Final[int] = 2
 
 # Indexing meaning for all step-based tables in this schema.
-# (Election has run, rewards distributed, mutation has not yet been applied.)
+# (Election has run, rewards distributed; mutation of step t is applied at start of t+1.)
 STEP_INDEXING: Final[str] = "post_election_pre_mutation"
 
 

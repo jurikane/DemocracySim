@@ -74,7 +74,7 @@ def run_once(run_id: int, cfg, out_dir: Path):
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))
     for step in tqdm(range(n_steps), desc=f"run {run_id}"):
         # Schema v2 uses 1-based step indexing. steps/area_steps color distributions
-        # are captured pre-mutation; grid snapshots remain post-mutation.
+        # are captured pre-mutation; grid snapshots are also pre-mutation.
         v2_step = step + 1
         v2.begin_step(v2_step)
         model.step()

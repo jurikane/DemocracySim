@@ -18,23 +18,21 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `agents.parquet`
 - `votes.parquet`
 - `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience)
-- `grids/grid_0001.npy` … `grids/grid_{S-1}.npy` (per-step grid snapshots, **post-mutation**)
+- `grids/grid_0001.npy` … `grids/grid_{S}.npy` (optional per-step snapshots, **pre-mutation**, depending on grid_interval).
+  `grid_0001.npy` may equal `grid_0000.npy` because no mutation is applied before step 1.
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
 ## Timing semantics (important)
 
-All Parquet tables are indexed as **post election + post reward**. Color
-distributions in `steps.parquet` and `area_steps.parquet` are captured
-**pre-mutation** (i.e., at vote time).
+Recorded step `t` (where **t starts at 1**) corresponds to the election-time state:
+- The grid shown/used is the state after applying mutation from step `t-1` (for `t>1`).
+- Elections and rewards/learning happen on this state during step `t`.
+- No mutation occurs during step `t`; mutation from step `t` is applied at the start of step `t+1`.
+- `area_color_*` in `area_steps.parquet` reflects the election-time distribution for step `t`.
+- `color_*` in `steps.parquet` reflects the global election-time distribution for step `t`.
+- Grid snapshots (`grids/grid_*.npy`) are the election-time state for step `t` and match the distributions.
 
-Meaning for step `t` (where **t starts at 1**):
-- The election in each area has been conducted.
-- Rewards and participation costs have been applied.
-- Color-cell mutation may already be applied in the simulation state, but
-  color distributions are recorded from **pre-mutation** snapshots.
-- `area_color_*` in `area_steps.parquet` reflects the **pre-mutation** distribution for that step.
-- `color_*` in `steps.parquet` reflects the global **pre-mutation** distribution for that step.
-- Grid snapshots (`grids/grid_*.npy`) remain **post-mutation**.
+`post_election_pre_mutation` means: post-election/reward for step `t`, pre-mutation of step `t` (applied at step `t+1`).
 
 ### Replay step 0
 
@@ -130,7 +128,7 @@ Vote signal table (participants only). This is the single source of
 | step                                     |   int32 |                                                |
 | area_id                                  |   int32 | disambiguates overlapping areas                |
 | agent_id                                 |   int32 |                                                |
-| participating                             | boolean | always true (rows only for participants)       |
+| participating                            | boolean | always true (rows only for participants)       |
 | confidence                               | float32 | agent confidence at vote time **in this area** |
 | estim_dst_color_0..estim_dst_color_{C-1} | float32 | estimated area color distribution at vote time |
 | rank_1_option_id                         |   Int32 | option row index into `model.options`          |
@@ -147,4 +145,4 @@ Vote signal table (participants only). This is the single source of
 ## Notes
 
 - Vector columns are **expanded**: `*_0..*_{C-1}` where `C=num_colors`.
-- Validators live in `src/logging/output_schema_v2.py` and allow safe dtype upcasts.
+- Validators live in `src/logging/output_schema.py` and allow safe dtype upcasts.

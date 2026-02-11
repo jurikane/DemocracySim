@@ -14,7 +14,7 @@ Not implemented yet (future batches):
 
 This module intentionally keeps core model logic unchanged. For steps.parquet and
 area_steps.parquet, color distributions are captured from pre-mutation (post-election)
-snapshots. Grid snapshots remain post-mutation.
+snapshots. Grid snapshots are pre-mutation.
 """
 
 from __future__ import annotations
@@ -221,8 +221,8 @@ class RunLoggerV2:
 
         Args:
             step: Recorded step number (schema v2 is 1-based).
-            model: The ParticipationModel (post-mutation state).
-            grid_snapshot: Optional HxW array to write to grids/ (1-based, post-mutation).
+            model: The ParticipationModel (pre-mutation state).
+            grid_snapshot: Optional HxW array to write to grids/ (1-based, pre-mutation).
         Notes:
             steps.parquet and area_steps.parquet color distributions are derived
             from pre-mutation snapshots captured during the election.
