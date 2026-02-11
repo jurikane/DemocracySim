@@ -10,7 +10,7 @@ class TestKendallTauDistance(unittest.TestCase):
 
     def test_kendall_tau_on_ranks(self):
 
-        print("TEST kendall_tau_on_ranks function")
+        print("TEST kendall_tau_on_ranks function | NO use with ties!\n")
 
         # Test cases kendall tau (rank-vektors)
         sequences = [

@@ -7,6 +7,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.agents.color_cell import ColorCell
 from src.agents.vote_agent import VoteAgent
 from src.utils.representations import scores_to_ordering, validate_score_vector_unit_interval
+from src.utils.representations import distribution_to_ordering
 # from src.utils.rng import np_rng_debug
 
 
@@ -245,7 +246,11 @@ class Area(Agent):
             # Set to previous outcome but don't distribute rewards as usual
             print("Area", self.unique_id, "no one participated in the election")
             # If no previous outcome, use the real distribution ordering
-            real_color_ord = np.argsort(self.color_distribution, kind="stable")[::-1]
+            real_color_ord = distribution_to_ordering(
+                self.color_distribution, rng=self.model.voting_rng
+            )
+            # Assumption is: if no (new) decision is made, things stay the same.
+            #   Alternative to think about: randomly select any available option.
             if self._voted_ordering is None:
                 self._voted_ordering = real_color_ord
             # Update dist_to_reality for monitoring but no rewards
@@ -422,7 +427,7 @@ class Area(Agent):
                 if debug_enabled:
                     scores = np.asarray(scores, dtype=np.float64)
                     debug_rng = self.model.rng_debug
-                    ordering = scores_to_ordering(scores, rng=debug_rng).astype(int).tolist()
+                    ordering = scores_to_ordering(scores, rng=debug_rng).tolist()
                     debug_votes.append(
                         {
                             "agent_id": agent.unique_id,
@@ -448,7 +453,9 @@ class Area(Agent):
         """
         dist_func = self.model.distance_func
         # Calculate the distance to the real distribution using distance_func in [0,1]
-        real_color_ord = np.argsort(self.color_distribution, kind="stable")[::-1]  # Descending
+        real_color_ord = distribution_to_ordering(
+            self.color_distribution, rng=self.model.voting_rng
+        )
         search_pairs = self.model.color_search_pairs
         self._dist_to_reality = dist_func(
             real_color_ord, self.voted_ordering, search_pairs

@@ -38,6 +38,7 @@ def test_headless_same_seed_produces_identical_first_steps(tmp_path: Path):
         Path("steps.parquet"),
         Path("area_steps.parquet"),
         Path("agents.parquet"),
+        Path("votes.parquet"),
     ]:
         assert (out_a / rel).exists(), rel
         assert (out_b / rel).exists(), rel
@@ -46,6 +47,11 @@ def test_headless_same_seed_produces_identical_first_steps(tmp_path: Path):
     s_a = pd.read_parquet(out_a / "steps.parquet").sort_values("step").reset_index(drop=True)
     s_b = pd.read_parquet(out_b / "steps.parquet").sort_values("step").reset_index(drop=True)
     pd.testing.assert_frame_equal(s_a.head(2), s_b.head(2), check_dtype=False)
+
+    # Compare first two step rows in votes.parquet (if any votes were recorded).
+    v_a = pd.read_parquet(out_a / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
+    v_b = pd.read_parquet(out_b / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
+    pd.testing.assert_frame_equal(v_a.head(10), v_b.head(10), check_dtype=False)
 
     # If grids are stored in this config, ensure identical arrays at step 1/2.
     g1_a = out_a / "grids" / f"grid_{1:0{pad}d}.npy"

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Literal
 import numpy as np
-from src.utils.rng import np_rng
 
 
 def validate_ordering(x: np.ndarray, n: int | None = None) -> None:
@@ -90,16 +89,23 @@ def ordering_to_ranks(ordering: np.ndarray) -> np.ndarray:
 
 
 def ranks_to_ordering(ranks: np.ndarray, eps = 1e-6) -> np.ndarray:
-    """Convert RankVector -> Ordering via argsort with deterministic tie-breaks."""
+    """Convert RankVector -> Ordering.
+
+    Fairness + determinism contract (thesis):
+    - If ties exist, deterministic tie-breaking by option id is NOT acceptable for
+      decision-critical code paths (it biases toward small ids).
+    - Therefore: if ties exist, call sites must provide an explicit RNG for
+      randomized tie-breaking (still deterministic given seed).
+
+    This helper is intentionally strict to prevent silent bias.
+    """
     arr = np.asarray(ranks)
     validate_rank_vector(arr, int(arr.size))
 
     has_ties = len(np.unique(arr)) != len(arr)
     if has_ties:
-        if not eps or eps <= 0:
-            raise ValueError("Epsilon must be positive to break ties in ranks")
-        noise = np_rng().uniform(-eps, eps, size=arr.size)
-        return np.argsort(arr + noise, kind="stable").astype(np.int64)
+        # Keep backward-compat strictness, but use a clear error.
+        raise ValueError("RankVector contains ties; tie-breaking requires explicit handling.")
 
     return np.argsort(arr, kind="stable").astype(np.int64)
 
@@ -112,26 +118,52 @@ def scores_to_ordering(
     rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     """Convert ScoreVector -> Ordering (lower score = better).
-    Uses RNG noise to break ties if eps > 0, otherwise raises error on ties.
+
+    Determinism contract (thesis):
+    - This function must not consume the model's main RNG implicitly.
+    - If there are ties, callers MUST pass rng for randomized tie-breaking.
+      Stable argsort tie-breaking is biased and not acceptable for social choice.
+    - If rng is provided and eps > 0, noise is added for randomized tie-breaking
+      (deterministic given seed).
     """
     arr = np.asarray(scores, dtype=np.float64)
     validate_score_vector(arr, int(arr.size))
 
-    if eps and eps > 0:  # Often have ties so go for tie-breaking first
+    has_ties = len(np.unique(arr)) != len(arr)
+    if has_ties:
         if rng is None:
-            rng = np_rng()
+            raise ValueError("ScoreVector contains ties; pass rng for randomized tie-breaking.")
+        if not eps or eps <= 0:
+            raise ValueError("eps must be > 0 to break ties with RNG noise.")
         noise = rng.uniform(-eps, eps, size=arr.size)
         return np.argsort(arr + noise, kind="stable").astype(np.int64)
-    elif len(np.unique(arr)) == len(arr): # check for ties
-        return np.argsort(arr, kind="stable").astype(np.int64)
-    else:
-        raise ValueError("Epsilon must be positive to break ties in ranks")
+
+    # No ties: stable argsort is fine and deterministic.
+    return np.argsort(arr, kind="stable").astype(np.int64)
 
 
-def distribution_to_ordering(dist: np.ndarray, *, stable: bool = True) -> np.ndarray:
-    """Convert Distribution -> Ordering (higher prob = better)."""
+def distribution_to_ordering(
+    dist: np.ndarray,
+    *,
+    stable: bool = True,
+    rng: np.random.Generator | None = None,
+    eps: float = 1e-6,
+) -> np.ndarray:
+    """Convert Distribution -> Ordering (higher prob = better).
+
+    Fairness contract:
+    - If there are ties and this ordering influences decisions, pass `rng` to break ties
+      randomly (still deterministic given seed).
+    - If rng is None, stable argsort is used (deterministic but biased in ties).
+    """
     arr = np.asarray(dist, dtype=np.float64)
     validate_distribution(arr, int(arr.size))
+    has_ties = len(np.unique(arr)) != len(arr)
+    if has_ties and rng is not None and eps and eps > 0:
+        noise = rng.uniform(-eps, eps, size=arr.size)
+        arr = arr + noise
+    else:
+        print("Warning: tie-breaking is biased, if not in debug/testing, always provide rng for fair tie-breaking.")
     kind = "stable" if stable else "quicksort"
     return np.argsort(arr, kind=kind)[::-1].astype(np.int64)
 

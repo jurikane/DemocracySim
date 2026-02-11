@@ -58,7 +58,7 @@ class DefaultVotingStrategy:
             personal_opt_dist=np.asarray(agent.personal_opt_dist, dtype=np.float32),
         )
 
-        target_ordering = ordering_from_distribution(target_dist)
+        target_ordering = ordering_from_distribution(target_dist, rng=agent.model.voting_rng)
 
         dist_func = agent.model.distance_func
         search_pairs = agent.model.color_search_pairs

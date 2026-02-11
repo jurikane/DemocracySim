@@ -23,14 +23,22 @@ def normalize_distribution(x: np.ndarray) -> np.ndarray:
     return (x / s).astype(np.float32)
 
 
-def ordering_from_distribution(dist: np.ndarray) -> np.ndarray:
+def ordering_from_distribution(dist: np.ndarray, *, rng: np.random.Generator | None = None) -> np.ndarray:
     """Convert a distribution into a ColorOrdering by descending probability.
 
-    Tie-break: stable argsort uses lower option id first (deterministic).
+    Tie-break:
+    - If rng is provided, ties are broken randomly (deterministic given seed).
+    - Otherwise stable argsort breaks ties by option id (deterministic but biased).
     """
     dist = np.asarray(dist, dtype=np.float32)
     if dist.ndim != 1:
         raise ValueError("dist must be 1D")
+    if rng is not None:
+        # Break ties fairly by adding tiny symmetric noise (ordering remains stable-ish).
+        eps = 1e-6
+        dist = dist + rng.uniform(-eps, eps, size=dist.size).astype(np.float32)
+    else:
+        print("Warning: tie-breaking is biased, if not in debug/testing, always provide rng for fair tie-breaking.")
     return np.argsort(dist, kind="stable")[::-1].astype(np.int16)
 
 
