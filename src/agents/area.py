@@ -258,10 +258,7 @@ class Area(Agent):
                 real_color_ord, self._voted_ordering,
                 self.model.color_search_pairs
             )
-            # Slightly punish for non-participation
-            for a in self.agents:
-                a.add_common_reward(-1)
-                a.reward_agent()  # Apply the penalty
+            # Thought: agents could be punished here for all abstaining.
             self.num_agents_participated_last = 0
             self._voter_turnout = 0
             self._update_diag_history()
@@ -640,6 +637,20 @@ class Area(Agent):
         participants = [a for a in eligible if a.participating]
         abstainers = [a for a in eligible if not a.participating]
 
+        # If no one participates, `aggregated` is None and the UI may show
+        # winning_option=None. However, the simulation can still have a carried-over
+        # `voted_ordering`. Compute the corresponding option id for clarity.
+        winning_option_id = None
+        try:
+            vo = self._voted_ordering
+            if vo is not None:
+                options = np.asarray(self.model.options)
+                matches = np.nonzero((options == np.asarray(vo)).all(axis=1))[0]
+                if len(matches) > 0:
+                    winning_option_id = int(matches[0])
+        except ValueError:
+            winning_option_id = None
+
         record = {
             "step": step,
             "area_id": self.unique_id,
@@ -647,6 +658,8 @@ class Area(Agent):
             "num_eligible": len(eligible),
             "num_participants": len(participants),
             "num_abstainers": len(abstainers),
+            "election_held": bool(aggregated is not None),
+            "winning_option_id": winning_option_id,
             "dist_to_reality": float(
                 self._dist_to_reality) if self._dist_to_reality is not None else float(
                 "nan"),

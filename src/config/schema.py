@@ -14,7 +14,7 @@ class ModelConfig(BaseModel):
     distance_idx: int      # Index of the distance function to use
 
     # --- Reward magnitude scaling (v2 economics) ---
-    reward_rate_common: float = 0.0  # Common reward magnitude in % of agent assets
+    reward_rate_common: float = 0.0  # Common reward magnitude as a fraction of agent assets (0..1)
     reward_rate_personal: float = 0.0  # Personal reward magnitude in % of agent assets
     reward_threshold_common: float = 0.5  # Common coeff = threshold - dist_to_reality
     reward_threshold_personal: float = 0.5  # Personal coeff = threshold - dist(personality, elected)

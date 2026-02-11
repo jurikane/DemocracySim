@@ -43,6 +43,7 @@ Implemented distances (normalized to `[0,1]`):
   - Can participate in elections, have personal preferences and limited information about surroundings.
   - Trained with decision-tree methods to simulate behavior.
   - Participation costs are modeled via `election_cost_rate` (fraction of current assets paid when voting).
+  - Rewards/penalties are scaled by wealth via `reward_rate_common` and `reward_rate_personal` (fractions of assets).
 
 - **Environment**:
   - Structured as a grid divided into "territories" or "areas."
