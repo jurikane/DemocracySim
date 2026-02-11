@@ -7,11 +7,19 @@ Representation contract:
 - Output: Ordering (permutation) with best option first.
 
 This design allows non-discrete and non-equidistant preferences.
+
+Implemented rules (schema B1):
+- majority_rule (first-choice plurality after tie-prep)
+- approval_voting (thresholded approvals)
+- utilitarian_rule (minimize total disagreement)
+- borda_rule (positional scoring derived from per-voter orderings)
 """
 
 from __future__ import annotations
 
 import numpy as np
+
+from src.utils.representations import validate_ordering, scores_to_ordering
 
 
 def complete_ranking(
@@ -165,6 +173,62 @@ def approval_voting(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.n
     eps = 1e-6
     noise = rng.uniform(-eps, eps, len(approval_counts))
     return np.argsort(-(approval_counts + noise))
+
+
+def utilitarian_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+    """Utilitarian (score) rule on disagreement scores.
+
+    Semantics:
+    - pref_table entries are disagreement/oppose scores in [0,1], lower=better.
+    - Aggregate by minimizing total disagreement across voters:
+        total[j] = sum_i pref_table[i, j]
+      Lower total => better.
+
+    Tie-breaking:
+    - Random but deterministic given `rng`, using a secondary random key.
+    """
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    n, m = pref_table.shape
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+    totals = np.sum(pref_table, axis=0).astype(np.float64)
+    # Primary key totals (ascending), secondary random key.
+    rand = rng.random(m)
+    ordering = np.lexsort((rand, totals))
+    validate_ordering(ordering, m)
+    return ordering
+
+
+def borda_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+    """Borda count derived from per-voter orderings of the ScoreVector.
+
+    We interpret each row as a (possibly tied) preference ordering by sorting
+    scores ascending (lower=better). Then assign Borda points:
+      best gets m-1, next m-2, ... worst gets 0.
+
+    Tie-breaking:
+    - per-voter randomized tie-breaking using `rng` via scores_to_ordering.
+    - final ordering tie-breaks by a secondary random key.
+    """
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    n, m = pref_table.shape
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+
+    points_by_rank = np.arange(m - 1, -1, -1, dtype=np.float64)  # length m
+    totals = np.zeros(m, dtype=np.float64)
+    for i in range(n):
+        ordering = scores_to_ordering(pref_table[i], rng=rng)
+        # ordering[0] is best -> gets m-1 points, etc.
+        totals[ordering] += points_by_rank
+
+    # Higher totals => better.
+    rand = rng.random(m)
+    ordering = np.lexsort((rand, -totals))
+    validate_ordering(ordering, m)
+    return ordering
 
 
 def continuous_score_voting(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:

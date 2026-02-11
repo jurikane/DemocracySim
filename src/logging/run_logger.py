@@ -88,6 +88,7 @@ class RunLoggerV2:
         *,
         config_ref: Optional[Path] = None,
         config_hash: Optional[str] = None,
+        model: Optional[Model] = None,
     ) -> None:
         """Write meta.yaml with schema identifier and config reference."""
         if config_hash is None:
@@ -103,6 +104,8 @@ class RunLoggerV2:
             "run": {
                 "run_seed": int(self.ctx.run_seed),
                 "rule_idx": int(self.ctx.rule_idx),
+                "rule_name": getattr(model, "voting_rule_name", None) if model is not None else None,
+                "rule_impl_name": getattr(model, "voting_rule_impl_name", None) if model is not None else None,
             },
             "config_ref": str(config_ref) if config_ref is not None else None,
             "config_hash": config_hash,
@@ -133,6 +136,13 @@ class RunLoggerV2:
                 "meaning": STEP_INDEXING,
                 "first_recorded_step": 1,
                 "grid_file": _grid_pattern(self.num_steps),
+            },
+            "voting_rules": {
+                "names": list(getattr(model, "voting_rule_names", []) or []),
+                "impl_names": list(getattr(model, "voting_rule_impl_names", []) or []),
+                "selected_idx": int(self.ctx.rule_idx),
+                "selected_name": getattr(model, "voting_rule_name", None),
+                "selected_impl_name": getattr(model, "voting_rule_impl_name", None),
             },
             "artifacts": {
                 "steps": "steps.parquet",

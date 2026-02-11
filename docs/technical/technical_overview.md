@@ -1,9 +1,9 @@
 # Technical overview
 
-**DemocracySim** is a multi-agent simulation framework designed to examine democratic participation. 
-This project models agents (with personal interests forming majority-minority groups), environments 
-(evolving under the influence of the collective behavior of the agents), 
-and elections to analyze how voting rules influence participation, 
+**DemocracySim** is a multi-agent simulation framework designed to examine democratic participation.
+This project models agents (with personal interests forming majority-minority groups), environments
+(evolving under the influence of the collective behavior of the agents),
+and elections to analyze how voting rules influence participation,
 welfare, system dynamics and overall collective outcomes.
 
 Key features:
@@ -12,9 +12,20 @@ Key features:
 - **Grid-based environment** with wrap-around support (toroidal topology).
 - Explore societal outcomes under different voting rules.
 
+## Voting Rules (Primary Independent Variable)
+
+Experiments vary `rule_idx` (the voting rule) while keeping all other components fixed.
+Current implemented rules:
+
+- `majority_rule` (plurality/first-choice)
+- `approval_voting`
+- `utilitarian_rule` (minimize total disagreement)
+- `borda_rule` (positional scoring derived from per-voter orderings)
+
 ---
 
-### Features
+## Features
+
 - **Agents**:
   - Independently acting entities modeled with preferences, budgets, and decision-making strategies.
   - Can participate in elections, have personal preferences and limited information about surroundings.

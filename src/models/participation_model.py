@@ -3,7 +3,7 @@ import mesa
 import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
-from src.utils.social_welfare_functions import majority_rule, approval_voting
+from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
@@ -21,7 +21,8 @@ from src.utils.rng import (
 
 
 # Voting rules to be accessible by index
-social_welfare_functions = [majority_rule, approval_voting]
+social_welfare_functions = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
+social_welfare_function_short_names = ["Majority", "Approval", "Utilitarian", "Borda"]
 # Distance functions
 # (explicitly ordering-based)
 distance_functions = [spearman_fr_order, kendall_tau_order]
@@ -241,17 +242,21 @@ class ParticipationModel(mesa.Model):
         self._av_area_color_dst = self._preset_color_dst.copy()  # TODO: Deal with overlaps and size diffs
         self.global_color_dst = self._preset_color_dst.copy()
         # Elections
+        vr, vr_names, vr_name, vr_impl_names, vr_impl_name = self._get_voting_rule_config(rule_idx)
+        self.voting_rule = vr
+        self.voting_rule_names = vr_names
+        self.voting_rule_name = vr_name
+        # Implementation names are stored alongside display names so runs can be
+        # reproduced even if UI labels change.
+        self.voting_rule_impl_names = vr_impl_names
+        self.voting_rule_impl_name = vr_impl_name
         self.election_cost_rate = election_cost_rate
         # Reward scaling knobs
         self.reward_rate_common = float(reward_rate_common)
         self.reward_rate_personal = float(reward_rate_personal)
         self.reward_threshold_common = float(reward_threshold_common)
         self.reward_threshold_personal = float(reward_threshold_personal)
-        self.abstention_share = max(0.0, min(1.0, float(abstention_share)))
-
-        # Wrap voting rules so they use deterministic RNG
-        # Keep self.voting_rule as the base function for tests.
-        self.voting_rule = social_welfare_functions[rule_idx]
+        self.abstention_share = max(0.0, min(1.0, float(abstention_share)))       
         self.voting_rng = self.np_random
         self.distance_func = distance_functions[distance_idx]
         self.options = self.create_all_options(num_colors)
@@ -759,6 +764,26 @@ class ParticipationModel(mesa.Model):
             if r < cumulative_sum:
                 return int(color_idx)
         raise ValueError("Unexpected error in color_distribution.")
+
+    @staticmethod
+    def _get_voting_rule_config(rule_idx):
+        # Wrap voting rules so they use deterministic RNG
+        # Keep self.voting_rule as the base function for tests.
+        if rule_idx < 0 or rule_idx >= len(social_welfare_functions):
+            raise ValueError(f"rule_idx out of range: {rule_idx} (valid: 0..{len(social_welfare_functions)-1})")
+        vr = social_welfare_functions[rule_idx]
+        impl_names = [f.__name__ for f in social_welfare_functions]
+
+        # Display names (for UI): prefer short names if aligned; otherwise fallback.
+        if len(social_welfare_function_short_names) == len(social_welfare_functions):
+            display_names = social_welfare_function_short_names
+            display_name = social_welfare_function_short_names[rule_idx]
+        else:
+            display_names = impl_names
+            display_name = str(vr.__name__)
+
+        impl_name = str(vr.__name__)
+        return vr, display_names, display_name, impl_names, impl_name
 
 
 def get_color_distribution_function(color: int) -> Callable[

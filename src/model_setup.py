@@ -10,6 +10,7 @@ from src.models.participation_model import (
     ParticipationModel,
     distance_functions,
     social_welfare_functions,
+    social_welfare_function_short_names
 )
 from src.viz.factory import make_canvas, make_charts
 
@@ -89,7 +90,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "height": model_cfg.height,
         "width": model_cfg.width,
         "rule_idx": mesa.visualization.Slider(
-            name=f"Rule idx {[r.__name__ for r in social_welfare_functions]}",
+            name=f"Rule idx {social_welfare_function_short_names}",
             value=model_cfg.rule_idx,
             min_value=0,
             max_value=len(social_welfare_functions) - 1,

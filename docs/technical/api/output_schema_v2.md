@@ -22,9 +22,18 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
   `grid_0001.npy` may equal `grid_0000.npy` because no mutation is applied before step 1.
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
+## Voting rule identification (reproducibility)
+
+The *primary independent variable* for the thesis experiments is `rule_idx`.
+To make `rule_idx` unambiguous across code changes, schema v2 stores:
+
+- `meta.yaml`: `run.rule_idx`, `run.rule_name`, `run.rule_impl_name`
+- `static.json`: `voting_rules.names`, `voting_rules.impl_names`, plus the selected index/name
+
 ## Timing semantics (important)
 
 Recorded step `t` (where **t starts at 1**) corresponds to the election-time state:
+
 - The grid shown/used is the state after applying mutation from step `t-1` (for `t>1`).
 - Elections and rewards/learning happen on this state during step `t`.
 - No mutation occurs during step `t`; mutation from step `t` is applied at the start of step `t+1`.
@@ -37,12 +46,14 @@ Recorded step `t` (where **t starts at 1**) corresponds to the election-time sta
 ### Replay step 0
 
 Replay starts in a **grid-only step 0** state:
+
 - It loads `grids/grid_0000.npy` (if present) and shows it as the initial grid.
 - It does **not** populate model/area time series until the first replay `step()` call.
 
 ## Shared identifiers
 
 All Parquet tables include:
+
 - `run_seed` (int32): concrete RNG seed used for the run
 - `rule_idx` (int16): voting rule index used for the run
 
@@ -139,6 +150,7 @@ Vote signal table (participants only). This is the single source of
 | rank_3_oppose_score                      | float32 |                                                |
 
 **Notes:**
+
 - `votes.parquet` uses a fixed 3-rank wide layout to reduce row counts.
 - If fewer than 3 options exist, remaining rank_* fields should be null.
 

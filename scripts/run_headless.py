@@ -57,7 +57,7 @@ def run_once(run_id: int, cfg, out_dir: Path):
                     cfg_dump = cfg
                 yaml.safe_dump(cfg_dump, f)
         cfg_hash = hashlib.sha256(cfg_ref_path.read_text().encode("utf-8")).hexdigest()
-        v2.write_meta(cfg_for_run, config_ref=cfg_ref, config_hash=cfg_hash)
+        v2.write_meta(cfg_for_run, config_ref=cfg_ref, config_hash=cfg_hash, model=model)
         v2.attach_to_model(model)
 
         # Write initial (pre-election) grid snapshot for UI convenience.

@@ -8,7 +8,7 @@ from src.utils.representations import (
     validate_ordering,
     validate_distribution,
 )
-from src.utils.social_welfare_functions import majority_rule, approval_voting
+from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
 
 
 pytestmark = pytest.mark.phase1
@@ -45,7 +45,7 @@ def test_area_voted_ordering_is_valid_when_set() -> None:
         validate_ordering(np.asarray(area.voted_ordering, dtype=np.int64), int(model.num_colors))
 
 
-@pytest.mark.parametrize("rule", [majority_rule, approval_voting])
+@pytest.mark.parametrize("rule", [majority_rule, approval_voting, utilitarian_rule, borda_rule])
 def test_social_welfare_functions_return_option_ordering(rule) -> None:  # type: ignore[no-untyped-def]
     """Contract: social welfare functions map a ScoreVector table -> OptionOrdering."""
     # Small option count: C=3 => options=6
@@ -70,4 +70,3 @@ def test_estimate_real_distribution_handles_empty_known_cells() -> None:
     dist = np.asarray(dist, dtype=np.float64)
     validate_distribution(dist, int(model.num_colors))
     assert conf == 0.0
-
