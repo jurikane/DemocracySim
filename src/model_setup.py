@@ -242,13 +242,14 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=100,
             step=1,
         ),
-        "common_assets": mesa.visualization.Slider(
-            name="Initial common assets",
-            value=model_cfg.common_assets,
-            min_value=model_cfg.num_agents,
-            max_value=1000 * model_cfg.num_agents,
-            step=10,
-        ),
+        # Remove assets slider because assets are now relative and set to 100 per agent by default
+        # "common_assets": mesa.visualization.Slider(
+        #     name="Initial common assets",
+        #     value=model_cfg.common_assets if model_cfg.common_assets is not None,
+        #     min_value=model_cfg.num_agents,
+        #     max_value=1000 * model_cfg.num_agents,
+        #     step=10,
+        # ),
         "abstention_share": mesa.visualization.Slider(
             name="Abstention share (common)",
             value=model_cfg.abstention_share,

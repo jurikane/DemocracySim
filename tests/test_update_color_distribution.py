@@ -17,7 +17,7 @@ class TestUpdateColorDistribution(unittest.TestCase):
         # Force all cells to color 1
         for cell in area.cells:
             cell.color = 1
-        area._update_color_distribution()
+        area.update_color_distribution()
         new_dist = area._color_distribution
         # Assert that distribution has changed
         self.assertFalse(np.array_equal(old_dist, new_dist))

@@ -2,11 +2,12 @@ import random
 from pathlib import Path
 from datetime import datetime
 import yaml
+import hashlib
 from tqdm import tqdm
 import argparse
 import numpy as np
 
-from src.config.loader import load_config, get_project_root
+from src.config.loader import load_config, resolve_output_dir
 from src.model_setup import make_model
 from src.utils.metrics import get_grid_colors
 from src.logging.run_logger import RunLoggerV2
@@ -42,7 +43,21 @@ def run_once(run_id: int, cfg, out_dir: Path):
         rule_idx = int(getattr(model_cfg_for_run, "rule_idx", 0) or 0)
         v2 = RunLoggerV2(out_dir=out_dir, run_seed=run_seed, rule_idx=rule_idx, num_steps=n_steps, store_grid=store_grid)
         v2.write_static(model)
-        v2.write_meta(cfg_for_run)
+        cfg_ref = Path("..") / "config_used.yaml"
+        cfg_ref_path = (out_dir / cfg_ref).resolve()
+        if not cfg_ref_path.exists():
+            # For direct run_once usage (no batch_run), write a canonical config copy.
+            with cfg_ref_path.open("w") as f:
+                if hasattr(cfg, "model_dump"):
+                    cfg_dump = cfg.model_dump(mode="json")
+                elif hasattr(cfg, "dict"):
+                    import json
+                    cfg_dump = json.loads(cfg.json())
+                else:
+                    cfg_dump = cfg
+                yaml.safe_dump(cfg_dump, f)
+        cfg_hash = hashlib.sha256(cfg_ref_path.read_text().encode("utf-8")).hexdigest()
+        v2.write_meta(cfg_for_run, config_ref=cfg_ref, config_hash=cfg_hash)
         v2.attach_to_model(model)
 
         # Write initial (pre-election) grid snapshot for UI convenience.
@@ -76,31 +91,6 @@ def run_once(run_id: int, cfg, out_dir: Path):
     # NOTE: schema v2 meta.yaml has already been written above.
 
 
-def _resolve_output_base_dir(conf) -> Path:
-    """Return the base output folder for runs.
-
-    Rules:
-      - default: <project_root>/data/simulation_output
-      - if conf.output.directory is absolute: use as-is
-      - if conf.output.directory is relative: interpret relative to project root
-    """
-    project_root = get_project_root()
-    default_dir = project_root / "data" / "simulation_output"
-
-    output_cfg = getattr(conf, "output", None)
-    if output_cfg is None:
-        return default_dir
-
-    configured = getattr(output_cfg, "directory", None)
-    if configured is None:
-        return default_dir
-
-    candidate = Path(configured)
-    if candidate.is_absolute():
-        return candidate
-    return project_root / candidate
-
-
 def batch_run(config_file: str = None):
     """Run multiple simulation runs in batch mode based on the provided config.
     Attributes:
@@ -116,7 +106,7 @@ def batch_run(config_file: str = None):
         print(f"No base_seed specified in config; using random seed {base_seed}")
         setattr(sim_cfg, "base_seed", int(base_seed))
     # Determine base directory
-    base_out_dir = _resolve_output_base_dir(conf)
+    base_out_dir = resolve_output_dir(conf)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_root = base_out_dir / ts
     run_root.mkdir(parents=True, exist_ok=True)
@@ -124,10 +114,12 @@ def batch_run(config_file: str = None):
     with open(run_root / "config_used.yaml", "w") as f:
         # pydantic AppConfig -> dict (support v1/v2)
         if hasattr(conf, "model_dump"):
-            yaml.safe_dump(conf.model_dump(), f)
+            cfg_dump = conf.model_dump(mode="json")
+        #elif hasattr(conf, "dict"):
+        #    cfg_dump = conf.dict()
         else:
-            # Fallback:
-            yaml.safe_dump(conf, f)
+            cfg_dump = conf
+        yaml.safe_dump(cfg_dump, f)
     runs = int(getattr(sim_cfg, "runs", 1))
     for run_id in range(runs):
         this_out = run_root / f"run_{run_id}"

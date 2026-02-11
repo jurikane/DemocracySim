@@ -23,11 +23,12 @@ def test_satisfaction_modes_and_combination() -> None:
     agent.known_cells = [area0.cells[0], area0.cells[1]]
 
     # Global distribution is mean of areas
-    global_dist = (area0.color_distribution + area1.color_distribution) / 2.0
-    model._av_area_color_dst = global_dist
+    #global_dist = (area0.color_distribution + area1.color_distribution) / 2.0
+    #model._av_area_color_dst = global_dist
+    model.update_global_color_distribution()
 
     d_area = distribution_distance_l1(agent.personal_opt_dist, area0.color_distribution)
-    d_global = distribution_distance_l1(agent.personal_opt_dist, global_dist)
+    d_global = distribution_distance_l1(agent.personal_opt_dist, model.global_color_dst)
     d_knowledge = distribution_distance_l1(agent.personal_opt_dist, np.asarray([1.0, 0.0], dtype=np.float64))
 
     model.satisfaction_mode = "area"

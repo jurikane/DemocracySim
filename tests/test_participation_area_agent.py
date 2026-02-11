@@ -123,7 +123,7 @@ class TestAreaIntegration(unittest.TestCase):
         all_color_cells = self.model.color_cells
         rand_area.cells = random.sample(all_color_cells, len(rand_area.cells))
         # Run/test the update_color_distribution method
-        rand_area._update_color_distribution()
+        rand_area.update_color_distribution()
         new_dst = rand_area.color_distribution
         print(f"Area {rand_area.unique_id}s new color distribution: {new_dst}")
         # Check if the distribution has changed

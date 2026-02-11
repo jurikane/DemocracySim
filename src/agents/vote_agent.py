@@ -1,5 +1,4 @@
 from __future__ import annotations
-import warnings
 import numpy as np
 from typing import TYPE_CHECKING, cast, List, Optional
 from mesa import Agent
@@ -312,19 +311,11 @@ class VoteAgent(Agent):
         """Compute satisfaction value (distance) between personality and a target distribution."""
         personality = np.asarray(self.personality, dtype=np.float64)
         area_dist = np.asarray(area.color_distribution, dtype=np.float64)
-        # Compute current global average from areas (pre-election state).
-        areas = list(model.areas)
-        if areas:
-            sums = np.zeros(model.num_colors, dtype=np.float64)
-            for a in areas:
-                sums += np.asarray(a.color_distribution, dtype=np.float64)
-            global_av_dist = sums / float(len(areas))
-        else:
-            global_av_dist = area_dist
+        global_color_dst = np.asarray(model.global_color_dst, dtype=np.float64)
 
         mode = model.satisfaction_mode
         if mode == "global":
-            target = global_av_dist
+            target = global_color_dst
             sv = distribution_distance_l1(personality, target)
         elif mode == "area":
             sv = distribution_distance_l1(personality, area_dist)
@@ -332,7 +323,7 @@ class VoteAgent(Agent):
             target = self._knowledge_distribution(area)
             sv = distribution_distance_l1(personality, target)
         elif mode == "combination":
-            d_global = distribution_distance_l1(personality, global_av_dist)
+            d_global = distribution_distance_l1(personality, global_color_dst)
             d_area = distribution_distance_l1(personality, area_dist)
             d_knowledge = distribution_distance_l1(personality, self._knowledge_distribution(area))
             sv = (d_global + d_area + d_knowledge) / 3.0

@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import yaml
+import hashlib
 
 from src.logging.output_schema import (
     SCHEMA_NAME,
@@ -81,8 +82,18 @@ class RunLoggerV2:
     # -----------------
     # Metadata
     # -----------------
-    def write_meta(self, config: Any) -> None:
-        """Write meta.yaml with schema identifier and config dump."""
+    def write_meta(
+        self,
+        config: Any,
+        *,
+        config_ref: Optional[Path] = None,
+        config_hash: Optional[str] = None,
+    ) -> None:
+        """Write meta.yaml with schema identifier and config reference."""
+        if config_hash is None:
+            cfg_dump = _safe_config_dump(config)
+            cfg_yaml = yaml.safe_dump(cfg_dump)
+            config_hash = _hash_text(cfg_yaml)
         meta = {
             "schema": {
                 "name": SCHEMA_NAME,
@@ -93,7 +104,8 @@ class RunLoggerV2:
                 "run_seed": int(self.ctx.run_seed),
                 "rule_idx": int(self.ctx.rule_idx),
             },
-            "config": _safe_config_dump(config),
+            "config_ref": str(config_ref) if config_ref is not None else None,
+            "config_hash": config_hash,
         }
         with open(self.ctx.out_dir / "meta.yaml", "w") as f:
             yaml.safe_dump(meta, f)
@@ -576,13 +588,18 @@ def _safe_config_dump(config: Any) -> Dict[str, Any]:
     # Pydantic v2
     if hasattr(config, "model_dump"):
         try:
-            return config.model_dump()
+            return config.model_dump(mode="json")
         except (TypeError, ValueError):
             return {}
     # Pydantic v1
     if hasattr(config, "dict"):
         try:
-            return config.dict()
+            import json
+            return json.loads(config.json())
         except (TypeError, ValueError):
             return {}
     return {}
+
+
+def _hash_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()

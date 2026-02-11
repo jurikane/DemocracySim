@@ -30,16 +30,27 @@ distance_functions = [spearman_fr_order, kendall_tau_order]
 class CustomScheduler(mesa.time.BaseScheduler):
     def step(self):
         """
-        Execute the step function for all area- and cell-agents by type,
-        first for Areas then for ColorCells.
+        Execute the step function for all area-agents.
         """
         model = self.model
         if TYPE_CHECKING:
             model = cast(ParticipationModel, model)
+        # TODO: Logg step 0 as initial state
         self.steps += 1
         self.time += 1
-        # Step through Area agents first (and in "random" order)
+        # Step through Area agents (in "random" order)
         model.random.shuffle(model.areas)
+        # Mutation happens before stepping.
+        # Before the first step, no election has taken place, then no mutation.
+        if self.steps > 1:
+            for area in model.areas:
+                # Mutation applies changes of the last election (previous step).
+                area.mutate_cells()
+        if not model.no_overlap:  # There may be overlap
+            for area in model.areas:
+                area.update_color_distribution()
+        # Update color distribution (colrs may have mutated)
+        model.update_global_color_distribution()
         for area in model.areas:
             area.step()
         # TODO: add global election?
@@ -112,6 +123,7 @@ class ParticipationModel(mesa.Model):
             non-uniformity among election territories.
         common_assets (float): Total resources to be distributed among all agents.
         av_area_color_dst (ndarray): Current (area)-average color distribution.
+        global_color_dst (ndarray): Current global color distribution across the grid.
         election_cost_rate (float): Cost/effort associated with participating in elections (relative to assets).
         known_cells (int): Number of cells each agent knows the color of.
         datacollector (mesa.DataCollector): A tool for collecting data
@@ -120,6 +132,7 @@ class ParticipationModel(mesa.Model):
             step function.
         _preset_color_dst (ndarray): A predefined global color distribution
             (set randomly) that affects cell initialization globally.
+        _no_overlap (bool): A flag indicating areas don't overlap. Speeds up certain computations if True.
     """
 
     def __init__(
@@ -131,7 +144,6 @@ class ParticipationModel(mesa.Model):
         num_personality_groups,
         mu,
         election_impact_on_mutation,
-        common_assets,
         known_cells,
         num_areas,
         av_area_height,
@@ -165,6 +177,7 @@ class ParticipationModel(mesa.Model):
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
         satisfaction_baseline_alpha: float = 0.1,
         personal_opt_dist_concentration: float = 1.0,
+        common_assets=None
     ):
         super().__init__()
         self._seed = seed
@@ -213,7 +226,6 @@ class ParticipationModel(mesa.Model):
         # Step control
         self.max_steps: Optional[int] = max_steps
         self.running: bool = True
-        # TODO clean up class (public/private variables)
         self.colors = np.arange(num_colors)
         # Create a scheduler that goes through areas first then color cells
         self.scheduler = CustomScheduler(self)
@@ -226,7 +238,8 @@ class ParticipationModel(mesa.Model):
         self._horizontal_bias = self.random.uniform(0, 1)
         # Color distribution (global)
         self._preset_color_dst = self.create_color_distribution(heterogeneity)
-        self._av_area_color_dst = self._preset_color_dst  # TODO: Deal with overlaps
+        self._av_area_color_dst = self._preset_color_dst.copy()  # TODO: Deal with overlaps and size diffs
+        self.global_color_dst = self._preset_color_dst.copy()
         # Elections
         self.election_cost_rate = election_cost_rate
         # Reward scaling knobs
@@ -244,7 +257,7 @@ class ParticipationModel(mesa.Model):
         self.options = self.create_all_options(num_colors)
         # Simulation variables
         self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
-        self.common_assets = float(common_assets)
+        self.common_assets = 100*num_agents if common_assets is None else common_assets
         # Election impact factor on color mutation through a probability array
         self.color_probs = self.init_color_probs(election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing orderings
@@ -266,6 +279,7 @@ class ParticipationModel(mesa.Model):
         self.av_area_height = av_area_height
         self.av_area_width = av_area_width
         self.area_size_variance = area_size_variance
+        self._no_overlap = False  # True if areas are instantiated without overlap (speeds up things)
         # Adjust the color pattern to make it less random (see color patches)
         self.adjust_color_pattern(color_patches_steps, patch_power)
         # Create areas
@@ -290,14 +304,6 @@ class ParticipationModel(mesa.Model):
         return len(self.colors)
 
     @property
-    def av_area_color_dst(self) -> np.ndarray:
-        return self._av_area_color_dst
-
-    @av_area_color_dst.setter
-    def av_area_color_dst(self, value) -> None:
-        self._av_area_color_dst = value
-
-    @property
     def num_agents(self) -> int:
         return len(self.voting_agents)
 
@@ -308,6 +314,18 @@ class ParticipationModel(mesa.Model):
     @property
     def preset_color_dst(self) -> np.ndarray:
         return self._preset_color_dst
+
+    @property
+    def av_area_color_dst(self) -> np.ndarray:
+        return self._av_area_color_dst
+
+    @av_area_color_dst.setter
+    def av_area_color_dst(self, value) -> None:
+        self._av_area_color_dst = value
+
+    @property
+    def no_overlap(self) -> bool:
+        return self._no_overlap
 
     def _initialize_color_cells(self, id_start=0) -> None:
         """
@@ -421,6 +439,14 @@ class ParticipationModel(mesa.Model):
         # Calculate the number of areas in each direction
         nr_areas_x = self.grid.width // self.av_area_width
         nr_areas_y = self.grid.height // self.av_area_height
+        self._no_overlap = (
+            self.area_size_variance == 0
+            and self.av_area_width > 0
+            and self.av_area_height > 0
+            and self.width % self.av_area_width == 0
+            and self.height % self.av_area_height == 0
+            and self.num_areas == nr_areas_x * nr_areas_y
+        )
         # Calculate the distance between the areas
         area_x_dist = self.grid.width // nr_areas_x
         area_y_dist = self.grid.height // nr_areas_y
@@ -432,6 +458,8 @@ class ParticipationModel(mesa.Model):
         for _ in range(missing):
             additional_x.append(self.random.randrange(self.grid.width))
             additional_y.append(self.random.randrange(self.grid.height))
+        if missing > 0:
+            self._no_overlap = False
         # Create the area's ids
         a_ids = iter(range(self.num_areas))
         # Initialize all areas
@@ -549,12 +577,16 @@ class ParticipationModel(mesa.Model):
         # Conduct elections in the areas
         # and then mutate the color cells according to election outcomes
         self.scheduler.step()
-        # Update the global color distribution
-        self.update_av_area_color_dst()
-        # Collect data for monitoring and data analysis (post-mutation).
+        # Collect data for monitoring and data analysis (pre-mutation).
         self.datacollector.collect(self)
         # Enforce step limit after step executed
         if self.max_steps is not None and self.scheduler.steps >= self.max_steps:
+            # TODO: Apply one final mutation round (from previous election)
+            #for area in self.areas:
+            #    area.mutate_cells()
+            #self.update_global_color_distribution()
+            # TODO: logg final state after mutation
+            #self.datacollector.collect(self)
             self.running = False
 
     def adjust_color_pattern(self, color_patches_steps: int, patch_power: float):
@@ -628,10 +660,12 @@ class ParticipationModel(mesa.Model):
         return cell.color  # Return the cell's own color if no consensus
 
 
-    def update_av_area_color_dst(self):
+    def update_av_area_color_dst(self) -> np.ndarray:
         """
         This method updates the av_area_color_dst attribute of the model.
-        Beware: On overlapping areas, cells are counted several times.
+        Beware: Overlaps and size difference of areas is not currently accounted for,
+        so this is a simple average across areas meant only for non-overlapping,
+        equally sized area distributions.
         """
         sums = np.zeros(self.num_colors)
         for area in self.areas:
@@ -639,6 +673,26 @@ class ParticipationModel(mesa.Model):
                 sums += area.color_distribution
         # Return the average color distributions
         self.av_area_color_dst = sums / self.num_areas
+        return self.av_area_color_dst
+
+
+    def update_global_color_distribution(self) -> None:
+        """
+        This method updates the global color distribution based on the current
+        state of the grid. It calculates the distribution of colors across all
+        color cells and normalizes it to sum to 1.
+        """
+        if self.area_size_variance == 0 and self._no_overlap:
+            self.global_color_dst = self.update_av_area_color_dst()
+            return
+        elif self.width * self.height > 1e+5:
+            print("Warning: Updating global color distribution on large grids may be slow.")
+        color_counts = np.zeros(self.num_colors)
+        for cell in self.color_cells:
+            color_counts[cell.color] += 1
+        total_cells = len(self.color_cells)
+        if total_cells > 0:
+            self.global_color_dst = color_counts / total_cells
 
     @staticmethod
     def pers_dist(size: int, *, rng: np.random.Generator) -> np.ndarray:
@@ -704,7 +758,7 @@ def get_color_distribution_function(color: int) -> Callable[
     Returns:
         Callable[[ParticipationModel], float]: Extractor.
     """
-    return lambda m: float(m.av_area_color_dst[color])
+    return lambda m: float(m.global_color_dst[color])
 
 
 def get_area_voter_turnout(area: Area) -> Optional[float]:

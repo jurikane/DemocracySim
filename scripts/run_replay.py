@@ -145,16 +145,21 @@ def replay_main():
         meta = yaml.safe_load(meta_path.read_text())
 
     # Start replay server
-    if meta is not None and "config" in meta:
+    if meta is not None and "config_ref" in meta:
         try:
-            appcfg = AppConfig.model_validate(meta["config"])
+            cfg_ref = meta.get("config_ref")
+            if not isinstance(cfg_ref, str) or not cfg_ref:
+                raise ValueError("meta.yaml has invalid config_ref")
+            cfg_path = (run_dir / cfg_ref).resolve()
+            cfg = yaml.safe_load(cfg_path.read_text())
+            appcfg = AppConfig.model_validate(cfg)
             server = make_replay_server(appcfg, run_dir)
             print("Starting replay server on http://127.0.0.1:8521 ...")
             server.launch(open_browser=True)
         except Exception as e:
             print("Could not start replay server:", e)
     else:
-        print("meta.yaml missing or has no config; cannot start server.")
+        print("meta.yaml missing or has no config_ref; cannot start server.")
 
 
 if __name__ == '__main__':

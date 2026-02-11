@@ -40,6 +40,33 @@ def get_project_subfolder(*subfolders, create_if_missing=False) -> Path:
     return path
 
 
+def resolve_output_dir(conf) -> Path:
+    """Resolve the output base directory from AppConfig.
+
+    Rules:
+      - default: <project_root>/data/simulation_output
+      - if conf.output.directory is absolute: use as-is
+      - if conf.output.directory is relative: interpret relative to project root
+      - expand ~ and environment variables
+    """
+    project_root = get_project_root()
+    default_dir = project_root / "data" / "simulation_output"
+
+    output_cfg = getattr(conf, "output", None)
+    if output_cfg is None:
+        return default_dir
+
+    configured = getattr(output_cfg, "directory", None)
+    if configured is None:
+        return default_dir
+
+    configured_str = os.path.expandvars(os.path.expanduser(str(configured)))
+    candidate = Path(configured_str)
+    if candidate.is_absolute():
+        return candidate
+    return project_root / candidate
+
+
 def load_config(config_file=None) -> AppConfig:
     """
     Load configuration from a YAML file.

@@ -107,11 +107,14 @@ class Area(Agent):
         which determines which cells and agents on the grid belong to the area.
         The cells and agents are added to the area's lists of cells and agents.
 
+        This is write-once. Area membership is built when idx_field is set.
+        If agents are added to the area later, they must be registered manually.
+
         Args:
             pos: (x, y) representing the areas top-left coordinates.
         """
-        # TODO: Check - isn't it better to make sure agents are added to the area when they are created?
-        # TODO -- There is something wrong here!!! (Agents are not added to the areas)
+        if self._idx_field is not None:  # Write-once.
+            raise RuntimeError("idx_field already set; areas are static")
         if TYPE_CHECKING:  # Type hint for IDEs
             self.model = cast(ParticipationModel, self.model)
         try:
@@ -151,7 +154,7 @@ class Area(Agent):
                         or y_area == self._height - 1):
                     cell.is_border_cell = True
         self._idx_field = (adjusted_x, adjusted_y)
-        self._update_color_distribution()
+        self.update_color_distribution()
         self._update_personality_group_distribution()
 
     def _set_dimensions(self, width, height, size_var):
@@ -474,7 +477,7 @@ class Area(Agent):
             a.add_common_reward(common_component)
             a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
 
-    def _update_color_distribution(self) -> None:
+    def update_color_distribution(self) -> None:
         """
         Recalculates the area's color distribution and updates the _color_distribution attribute.
 
@@ -712,7 +715,7 @@ class Area(Agent):
         # Take some number of cells to mutate (i.e., 5 %)
         n_to_mutate = int(self.model.mu * self.num_cells)
         # TODO/Idea: What if the voter_turnout determines the mutation rate?
-        cells_to_mutate = self.random.sample(self.cells, n_to_mutate)
+        cells_to_mutate = self.model.random.sample(self.cells, n_to_mutate)
         # Use voted ordering to pick colors in descending order
         # To pre-select colors for all cells to mutate
         # TODO: Think about this: should we take local color-structure
@@ -725,7 +728,10 @@ class Area(Agent):
         for cell, color in zip(cells_to_mutate, colors):
             cell.color = color
         # Important: Update the color distribution (because colors changed)
-        self._update_color_distribution()
+        if not self.model.no_overlap:  # There may be overlap
+            print("Warning: there may be overlapping areas; color distribution has to be updated in accordance.")
+            return
+        self.update_color_distribution()
 
     def step(self) -> None:
         """
@@ -752,4 +758,4 @@ class Area(Agent):
                 alpha = float(self.model.satisfaction_baseline_alpha)
                 agent.satisfaction_baseline = (1.0 - alpha) * baseline + alpha * sv
         self.conduct_election()
-        self.mutate_cells()
+        # self.mutate_cells()

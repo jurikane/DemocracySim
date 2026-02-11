@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import yaml
-
 from scripts.run_headless import run_once
 from src.config.loader import load_config
-from src.config.schema import AppConfig
 from src.replay.replay_server import ReplayModel
 from src.viz.visualisation_elements import AreaDiagnosticsPanel
+from tests.utils_meta import load_appcfg_from_meta
 
 
 def test_replay_area_stats_includes_area_0(tmp_path):
@@ -24,8 +22,7 @@ def test_replay_area_stats_includes_area_0(tmp_path):
 
     run_once(0, conf, out_dir=run_dir)
 
-    meta = yaml.safe_load((run_dir / "meta.yaml").read_text())
-    appcfg = AppConfig.model_validate(meta["config"])
+    appcfg = load_appcfg_from_meta(run_dir)
 
     model = ReplayModel(appcfg=appcfg, run_dir=run_dir)
 

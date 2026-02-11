@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import yaml
-
 from scripts.run_headless import run_once
 from src.config.loader import load_config
-from src.config.schema import AppConfig
 from src.replay.replay_server import ReplayModel
+from tests.utils_meta import load_appcfg_from_meta
 
 
 def test_replay_logs_and_exposes_area_giniindex(tmp_path):
@@ -29,8 +27,7 @@ def test_replay_logs_and_exposes_area_giniindex(tmp_path):
     assert not step1.empty
     assert 'gini_index' in step1.columns
 
-    meta = yaml.safe_load((run_dir / 'meta.yaml').read_text())
-    appcfg = AppConfig.model_validate(meta['config'])
+    appcfg = load_appcfg_from_meta(run_dir)
 
     m = ReplayModel(appcfg=appcfg, run_dir=run_dir)
     # ReplayModel starts at step 0 (grid only). Advance to step=1.

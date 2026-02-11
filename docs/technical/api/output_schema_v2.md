@@ -10,7 +10,8 @@ This document is the human-readable contract for the on-disk outputs produced by
 
 Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 
-- `meta.yaml` – config + seed + schema metadata
+- `meta.yaml` – schema + run metadata, plus config reference
+- `config_used.yaml` – canonical batch config (stored at batch root; `meta.yaml` points to it via `config_ref`)
 - `static.json` – static model info (grid size, personality_groups, file patterns)
 - `steps.parquet`
 - `area_steps.parquet`

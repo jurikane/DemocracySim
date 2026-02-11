@@ -67,15 +67,15 @@ class TestParticipationModelUnit(unittest.TestCase):
     # --- Functional behavior ---
 
     def test_step_updates_model(self):
-        before = self.model.av_area_color_dst.copy()
+        before = self.model.global_color_dst.copy()
         self.model.step()
-        after = self.model.av_area_color_dst
+        after = self.model.global_color_dst
         self.assertEqual(len(before), len(after))
         np.testing.assert_almost_equal(after.sum(), 1.0, decimal=6)
 
-    def test_update_av_area_color_dst(self):
-        self.model.update_av_area_color_dst()
-        dst = self.model.av_area_color_dst
+    def test_update_global_color_distribution(self):
+        self.model.update_global_color_distribution()
+        dst = self.model.global_color_dst
         np.testing.assert_almost_equal(dst.sum(), 1.0)
 
     def test_init_color_probs(self):

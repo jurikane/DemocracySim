@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import yaml
 import numpy as np
 
 from scripts.run_headless import run_once
 from src.config.loader import load_config
-from src.config.schema import AppConfig
 from src.replay.replay_server import ReplayModel
+from tests.utils_meta import load_appcfg_from_meta
 
 
 def test_replay_loads_grid_with_flexible_filenames(tmp_path):
@@ -32,8 +31,7 @@ def test_replay_loads_grid_with_flexible_filenames(tmp_path):
     assert (run_dir / "grids" / f"grid_{1:0{pad}d}.npy").exists()
     # grid_0000.npy may also exist (pre-election snapshot)
 
-    meta = yaml.safe_load((run_dir / "meta.yaml").read_text())
-    appcfg = AppConfig.model_validate(meta["config"])
+    appcfg = load_appcfg_from_meta(run_dir)
 
     m = ReplayModel(appcfg=appcfg, run_dir=run_dir)
     # Ensure at least one step applied and that colors are not all default 0
