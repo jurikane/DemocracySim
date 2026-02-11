@@ -452,12 +452,26 @@ class ParticipationModel(mesa.Model):
         area_y_dist = self.grid.height // nr_areas_y
         x_coords = range(0, self.grid.width, area_x_dist)
         y_coords = range(0, self.grid.height, area_y_dist)
+        reserved = {(int(x), int(y)) for x in x_coords for y in y_coords}
         # Add additional areas if necessary (num_areas not a square number)
         additional_x, additional_y = [], []
         missing = self.num_areas - len(x_coords) * len(y_coords)
         for _ in range(missing):
-            additional_x.append(self.random.randrange(self.grid.width))
-            additional_y.append(self.random.randrange(self.grid.height))
+            # Avoid placing the "additional" area exactly on the regular grid anchors;
+            # otherwise tests/diagnostics can't distinguish them and we may duplicate placements.
+            for _attempt in range(1000):
+                rx = int(self.random.randrange(self.grid.width))
+                ry = int(self.random.randrange(self.grid.height))
+                if (rx, ry) not in reserved:
+                    reserved.add((rx, ry))
+                    additional_x.append(rx)
+                    additional_y.append(ry)
+                    break
+            else:
+                raise RuntimeError("Failed to place all areas. Grid may be too small or num_areas too large.")
+                # Fallback: accept any random coordinate (extremely unlikely).
+                #additional_x.append(int(self.random.randrange(self.grid.width)))
+                #additional_y.append(int(self.random.randrange(self.grid.height)))
         if missing > 0:
             self._no_overlap = False
         # Create the area's ids

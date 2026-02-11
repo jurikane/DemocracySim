@@ -19,7 +19,7 @@ def _footrule_ordering(ordering_a: np.ndarray, ordering_b: np.ndarray) -> float:
     if n % 2 == 0:
         max_dist = n**2 / 2
     else:
-        max_dist = n * (n - 1) / 2
+        max_dist = (n**2 - 1) / 2
     return dist / max_dist if max_dist > 0 else 0.0
 
 

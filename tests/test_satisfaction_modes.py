@@ -7,7 +7,18 @@ from tests.factory import create_test_model
 
 
 def test_satisfaction_modes_and_combination() -> None:
-    model, _ = create_test_model(num_agents=50, num_colors=2, num_areas=2, num_personality_groups=2)
+    # Use a deterministic non-overlapping geometry so each area almost surely has agents.
+    model, _ = create_test_model(
+        num_agents=50,
+        num_colors=2,
+        num_areas=2,
+        num_personality_groups=2,
+        height=10,
+        width=10,
+        av_area_height=10,
+        av_area_width=5,
+        area_size_variance=0.0,
+    )
     area0 = model.areas[0]
     area1 = model.areas[1]
     agent = area0.agents[0]

@@ -342,13 +342,24 @@ class VoteAgent(Agent):
         Returns:
             tuple[np.array, float]: (distribution, confidence)
         """
-        known_colors = np.array([cell.color for cell in self.known_cells])
+        known_colors = np.asarray(
+            [int(c.color) for c in (self.known_cells or []) if c is not None],
+            dtype=np.int16,
+        )
+        if known_colors.size == 0:
+            # No information -> uniform estimate, zero confidence.
+            c = int(self.model.num_colors)
+            if c > 0:
+                self.est_real_dist[:] = 1.0 / c
+            self.confidence = 0.0
+            return self.est_real_dist, self.confidence
         # Get the unique color ids present and count their occurrence
         unique, counts = np.unique(known_colors, return_counts=True)
         # Update the est_real_dist and confidence values of the agent
         self.est_real_dist.fill(0)  # To ensure the ones not in unique are 0
-        self.est_real_dist[unique] = counts / known_colors.size
-        self.confidence = len(self.known_cells) / area.num_cells
+        self.est_real_dist[unique] = counts / float(known_colors.size)
+        denom = float(area.num_cells) if getattr(area, "num_cells", 0) else 0.0
+        self.confidence = float(known_colors.size / denom) if denom > 0 else 0.0
         return self.est_real_dist, self.confidence
 
     def participation_probability(self) -> float:

@@ -87,10 +87,13 @@ def spearman_footrule_ranks(rank_arr_1: FloatArray, rank_arr_2: FloatArray) -> f
         validate_rank_vector(rank_arr_1, n)
         validate_rank_vector(rank_arr_2, n)
     distance = np.sum(np.abs(rank_arr_1 - rank_arr_2))
+    # Maximum Spearman footrule distance:
+    # - even n: n^2 / 2
+    # - odd  n: (n^2 - 1) / 2
     if n % 2 == 0:
         max_dist = n**2 / 2
     else:
-        max_dist = n * (n - 1) / 2
+        max_dist = (n**2 - 1) / 2
     return distance / max_dist if max_dist > 0 else 0.0
 
 

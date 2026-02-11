@@ -50,6 +50,20 @@ def validate_score_vector(x: np.ndarray, n: int | None = None) -> None:
         raise ValueError("score vector must be finite")
 
 
+def validate_score_vector_unit_interval(x: np.ndarray, n: int | None = None, *, tol: float = 1e-6) -> None:
+    """Validate ScoreVector with thesis contract bounds: values in [0,1].
+
+    Motivation: social welfare functions assume a comparable score scale and the
+    simulation should not allow out-of-range values to silently skew outcomes.
+    """
+    arr = np.asarray(x, dtype=np.float64)
+    validate_score_vector(arr, n)
+    lo = float(arr.min(initial=0.0))
+    hi = float(arr.max(initial=0.0))
+    if lo < -tol or hi > 1.0 + tol:
+        raise ValueError("score vector values must be in [0, 1]")
+
+
 def validate_distribution(x: np.ndarray, n: int | None = None, tol: float = 1e-6) -> None:
     """Validate Distribution: index=option id, values >=0, sums to 1."""
     arr = np.asarray(x, dtype=np.float64)

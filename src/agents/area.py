@@ -5,8 +5,8 @@ from mesa import Agent
 if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell
-    from src.agents.vote_agent import VoteAgent
-from src.utils.representations import scores_to_ordering
+from src.agents.vote_agent import VoteAgent
+from src.utils.representations import scores_to_ordering, validate_score_vector_unit_interval
 # from src.utils.rng import np_rng_debug
 
 
@@ -403,7 +403,11 @@ class Area(Agent):
                 agent.set_election_fee(cost)  # Fee will be applied when rewards are distributed
                 self._election_fee_pool += cost
                 # Ask the agent for her preference
-                scores = agent.vote(area=self)
+                scores = np.asarray(agent.vote(area=self), dtype=np.float32)
+                # Representation contract: VoteAgent.vote returns a 1D ScoreVector
+                # over *options* (not colors). Fail fast instead of silently
+                # treating malformed votes as "no participants".
+                validate_score_vector_unit_interval(scores, int(self.model.options.shape[0]))
                 preference_profile.append(scores)
 
                 # Emit participant vote context if a sink is configured.
