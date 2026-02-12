@@ -10,8 +10,9 @@ from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors)
 from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
-                                get_area_dist_to_reality, get_area_color_distribution,
-                                get_election_results, get_area_gini_index)
+                                get_area_dist_to_reality, get_election_results,
+                                get_area_color_distribution, get_area_gini_index,
+                                is_learning_rate, ensure_rate_0_1, ensure_choice)
 from src.utils.rng import (
     set_seed,
     np_rng,
@@ -188,33 +189,37 @@ class ParticipationModel(mesa.Model):
         # Store scalar params early because agent init depends on them.
         self.known_cells = known_cells  # Integer
         # Adaptive participation learning parameters (global per agent)
-        self.participation_alpha = float(participation_alpha)  # Learning rate
+        self.participation_alpha = is_learning_rate(participation_alpha)
         self.participation_beta = float(participation_beta)  # Sensitivity
+        if not np.isfinite(self.participation_beta) or self.participation_beta < 0.0:
+            raise ValueError("participation_beta must be finite and >= 0.")
         self.participation_init_q = float(participation_init_q)
+        if not np.isfinite(self.participation_init_q):
+            raise ValueError("participation_init_q must be finite.")
         self.participation_q_max = float(participation_q_max)
+        if not np.isfinite(self.participation_q_max) or self.participation_q_max < 0.0:
+            raise ValueError("participation_q_max must be finite and >= 0.")
         self.bias_toward_participation = float(bias_toward_participation)
-        self.participation_baseline_alpha = float(participation_baseline_alpha)
-        if not (0.0 <= self.participation_baseline_alpha <= 1.0):
-            raise ValueError("participation_baseline_alpha must be in [0,1].")
+        if not np.isfinite(self.bias_toward_participation) or not (-1.0 <= self.bias_toward_participation <= 1.0):
+            raise ValueError("bias_toward_participation must be finite and in [-1,1].")
+        self.participation_baseline_alpha = ensure_rate_0_1(
+            "participation_baseline_alpha", participation_baseline_alpha
+        )
         # Adaptive altruism learning parameters (global per agent)
-        self.altruism_alpha = float(altruism_alpha)  # Learning rate. How fast q changes in response to the signal.
+        self.altruism_alpha = is_learning_rate(altruism_alpha)
         self.altruism_init = float(altruism_init)
         self.altruism_clip_min = float(altruism_clip_min)
         self.altruism_clip_max = float(altruism_clip_max)
         self.altruism_learning = bool(altruism_learning)
-        self.altruism_static = float(altruism_static)
-        if not (0.0 <= self.altruism_static <= 1.0):
-            raise ValueError("altruism_static must be in [0,1].")
-        self.satisfaction_mode = str(satisfaction_mode)
-        if self.satisfaction_mode not in {"global", "area", "knowledge", "combination"}:
-            raise ValueError(
-                "satisfaction_mode must be one of: global, area, knowledge, combination."
-            )
-        self.satisfaction_baseline_alpha = float(satisfaction_baseline_alpha)
-        if not (0.0 <= self.satisfaction_baseline_alpha <= 1.0):
-            raise ValueError("satisfaction_baseline_alpha must be in [0,1].")
+        self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
         self.personal_opt_dist_concentration = personal_opt_dist_concentration
-
+        self.satisfaction_mode = ensure_choice("satisfaction_mode",
+            str(satisfaction_mode),
+            {"global", "area", "knowledge", "combination"},
+        )
+        self.satisfaction_baseline_alpha = ensure_rate_0_1(
+            "satisfaction_baseline_alpha", satisfaction_baseline_alpha
+        )
         # Initialize RNGs early (centralized)
         set_seed(seed)
         self.np_random = np_rng()

@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional
 from src.utils.metrics import gini_index_0_100
 from src.agents import Area
+import numpy as np
 
 
 def is_rate_btw_0_and_1(value, nan_allowed=False) -> float | None:
@@ -19,6 +20,18 @@ def is_rate_btw_0_and_1(value, nan_allowed=False) -> float | None:
         return float(value)
     raise ValueError(f"Rate value must be in [0,1]. Got: {value} type={type(value)}")
 
+def is_learning_rate(value) -> float:
+    """
+    Helper function to check if a value is a valid learning rate >= 0.
+    Args:
+    - value: The value to check.
+    Returns:
+    - The value if it's a valid learning rate.
+    """
+    # Learning rate. How fast q changes in response to the signal.
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError("Learning rates alpha must be finite and >= 0.")
+    return float(value)
 
 def get_area_voter_turnout(area: Area) -> Optional[float]:
     return area.voter_turnout if isinstance(area, Area) else None
@@ -51,3 +64,18 @@ def get_area_gini_index(area: Area) -> Optional[float]:
         return None
     assets = [a.assets for a in area.agents]
     return float(gini_index_0_100(assets))
+
+def ensure_rate_0_1(name: str, value, *, allow_none: bool = False) -> float | None:
+    """Return value as float if in [0,1]; optionally allow None."""
+    if value is None and allow_none:
+        return None
+    if isinstance(value, (int, float)) and 0.0 <= value <= 1.0:
+        return float(value)
+    raise ValueError(f"{name} must be in [0,1]. Got: {value} type={type(value)}")
+
+
+def ensure_choice(name: str, value, allowed: set[str]) -> str:
+    """Return value if in allowed set; otherwise raise ValueError."""
+    if value in allowed:
+        return value
+    raise ValueError(f"{name} must be one of: {', '.join(sorted(allowed))}.")
