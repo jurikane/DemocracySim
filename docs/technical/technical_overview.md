@@ -54,6 +54,13 @@ Implemented distances (normalized to `[0,1]`):
   - Structured as a grid divided into "territories" or "areas."
   - A single unit of the grid is a "cell" or "field."
   - Each cell has a specific "color" representing a state. Elections influence these states, and areas mutate over time.
+  - The initial grid can be made less i.i.d.-random via an initialization-only “patching” stage:
+    `color_patches_steps` controls how many full-grid smoothing passes are applied (0 disables patching),
+    and `patch_power` controls how strongly patching prefers local neighbor consensus (larger values)
+    versus drawing colors from the preset distribution (smaller values).
+  - `global_color_dst` is the (normalized) global color distribution computed from the grid state at election time.
+    For performance, `update_global_color_distribution()` may avoid scanning the entire grid when areas are disjoint
+    by aggregating cached per-area color counts plus a cached contribution from uncovered (static) cells.
 
 - **Metrics**:
   - Participation rates, altruism factors, and metrics such as the Gini Index to analyze inequalities and long-term trends.

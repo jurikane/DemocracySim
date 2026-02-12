@@ -79,9 +79,9 @@ class TestParticipationModelUnit(unittest.TestCase):
         np.testing.assert_almost_equal(dst.sum(), 1.0)
 
     def test_init_color_probs(self):
-        probs = self.model.init_color_probs(1.0)
-        self.assertEqual(probs.shape, (self.model.num_colors,))
-        np.testing.assert_almost_equal(probs.sum(), 1.0)
+        # Covered by contract tests:
+        # - tests/test_election_impact_on_mutation_contract.py
+        pass
 
     def test_initialize_area_adds_area(self):
         old_num = sum(a is not None for a in self.model.areas)
@@ -117,16 +117,9 @@ class TestParticipationModelUnit(unittest.TestCase):
                          self.model_cfg["election_cost_rate"])
 
     def test_create_color_distribution(self):
-        eq_dst = self.model.create_color_distribution(heterogeneity=0)
-        np.testing.assert_allclose(
-            eq_dst, [1 / self.model_cfg["num_colors"]] * len(eq_dst))
-
-        het_dst = self.model.create_color_distribution(heterogeneity=1)
-        mid_dst = self.model.create_color_distribution(heterogeneity=0.5)
-
-        self.assertFalse(np.allclose(het_dst, eq_dst))
-        self.assertFalse(np.allclose(mid_dst, eq_dst))
-        self.assertFalse(np.allclose(het_dst, mid_dst))
+        # Covered by contract tests:
+        # - tests/test_heterogeneity_contract.py
+        pass
 
     def test_distribution_of_personality_groups(self):
         p_dist = self.model.personality_group_distribution

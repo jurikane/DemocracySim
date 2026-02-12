@@ -79,3 +79,19 @@ def ensure_choice(name: str, value, allowed: set[str]) -> str:
     if value in allowed:
         return value
     raise ValueError(f"{name} must be one of: {', '.join(sorted(allowed))}.")
+
+
+def ensure_int_ge_0(name: str, value) -> int:
+    """Return value as int if it is an integer >= 0 (bool is rejected)."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an int >= 0. Got: {value} type={type(value)}")
+    if value < 0:
+        raise ValueError(f"{name} must be an int >= 0. Got: {value}")
+    return int(value)
+
+
+def ensure_finite_ge_0(name: str, value) -> float:
+    """Return value as float if it is finite and >= 0."""
+    if not isinstance(value, (int, float)) or not np.isfinite(value) or float(value) < 0.0:
+        raise ValueError(f"{name} must be finite and >= 0. Got: {value} type={type(value)}")
+    return float(value)

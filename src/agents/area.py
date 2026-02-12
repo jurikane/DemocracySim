@@ -36,6 +36,8 @@ class Area(Agent):
         self.cells: List["ColorCell"] = []
         self._idx_field = None  # An indexing position of the area in the grid
         self._color_distribution = np.zeros(model.num_colors) # Initialize to 0
+        # Canonical integer counts (distribution is derived).
+        self._color_counts = np.zeros(model.num_colors, dtype=np.int64)
         self._voted_ordering = None
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
@@ -66,6 +68,11 @@ class Area(Agent):
     @property
     def color_distribution(self):
         return self._color_distribution
+
+    @property
+    def color_counts(self) -> np.ndarray:
+        """Integer counts of colors in this area (canonical state)."""
+        return self._color_counts
 
     @property
     def voted_ordering(self):
@@ -492,13 +499,12 @@ class Area(Agent):
         This method counts how many cells of each color belong to the area, normalizes
         the counts by the total number of cells, and stores the result internally.
         """
-        color_count = {}
+        counts = np.zeros(self.model.num_colors, dtype=np.int64)
         for cell in self.cells:
-            color = cell.color
-            color_count[color] = color_count.get(color, 0) + 1
-        for color in range(self.model.num_colors):
-            dist_val = color_count.get(color, 0) / self.num_cells  # Float
-            self._color_distribution[color] = dist_val
+            counts[int(cell.color)] += 1
+        self._color_counts = counts
+        if self.num_cells > 0:
+            self._color_distribution = counts.astype(np.float64) / float(self.num_cells)
 
     def _filter_cells(self, cell_list):
         """

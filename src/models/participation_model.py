@@ -12,7 +12,8 @@ from src.utils.metrics import (compute_gini_index, compute_collective_assets,
 from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
                                 get_area_dist_to_reality, get_election_results,
                                 get_area_color_distribution, get_area_gini_index,
-                                is_learning_rate, ensure_rate_0_1, ensure_choice)
+                                is_learning_rate, ensure_rate_0_1, ensure_choice,
+                                ensure_int_ge_0, ensure_finite_ge_0)
 from src.utils.rng import (
     set_seed,
     np_rng,
@@ -186,6 +187,20 @@ class ParticipationModel(mesa.Model):
     ):
         super().__init__()
         self._seed = seed
+        # --- Core sizing validation (fail-loud; avoids factorial explosions) ---
+        if not isinstance(num_colors, int):
+            raise ValueError(f"num_colors must be int, got {type(num_colors)}")
+        if num_colors < 2:
+            raise ValueError("num_colors must be >= 2.")
+        # Options are all permutations of colors; this grows as num_colors!.
+        # Keep a conservative cap to avoid accidentally creating enormous option spaces.
+        max_options = factorial(int(num_colors))
+        if max_options > 50_000:
+            raise ValueError(
+                f"num_colors={num_colors} implies {max_options} options (num_colors!), "
+                "which is too large for this simulation configuration. "
+                "Reduce num_colors (e.g. <= 8) or implement an alternative option representation."
+            )
         # Store scalar params early because agent init depends on them.
         self.known_cells = known_cells  # Integer
         # Adaptive participation learning parameters (global per agent)
@@ -244,6 +259,10 @@ class ParticipationModel(mesa.Model):
         self.max_steps: Optional[int] = max_steps
         self.running: bool = True
         self.colors = np.arange(num_colors)
+        # Cached area-coverage info for fast/exact global distribution updates when areas are disjoint.
+        # Initialized to safe defaults because update_global_color_distribution() is called before areas exist.
+        self._areas_are_disjoint: bool = False
+        self._uncovered_color_counts: np.ndarray = np.zeros(num_colors, dtype=np.int64)
         # Create a scheduler that goes through areas first then color cells
         self.scheduler = CustomScheduler(self)
         # The grid
@@ -254,7 +273,10 @@ class ParticipationModel(mesa.Model):
         self._vertical_bias = self.random.uniform(0, 1)
         self._horizontal_bias = self.random.uniform(0, 1)
         # Color distribution (global)
-        self._preset_color_dst = self.create_color_distribution(heterogeneity)
+        self.heterogeneity = float(heterogeneity)
+        if not np.isfinite(self.heterogeneity) or self.heterogeneity < 0.0:
+            raise ValueError("heterogeneity must be finite and >= 0.")
+        self._preset_color_dst = self.create_color_distribution(self.heterogeneity)
         self._av_area_color_dst = self._preset_color_dst.copy()  # TODO: Deal with overlaps and size diffs
         self.global_color_dst = self._preset_color_dst.copy()
         # Elections
@@ -284,10 +306,13 @@ class ParticipationModel(mesa.Model):
         self.distance_func_implementation_name = d_i_name
         self.options = self.create_all_options(num_colors)
         # Simulation variables
-        self.mu = mu  # Mutation rate for the color cells (0.1 = 10 % mutate)
+        self.mu = ensure_rate_0_1("mu", mu)  # Mutation rate for the color cells (0.1 = 10 % mutate)
         self.common_assets = 100*num_agents if common_assets is None else common_assets
         # Election impact factor on color mutation through a probability array
-        self.color_probs = self.init_color_probs(election_impact_on_mutation)
+        self.election_impact_on_mutation = float(election_impact_on_mutation)
+        if not np.isfinite(self.election_impact_on_mutation) or self.election_impact_on_mutation < 0.0:
+            raise ValueError("election_impact_on_mutation must be finite and >= 0.")
+        self.color_probs = self.init_color_probs(self.election_impact_on_mutation)
         # Create search pairs once for faster iterations when comparing orderings
         # (Removed unused self.search_pairs to avoid O(options^2) memory growth.)
         self.option_vec = np.arange(self.options.shape[0])  # Also to speed up
@@ -309,15 +334,49 @@ class ParticipationModel(mesa.Model):
         self.area_size_variance = area_size_variance
         self._no_overlap = False  # True if areas are instantiated without overlap (speeds up things)
         # Adjust the color pattern to make it less random (see color patches)
-        self.adjust_color_pattern(color_patches_steps, patch_power)
+        self.color_patches_steps = ensure_int_ge_0("color_patches_steps", color_patches_steps)
+        self.patch_power = ensure_finite_ge_0("patch_power", patch_power)
+        self.adjust_color_pattern(self.color_patches_steps, self.patch_power)
+        # Ensure global_color_dst matches the realized grid (not just the preset distribution).
+        # This makes step-0 / initialization logs consistent with the actual grid state.
+        self.update_global_color_distribution()
         # Create areas
         self.initialize_all_areas()
+        # Analyze area coverage once so global distributions can be updated fast + correctly
+        # for disjoint area layouts (including layouts with gaps).
+        self._analyze_area_coverage()
         # Data collector
         # TODO: NOTE: I think I should (consider) set up only areas as mesa Agents and everything else as classes
         #   because the datacollector goes through all the agents (cells, voting agents) even though we only need to go through the areas.
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
         self.datacollector.collect(self)
+
+    def _analyze_area_coverage(self) -> None:
+        """Compute and cache area coverage/overlap information.
+
+        This is used to safely accelerate global color distribution updates when areas
+        are disjoint. If areas overlap, we fall back to grid counting (exact, but slower).
+        """
+        n_cells = len(self.color_cells)
+        membership = np.zeros(n_cells, dtype=np.int16)
+        for area in self.areas:
+            if area.unique_id == -1:
+                continue
+            for cell in area.cells:
+                idx = self._cell_index_by_pos.get((cell.col, cell.row))
+                if idx is not None:
+                    membership[idx] += 1
+        self._covered_cell_count = int(np.count_nonzero(membership))
+        self._areas_are_disjoint = bool(np.max(membership) <= 1)
+        # Cache uncovered color counts (uncovered cells are never mutated by any area).
+        uncovered_counts = np.zeros(self.num_colors, dtype=np.int64)
+        if self._covered_cell_count < n_cells:
+            for i, cell in enumerate(self.color_cells):
+                if membership[i] == 0:
+                    # If needed in future, we could save the uncovered cells themselves here.
+                    uncovered_counts[int(cell.color)] += 1
+        self._uncovered_color_counts = uncovered_counts
 
     @property
     def height(self) -> int:
@@ -361,6 +420,8 @@ class ParticipationModel(mesa.Model):
         Args:
             id_start (int): The starting ID to ensure unique IDs.
         """
+        # Map from (col,row) to index in self.color_cells for fast coverage checks.
+        self._cell_index_by_pos: dict[tuple[int, int], int] = {}
         # Create a color cell for each cell in the grid
         for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):
             # Assign unique ID after areas and agents
@@ -371,6 +432,7 @@ class ParticipationModel(mesa.Model):
             cell = ColorCell(unique_id, self, (col, row), color)
             # Add to the 'model.color_cells' list (for faster access)
             self.color_cells[idx] = cell  # TODO: change to using the grid(?)
+            self._cell_index_by_pos[(col, row)] = idx
 
     def initialize_voting_agents(self, intended_dst, id_start = 0) -> None:
         """
@@ -724,8 +786,16 @@ class ParticipationModel(mesa.Model):
         state of the grid. It calculates the distribution of colors across all
         color cells and normalizes it to sum to 1.
         """
-        if self.area_size_variance == 0 and self._no_overlap:
-            self.global_color_dst = self.update_av_area_color_dst()
+        if self._areas_are_disjoint:
+            # Fast + exact when areas are disjoint:
+            # global counts = sum(area counts) + uncovered counts (uncovered are static).
+            counts = np.array(self._uncovered_color_counts, copy=True)
+            for area in self.areas:
+                if area.unique_id != -1:
+                    counts += area.color_counts
+            total_cells = len(self.color_cells)
+            if total_cells > 0:
+                self.global_color_dst = counts / float(total_cells)
             return
         elif self.width * self.height > 1e+5:
             print("Warning: Updating global color distribution on large grids may be slow.")

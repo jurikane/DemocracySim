@@ -10,12 +10,12 @@ COLORS = [
     "Red",         # 1
     "Green",       # 2
     "Blue",        # 3
-    "Yellow",      # 4
-    "Aqua",        # 5
-    "Fuchsia",     # 6
-    "Lime",        # 7
-    "Maroon",      # 8
-    "Orange",      # 9
+    "Orange",      # 4
+    "Maroon",      # 5
+    "Lime",        # 6
+    "Yellow",      # 7
+    #"Aqua",       # 8
+    #"Fuchsia",    # 9
 ]
 
 # Module-level store for visualization config

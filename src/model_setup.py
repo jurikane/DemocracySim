@@ -227,7 +227,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             name="# Colors",
             value=model_cfg.num_colors,
             min_value=2,
-            max_value=max(2, model_cfg.num_colors),
+            max_value=8,
             step=1,
         ),
         "num_personality_groups": mesa.visualization.Slider(

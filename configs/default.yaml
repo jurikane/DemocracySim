@@ -9,7 +9,7 @@ model:
   election_impact_on_mutation: 1.8
   mu: 0.05
   rule_idx: 0
-  distance_idx: 1
+  distance_idx: 0
 
   # Model parameters
   num_agents: 300
