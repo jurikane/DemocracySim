@@ -76,6 +76,5 @@ def test_participation_alpha_zero_means_no_update() -> None:
 
 
 def test_participation_alpha_negative_raises() -> None:
-    with pytest.raises(ValueError, match="participation_alpha must be finite and >= 0"):
+    with pytest.raises(ValueError, match=r"Learning rates alpha must be finite and >= 0\."):
         create_test_model(seed=4, participation_alpha=-0.01)
-

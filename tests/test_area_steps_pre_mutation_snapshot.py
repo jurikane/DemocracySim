@@ -10,7 +10,7 @@ from src.logging.run_logger import RunLoggerV2
 
 
 def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
-    """Ensure area_steps rows use pre-mutation snapshots when provided."""
+    """Contract: area_steps rows use pre-mutation snapshots when provided."""
     cfg = load_config("toy.yaml")
     cfg_for_run = cfg.model_copy(deep=True)
     cfg_for_run.simulation.num_steps = 1

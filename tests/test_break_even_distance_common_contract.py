@@ -99,4 +99,3 @@ def test_break_even_distance_common_out_of_range_raises() -> None:
         _model_one_area(break_even_distance_common=-0.01)
     with pytest.raises(ValueError):
         _model_one_area(break_even_distance_common=1.01)
-

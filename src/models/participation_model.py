@@ -208,8 +208,16 @@ class ParticipationModel(mesa.Model):
         # Adaptive altruism learning parameters (global per agent)
         self.altruism_alpha = is_learning_rate(altruism_alpha)
         self.altruism_init = float(altruism_init)
+        if not np.isfinite(self.altruism_init) or not (0.0 <= self.altruism_init <= 1.0):
+            raise ValueError("altruism_init must be finite and in [0,1].")
         self.altruism_clip_min = float(altruism_clip_min)
         self.altruism_clip_max = float(altruism_clip_max)
+        if (
+            (not np.isfinite(self.altruism_clip_min))
+            or (not np.isfinite(self.altruism_clip_max))
+            or (self.altruism_clip_min > self.altruism_clip_max)
+        ):
+            raise ValueError("altruism_clip_min/max must be finite and satisfy clip_min <= clip_max.")
         self.altruism_learning = bool(altruism_learning)
         self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
         self.personal_opt_dist_concentration = personal_opt_dist_concentration

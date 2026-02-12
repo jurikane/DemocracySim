@@ -20,6 +20,9 @@ nav:
         - Future Goals: research/goals.md
     - Technical:
         - Overview: technical/technical_overview.md
+        - Learning:
+            - Participation Learning: technical/participation_learning.md
+            - Altruism Learning: technical/altruism_learning.md
         #- Installation Instructions: technical/installation_instructions.md
         - API Reference:
             - Model (Environment): technical/api/Model.md

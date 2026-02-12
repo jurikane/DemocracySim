@@ -6,12 +6,7 @@ from itertools import combinations
 
 class TestKendallTauDistance(unittest.TestCase):
 
-    #TODO test normalized version
-
     def test_kendall_tau_on_ranks(self):
-
-        print("TEST kendall_tau_on_ranks function | NO use with ties!\n")
-
         # Test cases kendall tau (rank-vektors)
         sequences = [
             ([0, 1, 2, 3], [0, 1, 2, 3], 0),  # Equal sequences
@@ -54,7 +49,7 @@ class TestKendallTauDistance(unittest.TestCase):
             # => inversions: (2,1) => 1 inversion
 
             ## Kendall tau can not handle ties - need kendall-tau-b
-            ##   I currently only use noise to break ties  TODO implement KT-b
+            ##   I currently only use noise to break ties -- could implement KT-b
 
             # ([0, 1, 1, 2], [1, 0, 2, 1], 2),  # rank vectors with ties
             # # 'A'>'B'='C'>'D' - 'B'>'A'='D'>'C'
@@ -76,7 +71,7 @@ class TestKendallTauDistance(unittest.TestCase):
         ]
 
         for seq1, seq2, expected in sequences:
-            print(f"# Next #\nSeq1: {seq1}, Seq2: {seq2}")
+            #print(f"# Next #\nSeq1: {seq1}, Seq2: {seq2}")
             n = len(seq1)
             assert n == len(seq2), \
                 "Test failed: sequences must have the same length"
@@ -85,14 +80,11 @@ class TestKendallTauDistance(unittest.TestCase):
             # assert set(np.unique(seq1)) == set(np.unique(seq2)), \
             #     "Test failed: sequences must have the same elements"
             d = kendall_tau_on_ranks(np.array(seq1), np.array(seq2),
-                                     pairs, item_vec)
-            print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
+                                     pairs, item_vec)  # type: ignore
+            #print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
             assert d == expected, f"Test failed for input {seq1}, {seq2}"
 
     def test_kendall_tau_on_orderings(self):
-
-        print("\nTEST kendall_tau_on_orderings (not normalized) function\n")
-
         # Test cases kendall tau (on orderings)
         ordering_seqs = [
             ([1, 2, 3, 4], [1, 2, 3, 4], 0),  # Equal sequences
@@ -118,25 +110,20 @@ class TestKendallTauDistance(unittest.TestCase):
         ]
 
         for seq1, seq2, expected in ordering_seqs:
-            print(f"# Next #\nSeq1: {seq1}, Seq2: {seq2}")
+            #print(f"# Next #\nSeq1: {seq1}, Seq2: {seq2}")
             n = len(seq1)
             assert n == len(seq2), \
                 "Test failed: sequences must have the same length"
             pairs = list(combinations(range(0, n), 2))
             # Test the ordering version
             d = unnormalized_kendall_tau(np.array(seq1), np.array(seq2), pairs)
-            print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
+            #print(f"Seq1: {seq1}, Seq2: {seq2}, Expected: {expected}, Got: {d}")
             assert d == expected, f"Test failed for input {seq1}, {seq2}"
 
 
 class TestSpearmanDistance(unittest.TestCase):
 
-    #TODO test normalized version
-
     def test_spearman_distance(self):
-
-        print("\nTEST spearman_distance function\n")
-
         sequences = [
             ([1, 2, 3, 4], [1, 2, 3, 4], 0),  # Equal sequences
             ([1], [1], 0),  # Single-element sequences

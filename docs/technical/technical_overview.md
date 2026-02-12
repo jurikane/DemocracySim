@@ -62,3 +62,4 @@ Learn more in the following sections.
 
 Additional deep-dives:
 - `docs/technical/participation_learning.md` (equations + implementation contract for participation learning)
+- `docs/technical/altruism_learning.md` (equations + implementation contract for altruism learning)
