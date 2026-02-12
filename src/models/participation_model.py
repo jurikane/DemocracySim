@@ -161,8 +161,8 @@ class ParticipationModel(mesa.Model):
         election_cost_rate,
         reward_rate_common: float = 0.0,
         reward_rate_personal: float = 0.0,
-        reward_threshold_common: float = 0.5,
-        reward_threshold_personal: float = 0.5,
+        break_even_distance_common: float = 0.5,
+        break_even_distance_personal: float = 0.5,
         abstention_share: float = 1.0,
         seed=None,
         max_steps: Optional[int] = None,
@@ -258,8 +258,8 @@ class ParticipationModel(mesa.Model):
         # Reward scaling knobs
         self.reward_rate_common = is_rate_btw_0_and_1(reward_rate_common)
         self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
-        self.reward_threshold_common = is_rate_btw_0_and_1(reward_threshold_common)
-        self.reward_threshold_personal = is_rate_btw_0_and_1(reward_threshold_personal)
+        self.break_even_distance_common = is_rate_btw_0_and_1(break_even_distance_common)
+        self.break_even_distance_personal = is_rate_btw_0_and_1(break_even_distance_personal)
         self.abstention_share = is_rate_btw_0_and_1(abstention_share)
         self.voting_rng = self.np_random
         self.distance_idx = distance_idx

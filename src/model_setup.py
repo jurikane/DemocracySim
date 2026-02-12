@@ -38,8 +38,8 @@ _ALLOWED_KW = {
     "election_cost_rate",
     "reward_rate_common",
     "reward_rate_personal",
-    "reward_threshold_common",
-    "reward_threshold_personal",
+    "break_even_distance_common",
+    "break_even_distance_personal",
     "abstention_share",
     "seed",
     # Adaptive participation learning
@@ -125,16 +125,16 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=1.0,
             step=0.01,
         ),
-        "reward_threshold_common": mesa.visualization.Slider(
-            name="Reward threshold (common)",
-            value=model_cfg.reward_threshold_common,
+        "break_even_distance_common": mesa.visualization.Slider(
+            name="Common-Reward break-even (1=never-punish)",
+            value=model_cfg.break_even_distance_common,
             min_value=0.0,
             max_value=1.0,
             step=0.01,
         ),
-        "reward_threshold_personal": mesa.visualization.Slider(
-            name="Reward threshold (personal)",
-            value=model_cfg.reward_threshold_personal,
+        "break_even_distance_personal": mesa.visualization.Slider(
+            name="Personal-Reward break-even (1=never-punish)",
+            value=model_cfg.break_even_distance_personal,
             min_value=0.0,
             max_value=1.0,
             step=0.01,
@@ -253,7 +253,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         #     step=10,
         # ),
         "abstention_share": mesa.visualization.Slider(
-            name="Abstention share (common)",
+            name="Abstention share (common) 1 for even",
             value=model_cfg.abstention_share,
             min_value=0.0,
             max_value=1.0,

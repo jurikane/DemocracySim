@@ -131,8 +131,8 @@ class AreaAgentDebugPanel(TextElement):
             "Rewards: "
             f"rate_common={self._fmt_value(rec.get('reward_rate_common'))} "
             f"rate_personal={self._fmt_value(rec.get('reward_rate_personal'))} "
-            f"thr_common={self._fmt_value(rec.get('reward_threshold_common'))} "
-            f"thr_personal={self._fmt_value(rec.get('reward_threshold_personal'))} "
+            f"thr_common={self._fmt_value(rec.get('break_even_distance_common'))} "
+            f"thr_personal={self._fmt_value(rec.get('break_even_distance_personal'))} "
             f"abstention_share={self._fmt_value(rec.get('abstention_share'))}"
         )
 

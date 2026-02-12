@@ -17,13 +17,12 @@ class _AlwaysParticipate:
 
 class _ZeroBallot:
     def score_options(self, agent, area, options) -> np.ndarray:  # type: ignore[no-untyped-def]
-        # Valid ScoreVector in [0,1].
         return np.zeros(int(options.shape[0]), dtype=np.float32)
 
 
 def _model_one_area(**overrides):
     base = dict(
-        seed=42,
+        seed=24,
         num_colors=3,
         num_agents=10,
         num_areas=1,
@@ -34,22 +33,24 @@ def _model_one_area(**overrides):
         area_size_variance=0.0,
         max_steps=1,
         election_cost_rate=0.0,
-        reward_rate_personal=0.0,
-        # Keep break_even in-range; tests override as needed.
+        reward_rate_common=0.0,
+        break_even_distance_personal=0.5,
         break_even_distance_common=0.5,
+        abstention_share=1.0,
     )
     base.update(overrides)
     model, _ = create_test_model(**base)
     return model
 
 
-def _force_perfect_outcome_voting_rule(model, area) -> None:
-    """Set model.voting_rule to always elect the 'real' ordering implied by area.color_distribution."""
-    real = distribution_to_ordering(area.color_distribution, rng=model.voting_rng)
-    validate_ordering(real, int(model.num_colors))
+def _force_outcome_equals_first_agent_personality(model, area) -> None:
+    """Elect the first agent's personality_group ordering (so personal distance=0 for that agent)."""
+    a0 = area.agents[0]
+    target = np.asarray(a0.personality_group, dtype=np.int64)
+    validate_ordering(target, int(model.num_colors))
 
     opts = np.asarray(model.options)
-    matches = np.nonzero((opts == np.asarray(real)).all(axis=1))[0]
+    matches = np.nonzero((opts == target).all(axis=1))[0]
     assert len(matches) == 1
     win = int(matches[0])
 
@@ -64,13 +65,13 @@ def _force_perfect_outcome_voting_rule(model, area) -> None:
     model.voting_rule = _rule
 
 
-def test_reward_rate_common_zero_yields_no_common_rewards_and_no_asset_change() -> None:
-    model = _model_one_area(reward_rate_common=0.0, break_even_distance_common=1.0)
+def test_reward_rate_personal_zero_yields_no_personal_rewards() -> None:
+    model = _model_one_area(reward_rate_personal=0.0, break_even_distance_personal=1.0)
     area = model.areas[0]
-    # Avoid ties to keep the implied "real ordering" deterministic.
+    # Avoid ties in "real ordering" paths (not critical here, but keeps determinism).
     area._color_distribution = np.asarray([0.1, 0.3, 0.6], dtype=np.float64)
 
-    _force_perfect_outcome_voting_rule(model, area)
+    _force_outcome_equals_first_agent_personality(model, area)
     for a in model.voting_agents:
         if a is None:
             continue
@@ -80,58 +81,54 @@ def test_reward_rate_common_zero_yields_no_common_rewards_and_no_asset_change() 
     assets0 = [float(a.assets) for a in area.agents]
     model.step()
 
-    # No fees, no personal rewards, common rate is 0 => no asset change.
     assert [float(a.assets) for a in area.agents] == pytest.approx(assets0, abs=1e-12)
     for a in area.agents:
-        assert float(getattr(a, "_reward_common_comp")) == pytest.approx(0.0, abs=1e-12)
+        assert float(getattr(a, "_reward_pers_comp")) == pytest.approx(0.0, abs=1e-12)
 
 
-def test_reward_rate_common_scales_common_component_linearly() -> None:
+def test_reward_rate_personal_scales_personal_component_linearly_for_matching_agent() -> None:
     rate = 0.2
     thresh = 0.5
-    model = _model_one_area(reward_rate_common=rate, break_even_distance_common=thresh)
+    model = _model_one_area(reward_rate_personal=rate, break_even_distance_personal=thresh)
     area = model.areas[0]
     area._color_distribution = np.asarray([0.1, 0.3, 0.6], dtype=np.float64)
 
-    _force_perfect_outcome_voting_rule(model, area)
+    _force_outcome_equals_first_agent_personality(model, area)
     for a in model.voting_agents:
         if a is None:
             continue
         a.participation_strategy = _AlwaysParticipate()
         a.voting_strategy = _ZeroBallot()
 
-    assets0 = [float(a.assets) for a in area.agents]
+    a0 = area.agents[0]
+    assets0 = float(a0.assets)
     model.step()
 
-    # Perfect outcome => dist_to_reality == 0 => common_coeff == break_even_common.
-    # common_component = break_even_common * reward_rate_common * assets_pre
-    for a0, a in zip(assets0, area.agents):
-        expected_common = thresh * rate * a0
-        assert float(getattr(a, "_reward_common_comp")) == pytest.approx(expected_common, abs=1e-9)
-        assert float(a.assets) == pytest.approx(a0 + expected_common, abs=1e-9)
+    # For agent 0: p = dist(personality_group, voted_ordering) = 0
+    # pers_coeff = break_even_personal - 0 = break_even_personal
+    # pers_component = pers_coeff * reward_rate_personal * assets_pre
+    expected_pers = thresh * rate * assets0
+    assert float(getattr(a0, "_reward_pers_comp")) == pytest.approx(expected_pers, abs=1e-9)
+    assert float(a0.assets) == pytest.approx(assets0 + expected_pers, abs=1e-9)
 
 
-def test_reward_rate_common_metamorphic_ratio_two_runs() -> None:
-    """Metamorphic/property test: scaling reward_rate_common scales common rewards proportionally.
-
-    This checks proportionality across two identical runs (same seed/config except the knob).
-    """
-    rate1 = 0.1
-    rate2 = 0.4
+def test_reward_rate_personal_metamorphic_ratio_two_runs() -> None:
+    """Metamorphic/property test: scaling reward_rate_personal scales personal rewards proportionally."""
+    rate1 = 0.05
+    rate2 = 0.2
     assert rate2 > rate1
     ratio = rate2 / rate1
-    be = 0.7
+    be = 0.6
 
-    m1 = _model_one_area(seed=2025, reward_rate_common=rate1, break_even_distance_common=be)
-    m2 = _model_one_area(seed=2025, reward_rate_common=rate2, break_even_distance_common=be)
+    m1 = _model_one_area(seed=2026, reward_rate_personal=rate1, break_even_distance_personal=be)
+    m2 = _model_one_area(seed=2026, reward_rate_personal=rate2, break_even_distance_personal=be)
     a1 = m1.areas[0]
     a2 = m2.areas[0]
-    # Avoid ties so the "real ordering" is deterministic.
     a1._color_distribution = np.asarray([0.1, 0.3, 0.6], dtype=np.float64)
     a2._color_distribution = np.asarray([0.1, 0.3, 0.6], dtype=np.float64)
 
-    _force_perfect_outcome_voting_rule(m1, a1)
-    _force_perfect_outcome_voting_rule(m2, a2)
+    _force_outcome_equals_first_agent_personality(m1, a1)
+    _force_outcome_equals_first_agent_personality(m2, a2)
     for ag in m1.voting_agents:
         if ag is None:
             continue
@@ -143,7 +140,6 @@ def test_reward_rate_common_metamorphic_ratio_two_runs() -> None:
         ag.participation_strategy = _AlwaysParticipate()
         ag.voting_strategy = _ZeroBallot()
 
-    # Compare a single agent to avoid averaging artifacts.
     g1 = a1.agents[0]
     g2 = a2.agents[0]
     assets_pre_1 = float(g1.assets)
@@ -153,14 +149,13 @@ def test_reward_rate_common_metamorphic_ratio_two_runs() -> None:
     m1.step()
     m2.step()
 
-    r1 = float(getattr(g1, "_reward_common_comp"))
-    r2 = float(getattr(g2, "_reward_common_comp"))
-    # With identical state/coefficients, r scales linearly with reward_rate_common.
+    r1 = float(getattr(g1, "_reward_pers_comp"))
+    r2 = float(getattr(g2, "_reward_pers_comp"))
     assert (r2 / r1) == pytest.approx(ratio, rel=1e-10, abs=1e-12)
 
 
-def test_reward_rate_common_out_of_range_raises() -> None:
+def test_reward_rate_personal_out_of_range_raises() -> None:
     with pytest.raises(ValueError):
-        _model_one_area(reward_rate_common=-0.1)
+        _model_one_area(reward_rate_personal=-0.1)
     with pytest.raises(ValueError):
-        _model_one_area(reward_rate_common=1.1)
+        _model_one_area(reward_rate_personal=1.1)

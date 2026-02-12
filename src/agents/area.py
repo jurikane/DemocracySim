@@ -444,7 +444,7 @@ class Area(Agent):
         Calculates and distributes rewards (or penalties) to agents based on outcomes.
 
         Contract (economics v2):
-        - Signs are determined by distances in [0,1] mapped via (threshold - d)
+        - Signs are determined by distances in [0,1] mapped via (break-even - d)
         - Magnitudes are scaled by agent wealth via model.reward_rate_* (0..1)
         - Fee pool is tracked as a statistic but no longer sets reward magnitude
         """
@@ -458,7 +458,7 @@ class Area(Agent):
             real_color_ord, self.voted_ordering, search_pairs
         )
         # Common component coefficient shared across agents
-        common_coeff = (self.model.reward_threshold_common - float(self.dist_to_reality))
+        common_coeff = (self.model.break_even_distance_common - float(self.dist_to_reality))
         # Model-wide reward rates for scaling rewards/penalties by agent wealth
         reward_rate_common = self.model.reward_rate_common
         reward_rate_personal = self.model.reward_rate_personal
@@ -471,7 +471,7 @@ class Area(Agent):
             #   between a.personal_opt_dist (agent personality dist) and the elected outcome
             #   expressed as a distribution (not ordering).
             p = dist_func(a.personality_group, self.voted_ordering, search_pairs)
-            pers_coeff = (self.model.reward_threshold_personal - p)
+            pers_coeff = (self.model.break_even_distance_personal - p)
 
             # Absolute rewards/penalties in asset units
             scale_common = reward_rate_common * a.assets  # Scale by current wealth
@@ -689,8 +689,8 @@ class Area(Agent):
             "winning_option": int(
                 aggregated[0]) if aggregated is not None and len(
                 aggregated) > 0 else None,
-            "reward_threshold_common": float(self.model.reward_threshold_common),
-            "reward_threshold_personal": float(self.model.reward_threshold_personal),
+            "break_even_distance_common": float(self.model.break_even_distance_common),
+            "break_even_distance_personal": float(self.model.break_even_distance_personal),
             "reward_rate_common": float(self.model.reward_rate_common),
             "reward_rate_personal": float(self.model.reward_rate_personal),
             "abstention_share": float(self.model.abstention_share),

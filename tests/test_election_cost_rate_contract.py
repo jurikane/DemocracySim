@@ -98,6 +98,33 @@ def test_election_cost_rate_zero_means_no_fee_pool_and_no_asset_change_from_fee(
     assert [float(a.assets) for a in area.agents] == pytest.approx(assets0, abs=1e-12)
 
 
+def test_election_cost_rate_allows_fractional_fees_no_minimum_fee_regression() -> None:
+    """Regression guard: no hidden `min fee = 1` clamp.
+
+    Fee is purely proportional: fee = election_cost_rate * assets.
+    """
+    rate = 0.1
+    model = _model_all_agents_in_one_area(
+        seed=999,
+        num_agents=1,
+        election_cost_rate=rate,
+        reward_rate_common=0.0,
+        reward_rate_personal=0.0,
+        max_steps=1,
+    )
+    agent = next(a for a in model.voting_agents if a is not None)
+    agent.assets = 0.5  # small assets => fee must be < 1.0 if not clamped
+    agent.participation_strategy = _AlwaysParticipate()
+    agent.voting_strategy = _ZeroBallot()
+
+    area = model.areas[0]
+    model.step()
+
+    assert float(getattr(agent, "_fee")) == pytest.approx(0.05, abs=1e-12)
+    assert float(area._election_fee_pool) == pytest.approx(0.05, abs=1e-12)
+    assert float(agent.assets) == pytest.approx(0.45, abs=1e-12)
+
+
 def test_election_cost_rate_out_of_range_raises() -> None:
     with pytest.raises(ValueError, match="Rate value must be in \[0,1\]."):
         _model_all_agents_in_one_area(election_cost_rate=-0.01)

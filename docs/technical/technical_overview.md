@@ -44,6 +44,11 @@ Implemented distances (normalized to `[0,1]`):
   - Trained with decision-tree methods to simulate behavior.
   - Participation costs are modeled via `election_cost_rate` (fraction of current assets paid when voting).
   - Rewards/penalties are scaled by wealth via `reward_rate_common` and `reward_rate_personal` (fractions of assets).
+  - Reward signs/magnitudes are controlled by break-even points: `break_even_distance_common` 
+    and `break_even_distance_personal`. These are *break-even distances*: coefficient = `break_even - distance`.
+    If `distance < break_even`, the coefficient is positive (reward); if `distance > break_even`, negative (penalty).
+  - Abstainers can receive a scaled share of the **common** reward/penalty via `abstention_share` (0..1). For abstainers:
+    `common_component *= abstention_share` (participants always receive the full common component).
 
 - **Environment**:
   - Structured as a grid divided into "territories" or "areas."
