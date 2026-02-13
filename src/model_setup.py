@@ -24,7 +24,7 @@ _ALLOWED_KW = {
     "num_personality_groups",
     "mu",
     "election_impact_on_mutation",
-    "common_assets",
+    "initial_agent_assets",
     "known_cells",
     "num_areas",
     "av_area_height",
@@ -244,13 +244,13 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=100,
             step=1,
         ),
-        # Remove assets slider because assets are now relative and set to 100 per agent by default
-        # "common_assets": mesa.visualization.Slider(
-        #     name="Initial common assets",
-        #     value=model_cfg.common_assets if model_cfg.common_assets is not None,
-        #     min_value=model_cfg.num_agents,
-        #     max_value=1000 * model_cfg.num_agents,
-        #     step=10,
+        # Optional UI knob for robustness checks (kept off by default).
+        # "initial_agent_assets": mesa.visualization.Slider(
+        #     name="Initial assets per agent",
+        #     value=model_cfg.initial_agent_assets,
+        #     min_value=0.0,
+        #     max_value=1000.0,
+        #     step=1.0,
         # ),
         "abstention_share": mesa.visualization.Slider(
             name="Abstention share (common) 1 for even",

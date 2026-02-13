@@ -29,37 +29,37 @@ def _run_one_logged_step(model, out_dir):
     return pd.read_parquet(out_dir / "agents.parquet")
 
 
-def test_common_assets_validation_fail_loud():
+def test_initial_agent_assets_validation_fail_loud():
     with pytest.raises(ValueError):
-        create_test_model(common_assets=-1)
+        create_test_model(initial_agent_assets=-1)
     with pytest.raises(ValueError):
-        create_test_model(common_assets=float("nan"))
+        create_test_model(initial_agent_assets=float("nan"))
     with pytest.raises(ValueError):
-        create_test_model(common_assets=float("inf"))
+        create_test_model(initial_agent_assets=float("inf"))
     with pytest.raises(ValueError):
-        create_test_model(common_assets=True)
+        create_test_model(initial_agent_assets=True)
 
 
-def test_common_assets_oracle_initial_distribution_exact():
+def test_initial_agent_assets_oracle_initial_distribution_exact():
     n = 8
-    total = 1600.0
-    model, _ = create_test_model(num_agents=n, common_assets=total, seed=1301)
-    assert float(model.common_assets) == total
+    per_agent = 200.0
+    model, _ = create_test_model(num_agents=n, initial_agent_assets=per_agent, seed=1301)
+    assert float(model.initial_agent_assets) == per_agent
     assets = _initial_assets(model)
-    np.testing.assert_allclose(assets, np.full(n, total / n), rtol=0.0, atol=1e-8)
-    np.testing.assert_allclose(float(np.sum(assets)), total, rtol=0.0, atol=1e-8)
+    np.testing.assert_allclose(assets, np.full(n, per_agent), rtol=0.0, atol=1e-8)
+    np.testing.assert_allclose(float(np.sum(assets)), per_agent * n, rtol=0.0, atol=1e-8)
 
 
-def test_common_assets_metamorphic_doubles_per_agent_assets():
+def test_initial_agent_assets_metamorphic_doubles_per_agent_assets():
     n = 8
-    m1, _ = create_test_model(num_agents=n, common_assets=800.0, seed=1302)
-    m2, _ = create_test_model(num_agents=n, common_assets=1600.0, seed=1302)
+    m1, _ = create_test_model(num_agents=n, initial_agent_assets=100.0, seed=1302)
+    m2, _ = create_test_model(num_agents=n, initial_agent_assets=200.0, seed=1302)
     a1 = _initial_assets(m1)
     a2 = _initial_assets(m2)
     np.testing.assert_allclose(a2, 2.0 * a1, rtol=0.0, atol=1e-8)
 
 
-def test_common_assets_integration_logged_assets_scale_with_total_assets(tmp_path):
+def test_initial_agent_assets_integration_logged_assets_scale_with_per_agent_value(tmp_path):
     # Disable asset-changing mechanics so logged assets remain pure initialization outcomes.
     base_kwargs = dict(
         seed=1303,
@@ -75,8 +75,8 @@ def test_common_assets_integration_logged_assets_scale_with_total_assets(tmp_pat
         reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
-    m1, _ = create_test_model(**base_kwargs, common_assets=1000.0)
-    m2, _ = create_test_model(**base_kwargs, common_assets=2000.0)
+    m1, _ = create_test_model(**base_kwargs, initial_agent_assets=100.0)
+    m2, _ = create_test_model(**base_kwargs, initial_agent_assets=200.0)
 
     df1 = _run_one_logged_step(m1, tmp_path / "r1")
     df2 = _run_one_logged_step(m2, tmp_path / "r2")

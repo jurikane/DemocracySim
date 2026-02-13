@@ -11,7 +11,7 @@ def test_build_model_params_exposes_seed_control() -> None:
         height=10,
         width=10,
         num_agents=10,
-        common_assets=100,
+        initial_agent_assets=100.0,
         num_colors=3,
         color_patches_steps=0,
         patch_power=1.0,

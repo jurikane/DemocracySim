@@ -44,8 +44,7 @@ class ModelConfig(BaseModel):
     satisfaction_baseline_alpha: float = 0.1
 
     num_agents: int        # Number of agents in the simulation
-    # common_assets should simply be 100 per agent for now (automatically set if None)
-    common_assets: float = None   # Initial collective assets
+    initial_agent_assets: float = 100.0  # Initial assets per agent
     num_colors: int        # Number of color options
     color_patches_steps: int  # Steps for color patch adjustment
     patch_power: float     # Power/radius of color patching

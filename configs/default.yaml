@@ -13,7 +13,7 @@ model:
 
   # Model parameters
   num_agents: 300
-  common_assets: 15000
+  initial_agent_assets: 100
   num_colors: 3
   color_patches_steps: 3
   patch_power: 1.0

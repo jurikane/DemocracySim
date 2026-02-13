@@ -109,8 +109,8 @@ class TestParticipationModelUnit(unittest.TestCase):
         v_rule = social_welfare_functions[self.model_cfg["rule_idx"]]
         dist_func = distance_functions[self.model_cfg["distance_idx"]]
 
-        self.assertEqual(self.model.common_assets,
-                         self.model_cfg["common_assets"])
+        self.assertEqual(self.model.initial_agent_assets,
+                         self.model_cfg["initial_agent_assets"])
         self.assertEqual(self.model.voting_rule, v_rule)
         self.assertEqual(self.model.distance_func, dist_func)
         self.assertEqual(self.model.election_cost_rate,

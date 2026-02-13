@@ -127,7 +127,7 @@ class ParticipationModel(mesa.Model):
         av_area_width (int): Average width of areas created in the simulation.
         area_size_variance (float): Variance in area sizes to introduce
             non-uniformity among election territories.
-        common_assets (float): Total resources to be distributed among all agents.
+        initial_agent_assets (float): Initial assets assigned to each agent.
         av_area_color_dst (ndarray): Current (area)-average color distribution.
         global_color_dst (ndarray): Current global color distribution across the grid.
         election_cost_rate (float): Cost/effort associated with participating in elections (relative to assets).
@@ -183,7 +183,7 @@ class ParticipationModel(mesa.Model):
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
         satisfaction_baseline_alpha: float = 0.1,
         personal_opt_dist_concentration: float = 1.0,
-        common_assets=None
+        initial_agent_assets: float = 100.0
     ):
         super().__init__()
         self._seed = seed
@@ -226,7 +226,7 @@ class ParticipationModel(mesa.Model):
                 "Reduce num_colors (e.g. <= 8) or implement an alternative option representation."
             )
         # Store scalar params early because agent init depends on them.
-        self.known_cells = known_cells  # Integer
+        self.known_cells = ensure_int_ge_0("known_cells", known_cells)
         # Adaptive participation learning parameters (global per agent)
         self.participation_alpha = is_learning_rate(participation_alpha)
         self.participation_beta = float(participation_beta)  # Sensitivity
@@ -331,10 +331,9 @@ class ParticipationModel(mesa.Model):
         self.options = self.create_all_options(num_colors)
         # Simulation variables
         self.mu = ensure_rate_0_1("mu", mu)  # Mutation rate for the color cells (0.1 = 10 % mutate)
-        if common_assets is None:
-            self.common_assets = float(100 * num_agents)
-        else:
-            self.common_assets = ensure_finite_ge_0("common_assets", common_assets)
+        self.initial_agent_assets = ensure_finite_ge_0(
+            "initial_agent_assets", initial_agent_assets
+        )
         # Election impact factor on color mutation through a probability array
         self.election_impact_on_mutation = float(election_impact_on_mutation)
         if not np.isfinite(self.election_impact_on_mutation) or self.election_impact_on_mutation < 0.0:
@@ -474,7 +473,7 @@ class ParticipationModel(mesa.Model):
         # Testing parameter validity
         if self.num_agents < 1:
             raise ValueError("The number of agents must be at least 1.")
-        assets = self.common_assets / self.num_agents  # TODO: always equal dist?
+        assets = self.initial_agent_assets
         nr = len(self.personality_groups)
         for idx in range(self.num_agents):
             # Assign unique ID after areas

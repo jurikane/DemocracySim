@@ -21,24 +21,24 @@ def test_num_agents_validation_fail_loud():
 
 def test_num_agents_oracle_initialization_count_and_assets():
     n = 7
-    model, _ = create_test_model(num_agents=n, common_assets=None, seed=1201)
+    model, _ = create_test_model(num_agents=n, initial_agent_assets=100.0, seed=1201)
     assert model.num_agents == n
     assert len(model.voting_agents) == n
-    assert model.common_assets == 100 * n
+    assert model.initial_agent_assets == 100.0
 
     assets = np.array([float(a.assets) for a in model.voting_agents], dtype=np.float64)
     assert len(assets) == n
     np.testing.assert_allclose(assets, np.full(n, 100.0), rtol=0.0, atol=1e-8)
-    np.testing.assert_allclose(float(np.sum(assets)), float(model.common_assets), rtol=0.0, atol=1e-8)
+    np.testing.assert_allclose(float(np.sum(assets)), 100.0 * n, rtol=0.0, atol=1e-8)
 
 
-def test_num_agents_metamorphic_common_assets_none_scales_linearly():
+def test_num_agents_metamorphic_total_initial_assets_scale_linearly():
     n1, n2 = 5, 11
-    m1, _ = create_test_model(num_agents=n1, common_assets=None, seed=1202)
-    m2, _ = create_test_model(num_agents=n2, common_assets=None, seed=1202)
-    assert m1.common_assets == 100 * n1
-    assert m2.common_assets == 100 * n2
-    assert m2.common_assets / m1.common_assets == n2 / n1
+    m1, _ = create_test_model(num_agents=n1, initial_agent_assets=100.0, seed=1202)
+    m2, _ = create_test_model(num_agents=n2, initial_agent_assets=100.0, seed=1202)
+    total1 = float(np.sum([float(a.assets) for a in m1.voting_agents]))
+    total2 = float(np.sum([float(a.assets) for a in m2.voting_agents]))
+    assert total2 / total1 == n2 / n1
 
 
 def test_num_agents_integration_logging_agents_and_area_rows(tmp_path):
