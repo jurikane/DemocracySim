@@ -182,7 +182,7 @@ class ParticipationModel(mesa.Model):
         altruism_static: float = 0.5,
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
         satisfaction_baseline_alpha: float = 0.1,
-        personal_opt_dist_concentration: float = 1.0,
+        personal_preference_peakedness: float = 1.0,
         initial_agent_assets: float = 100.0
     ):
         super().__init__()
@@ -216,6 +216,17 @@ class ParticipationModel(mesa.Model):
         self.area_size_variance = ensure_finite_ge_0("area_size_variance", area_size_variance)
         if self.area_size_variance > 1.0:
             raise ValueError("area_size_variance must be in [0,1].")
+        num_personality_groups = ensure_int_ge_0(
+            "num_personality_groups", num_personality_groups
+        )
+        if num_personality_groups < 1:
+            raise ValueError("num_personality_groups must be >= 1.")
+        max_personality_groups = factorial(int(num_colors))
+        if num_personality_groups > max_personality_groups:
+            raise ValueError(
+                f"num_personality_groups={num_personality_groups} exceeds "
+                f"max unique permutations {max_personality_groups} for num_colors={num_colors}."
+            )
         # Options are all permutations of colors; this grows as num_colors!.
         # Keep a conservative cap to avoid accidentally creating enormous option spaces.
         max_options = factorial(int(num_colors))
@@ -259,7 +270,11 @@ class ParticipationModel(mesa.Model):
             raise ValueError("altruism_clip_min/max must be finite and satisfy clip_min <= clip_max.")
         self.altruism_learning = bool(altruism_learning)
         self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
-        self.personal_opt_dist_concentration = personal_opt_dist_concentration
+        self.personal_preference_peakedness = ensure_finite_ge_0(
+            "personal_preference_peakedness", personal_preference_peakedness
+        )
+        if self.personal_preference_peakedness <= 0.0:
+            raise ValueError("personal_preference_peakedness must be > 0.")
         self.satisfaction_mode = ensure_choice("satisfaction_mode",
             str(satisfaction_mode),
             {"global", "area", "knowledge", "combination"},

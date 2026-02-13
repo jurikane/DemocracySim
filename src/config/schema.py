@@ -58,8 +58,8 @@ class ModelConfig(BaseModel):
     av_area_width: int     # Average area width
     area_size_variance: float  # Variance in area sizes
     seed: Optional[int] = None # Random seed for reproducibility
-    # Per-agent personal_opt_dist (static preference distribution) ---
-    personal_opt_dist_concentration: float = 1.0  # Controls the heterogeneity/intensity of the derived distribution
+    # Per-agent personal preference distribution shape ---
+    personal_preference_peakedness: float = 1.0  # >1 more peaked, <1 flatter
 
 class VisualizationConfig(BaseModel):
     """

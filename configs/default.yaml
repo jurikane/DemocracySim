@@ -43,8 +43,8 @@ model:
   # EMA alpha for participation baseline (1.0 => baseline becomes last step's value)
   participation_baseline_alpha: 0.1
 
-  # Per-agent personal_opt_dist (static)
-  personal_opt_dist_concentration: 1.0
+  # Per-agent personal preference shape (static)
+  personal_preference_peakedness: 1.0
 
   # Adaptive altruism learning (reality-weight)
   altruism_alpha: 0.05

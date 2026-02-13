@@ -36,7 +36,7 @@ def test_build_model_params_exposes_seed_control() -> None:
         altruism_init=0.5,
         altruism_clip_min=0.0,
         altruism_clip_max=1.0,
-        personal_opt_dist_concentration=1.0,
+        personal_preference_peakedness=1.0,
         seed=123,
     )
 

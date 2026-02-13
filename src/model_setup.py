@@ -58,8 +58,8 @@ _ALLOWED_KW = {
     "altruism_static",
     "satisfaction_mode",
     "satisfaction_baseline_alpha",
-    # Per-agent personal_opt_dist
-    "personal_opt_dist_concentration",
+    # Per-agent personal preference distribution shape
+    "personal_preference_peakedness",
 }
 
 
@@ -273,10 +273,10 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=5.0,
             step=0.1,
         ),
-        "personal_opt_dist_concentration": mesa.visualization.Slider(
-            name="Personal opt dist concentration",
-            value=model_cfg.personal_opt_dist_concentration,
-            min_value=0.0,
+        "personal_preference_peakedness": mesa.visualization.Slider(
+            name="Personal preference peakedness",
+            value=model_cfg.personal_preference_peakedness,
+            min_value=0.1,
             max_value=5.0,
             step=0.1,
         ),

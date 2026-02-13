@@ -426,14 +426,13 @@ class VoteAgent(Agent):
             return np.asarray([], dtype=np.float32)
 
         personality_group = np.asarray(self.personality_group)
-        conc = self.model.personal_opt_dist_concentration
-        conc = max(conc, 1e-8)  # Avoid zero concentration
+        peakedness = float(self.model.personal_preference_peakedness)
 
         # Sample positive intensities, sort descending, then assign by rank position.
         rng = self.model.np_random
         vals = rng.exponential(scale=1.0, size=num_colors).astype(np.float64)
         # Concentration: >1 makes the distribution more peaked; <1 flattens.
-        vals = np.power(vals + 1e-12, conc)
+        vals = np.power(vals + 1e-12, peakedness)
         vals.sort()
         vals = vals[::-1]
 
