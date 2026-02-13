@@ -162,7 +162,7 @@ def distribution_to_ordering(
     if has_ties and rng is not None and eps and eps > 0:
         noise = rng.uniform(-eps, eps, size=arr.size)
         arr = arr + noise
-    else:
+    elif has_ties:
         print("Warning: tie-breaking is biased, if not in debug/testing, always provide rng for fair tie-breaking.")
     kind = "stable" if stable else "quicksort"
     return np.argsort(arr, kind=kind)[::-1].astype(np.int64)

@@ -33,11 +33,12 @@ def ordering_from_distribution(dist: np.ndarray, *, rng: np.random.Generator | N
     dist = np.asarray(dist, dtype=np.float32)
     if dist.ndim != 1:
         raise ValueError("dist must be 1D")
-    if rng is not None:
+    has_ties = len(np.unique(dist)) != len(dist)
+    if rng is not None and has_ties:
         # Break ties fairly by adding tiny symmetric noise (ordering remains stable-ish).
         eps = 1e-6
         dist = dist + rng.uniform(-eps, eps, size=dist.size).astype(np.float32)
-    else:
+    elif has_ties:
         print("Warning: tie-breaking is biased, if not in debug/testing, always provide rng for fair tie-breaking.")
     return np.argsort(dist, kind="stable")[::-1].astype(np.int16)
 

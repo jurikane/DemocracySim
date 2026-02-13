@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from tests.factory import create_test_model
 
@@ -10,9 +11,11 @@ class _NeverParticipate:
         return False
 
 
-def test_no_participation_debug_snapshot_records_outcome_fields() -> None:
+@pytest.mark.parametrize("rule_idx", [0, 1, 2, 3])
+def test_no_participation_debug_snapshot_records_outcome_fields(rule_idx: int) -> None:
     model, _ = create_test_model(
         seed=123,
+        rule_idx=rule_idx,
         num_colors=3,
         num_agents=10,
         num_areas=1,
@@ -48,4 +51,3 @@ def test_no_participation_debug_snapshot_records_outcome_fields() -> None:
     assert rec["winning_option_id"] is not None
     # Under no participation, this field is expected to remain None.
     assert rec["winning_option"] is None
-
