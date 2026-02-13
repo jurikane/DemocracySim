@@ -30,6 +30,12 @@ def test_agents_parquet_includes_participation_baseline_columns(tmp_path: Path) 
         logger._area_snapshots_by_step_area[(step, int(area.unique_id))] = {
             "area_color": area.color_distribution.copy(),
             "elected_color": elected_color,
+            "eligible_voters": int(area.num_agents),
+            "participants": 0,
+            "turnout": float(area.voter_turnout),
+            "election_cost_rate": float(model.election_cost_rate),
+            "fee_pool": float(getattr(area, "_election_fee_pool", 0.0)),
+            "dist_to_reality": 0.0,
         }
 
     logger._votes_rows.append(

@@ -13,7 +13,7 @@ from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
                                 get_area_dist_to_reality, get_election_results,
                                 get_area_color_distribution, get_area_gini_index,
                                 is_learning_rate, ensure_rate_0_1, ensure_choice,
-                                ensure_int_ge_0, ensure_finite_ge_0)
+                                ensure_int_ge_0, ensure_finite_ge_0, ensure_finite_gt_0)
 from src.utils.rng import (
     set_seed,
     np_rng,
@@ -41,7 +41,6 @@ class CustomScheduler(mesa.time.BaseScheduler):
         model = self.model
         if TYPE_CHECKING:
             model = cast(ParticipationModel, model)
-        # TODO: Logg step 0 as initial state
         self.steps += 1
         self.time += 1
         # Step through Area agents (in "random" order)
@@ -59,7 +58,6 @@ class CustomScheduler(mesa.time.BaseScheduler):
         model.update_global_color_distribution()
         for area in model.areas:
             area.step()
-        # TODO: add global election?
 
 
     @property
@@ -128,7 +126,7 @@ class ParticipationModel(mesa.Model):
         area_size_variance (float): Variance in area sizes to introduce
             non-uniformity among election territories.
         initial_agent_assets (float): Initial assets assigned to each agent.
-        av_area_color_dst (ndarray): Current (area)-average color distribution.
+        _av_area_color_dst (ndarray): Current (area)-average color distribution.
         global_color_dst (ndarray): Current global color distribution across the grid.
         election_cost_rate (float): Cost/effort associated with participating in elections (relative to assets).
         known_cells (int): Number of cells each agent knows the color of.
@@ -141,6 +139,9 @@ class ParticipationModel(mesa.Model):
         _no_overlap (bool): A flag indicating areas don't overlap. Speeds up certain computations if True.
     """
 
+    # -----------------
+    # Validation / setup helpers
+    # -----------------
     @staticmethod
     def _validate_color_and_personality_space(
         *,
@@ -285,6 +286,79 @@ class ParticipationModel(mesa.Model):
             "satisfaction_baseline_alpha", satisfaction_baseline_alpha
         )
 
+    def _configure_rules_rewards_and_distance(
+        self,
+        *,
+        rule_idx,
+        distance_idx,
+        election_cost_rate,
+        reward_rate_common,
+        reward_rate_personal,
+        break_even_distance_common,
+        break_even_distance_personal,
+        abstention_share,
+        num_colors: int,
+    ) -> None:
+        """Validate and assign voting-rule, distance, and reward knobs."""
+        vr, vr_names, vr_name, vr_i_names, vr_i_name = self._get_voting_rule_conf(rule_idx)
+        self.rule_idx = rule_idx
+        self.voting_rule = vr
+        self.voting_rule_names = vr_names
+        self.voting_rule_name = vr_name
+        # Implementation names are stored alongside display names so runs can be
+        # reproduced even if UI labels change.
+        self.voting_rule_implementation_names = vr_i_names
+        self.voting_rule_implementation_name = vr_i_name
+
+        self.election_cost_rate = is_rate_btw_0_and_1(election_cost_rate)
+        self.reward_rate_common = is_rate_btw_0_and_1(reward_rate_common)
+        self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
+        self.break_even_distance_common = is_rate_btw_0_and_1(break_even_distance_common)
+        self.break_even_distance_personal = is_rate_btw_0_and_1(break_even_distance_personal)
+        self.abstention_share = is_rate_btw_0_and_1(abstention_share)
+
+        self.voting_rng = self.np_random
+        self.distance_idx = distance_idx
+        dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
+        self.distance_func = dist
+        self.distance_func_names = d_names
+        self.distance_func_name = d_name
+        self.distance_func_implementation_names = d_i_names
+        self.distance_func_implementation_name = d_i_name
+        self.options = self.create_all_options(num_colors)
+
+    def _configure_environment_scalars(
+        self,
+        *,
+        heterogeneity,
+        mu,
+        initial_agent_assets,
+        election_impact_on_mutation,
+        color_patches_steps,
+        patch_power,
+    ) -> None:
+        """Validate and assign environment/economy scalar knobs."""
+        self.heterogeneity = float(heterogeneity)
+        if not np.isfinite(self.heterogeneity) or self.heterogeneity < 0.0:
+            raise ValueError("heterogeneity must be finite and >= 0.")
+        self._preset_color_dst = self.create_color_distribution(self.heterogeneity)
+        self._av_area_color_dst = self._preset_color_dst.copy()
+        self.global_color_dst = self._preset_color_dst.copy()
+
+        self.mu = ensure_rate_0_1("mu", mu)
+        self.initial_agent_assets = ensure_finite_ge_0("initial_agent_assets", initial_agent_assets)
+
+        self.election_impact_on_mutation = float(election_impact_on_mutation)
+        if not np.isfinite(self.election_impact_on_mutation) or self.election_impact_on_mutation < 0.0:
+            raise ValueError("election_impact_on_mutation must be finite and >= 0.")
+        self.color_probs = self.init_color_probs(self.election_impact_on_mutation)
+
+        self.color_patches_steps = ensure_int_ge_0("color_patches_steps", color_patches_steps)
+        self.patch_power = ensure_finite_ge_0("patch_power", patch_power)
+
+    # -----------------
+    # Initialization
+    # -----------------
     def __init__(
         self,
         height,
@@ -331,6 +405,8 @@ class ParticipationModel(mesa.Model):
     ):
         super().__init__()
         self._seed = seed
+        self._av_area_color_dst = np.asarray([], dtype=np.float64)
+        self.global_color_dst = np.asarray([], dtype=np.float64)
         # --- Core sizing validation (fail-loud; avoids factorial explosions) ---
         num_colors, num_personality_groups = self._validate_color_and_personality_space(
             num_colors=num_colors,
@@ -369,11 +445,8 @@ class ParticipationModel(mesa.Model):
             satisfaction_mode=satisfaction_mode,
             satisfaction_baseline_alpha=satisfaction_baseline_alpha,
         )
-        self.personal_preference_peakedness = ensure_finite_ge_0(
-            "personal_preference_peakedness", personal_preference_peakedness
-        )
-        if self.personal_preference_peakedness <= 0.0:
-            raise ValueError("personal_preference_peakedness must be > 0.")
+        ppp = ensure_finite_gt_0("pp-peak", personal_preference_peakedness)
+        self.personal_preference_peakedness = ppp
         # Initialize RNGs early (centralized)
         set_seed(seed)
         self.np_random = np_rng()
@@ -383,8 +456,6 @@ class ParticipationModel(mesa.Model):
         self.rng_debug = np_rng_debug()
         self.random_viz = py_rng_viz()
         self.random_debug = py_rng_debug()
-        if seed is not None:
-            print(f"Set models random seed to {seed}")
         # Step control
         self.max_steps: Optional[int] = max_steps
         self.running: bool = True
@@ -402,69 +473,43 @@ class ParticipationModel(mesa.Model):
         # Random bias factors that affect the initial color distribution
         self._vertical_bias = self.random.uniform(0, 1)
         self._horizontal_bias = self.random.uniform(0, 1)
-        # Color distribution (global)
-        self.heterogeneity = float(heterogeneity)
-        if not np.isfinite(self.heterogeneity) or self.heterogeneity < 0.0:
-            raise ValueError("heterogeneity must be finite and >= 0.")
-        self._preset_color_dst = self.create_color_distribution(self.heterogeneity)
-        self._av_area_color_dst = self._preset_color_dst.copy()  # TODO: Deal with overlaps and size diffs
-        self.global_color_dst = self._preset_color_dst.copy()
-        # Elections
-        vr, vr_names, vr_name, vr_i_names, vr_i_name = self._get_voting_rule_conf(rule_idx)
-        self.rule_idx = rule_idx
-        self.voting_rule = vr
-        self.voting_rule_names = vr_names
-        self.voting_rule_name = vr_name
-        # Implementation names are stored alongside display names so runs can be
-        # reproduced even if UI labels change.
-        self.voting_rule_implementation_names = vr_i_names
-        self.voting_rule_implementation_name = vr_i_name
-        self.election_cost_rate = is_rate_btw_0_and_1(election_cost_rate)
-        # Reward scaling knobs
-        self.reward_rate_common = is_rate_btw_0_and_1(reward_rate_common)
-        self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
-        self.break_even_distance_common = is_rate_btw_0_and_1(break_even_distance_common)
-        self.break_even_distance_personal = is_rate_btw_0_and_1(break_even_distance_personal)
-        self.abstention_share = is_rate_btw_0_and_1(abstention_share)
-        self.voting_rng = self.np_random
-        self.distance_idx = distance_idx
-        dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
-        self.distance_func = dist
-        self.distance_func_names = d_names
-        self.distance_func_name = d_name
-        self.distance_func_implementation_names = d_i_names
-        self.distance_func_implementation_name = d_i_name
-        self.options = self.create_all_options(num_colors)
-        # Simulation variables
-        self.mu = ensure_rate_0_1("mu", mu)  # Mutation rate for the color cells (0.1 = 10 % mutate)
-        self.initial_agent_assets = ensure_finite_ge_0(
-            "initial_agent_assets", initial_agent_assets
+        self._configure_environment_scalars(
+            heterogeneity=heterogeneity,
+            mu=mu,
+            initial_agent_assets=initial_agent_assets,
+            election_impact_on_mutation=election_impact_on_mutation,
+            color_patches_steps=color_patches_steps,
+            patch_power=patch_power,
         )
-        # Election impact factor on color mutation through a probability array
-        self.election_impact_on_mutation = float(election_impact_on_mutation)
-        if not np.isfinite(self.election_impact_on_mutation) or self.election_impact_on_mutation < 0.0:
-            raise ValueError("election_impact_on_mutation must be finite and >= 0.")
-        self.color_probs = self.init_color_probs(self.election_impact_on_mutation)
+        self._configure_rules_rewards_and_distance(
+            rule_idx=rule_idx,
+            distance_idx=distance_idx,
+            election_cost_rate=election_cost_rate,
+            reward_rate_common=reward_rate_common,
+            reward_rate_personal=reward_rate_personal,
+            break_even_distance_common=break_even_distance_common,
+            break_even_distance_personal=break_even_distance_personal,
+            abstention_share=abstention_share,
+            num_colors=num_colors,
+        )
         # Create search pairs once for faster iterations when comparing orderings
         # (Removed unused self.search_pairs to avoid O(options^2) memory growth.)
         self.option_vec = np.arange(self.options.shape[0])  # Also to speed up
         self.color_search_pairs = list(combinations(range(0, num_colors), 2))
         # Create color cells (IDs start after areas+agents)
-        self.color_cells: List[Optional[ColorCell]] = [None] * (height * width)  # TODO change to using mesas AgentSet class!
+        self.color_cells: List[Optional[ColorCell]] = [None] * (height * width)
         self._initialize_color_cells(id_start=num_agents + num_areas)
         # Create voting agents (IDs start after areas)
-        self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents    # TODO change to using mesas AgentSet class!
+        self.voting_agents: List[Optional[VoteAgent]] = [None] * num_agents
         self.personality_groups = self.create_personality_groups(num_personality_groups)
         pg_dst = ParticipationModel.pers_dist(num_personality_groups, rng=self.np_random)
         self.initialize_voting_agents(intended_dst=pg_dst, id_start=num_areas)
         self.personality_group_distribution = self._initialize_personality_group_distribution()  # Static
         # Area variables
         self.global_area = self.initialize_global_area()
-        self.areas: List[Optional[Area]] = [None] * num_areas    # TODO change to using mesas AgentSet class!
+        self.areas: List[Optional[Area]] = [None] * num_areas
         self._no_overlap = False  # True if areas are instantiated without overlap (speeds up things)
         # Adjust the color pattern to make it less random (see color patches)
-        self.color_patches_steps = ensure_int_ge_0("color_patches_steps", color_patches_steps)
-        self.patch_power = ensure_finite_ge_0("patch_power", patch_power)
         self.adjust_color_pattern(self.color_patches_steps, self.patch_power)
         # Ensure global_color_dst matches the realized grid (not just the preset distribution).
         # This makes step-0 / initialization logs consistent with the actual grid state.
@@ -475,8 +520,6 @@ class ParticipationModel(mesa.Model):
         # for disjoint area layouts (including layouts with gaps).
         self._analyze_area_coverage()
         # Data collector
-        # TODO: NOTE: I think I should (consider) set up only areas as mesa Agents and everything else as classes
-        #   because the datacollector goes through all the agents (cells, voting agents) even though we only need to go through the areas.
         self.datacollector = self.initialize_datacollector()
         # Collect initial data
         self.datacollector.collect(self)
@@ -501,12 +544,12 @@ class ParticipationModel(mesa.Model):
         # no_overlap means "areas do not overlap" (disjointness only).
         # Full-coverage/partition is tracked separately where needed.
         self._no_overlap = bool(self._areas_are_disjoint)
-        # Cache uncovered color counts (uncovered cells are never mutated by any area).
+        # Cache uncovered color counts (uncovered cells are never mutated anywhere).
         uncovered_counts = np.zeros(self.num_colors, dtype=np.int64)
         if self._covered_cell_count < n_cells:
             for i, cell in enumerate(self.color_cells):
                 if membership[i] == 0:
-                    # If needed in future, we could save the uncovered cells themselves here.
+                    # If needed in the future, we could save uncovered cells here.
                     uncovered_counts[int(cell.color)] += 1
         self._uncovered_color_counts = uncovered_counts
 
@@ -538,10 +581,6 @@ class ParticipationModel(mesa.Model):
     def av_area_color_dst(self) -> np.ndarray:
         return self._av_area_color_dst
 
-    @av_area_color_dst.setter
-    def av_area_color_dst(self, value) -> None:
-        self._av_area_color_dst = value
-
     @property
     def no_overlap(self) -> bool:
         return self._no_overlap
@@ -563,7 +602,7 @@ class ParticipationModel(mesa.Model):
             # Create the cell (skip ids for area and voting agents)
             cell = ColorCell(unique_id, self, (col, row), color)
             # Add to the 'model.color_cells' list (for faster access)
-            self.color_cells[idx] = cell  # TODO: change to using the grid(?)
+            self.color_cells[idx] = cell
             self._cell_index_by_pos[(col, row)] = idx
 
     def initialize_voting_agents(self, intended_dst, id_start = 0) -> None:
@@ -817,12 +856,8 @@ class ParticipationModel(mesa.Model):
         self.datacollector.collect(self)
         # Enforce step limit after step executed
         if self.max_steps is not None and self.scheduler.steps >= self.max_steps:
-            # TODO: Apply one final mutation round (from previous election)
-            #for area in self.areas:
-            #    area.mutate_cells()
-            #self.update_global_color_distribution()
-            # TODO: logg final state after mutation
-            #self.datacollector.collect(self)
+            # Model intentionally stops after the last election-time snapshot;
+            # no final "apply pending mutation" step is executed.
             self.running = False
 
     def adjust_color_pattern(self, color_patches_steps: int, patch_power: float):
@@ -908,8 +943,8 @@ class ParticipationModel(mesa.Model):
             if area.unique_id != -1:  # Exclude global area
                 sums += area.color_distribution
         # Return the average color distributions
-        self.av_area_color_dst = sums / self.num_areas
-        return self.av_area_color_dst
+        self._av_area_color_dst = sums / self.num_areas
+        return self._av_area_color_dst
 
 
     def update_global_color_distribution(self) -> None:
@@ -937,6 +972,7 @@ class ParticipationModel(mesa.Model):
         total_cells = len(self.color_cells)
         if total_cells > 0:
             self.global_color_dst = color_counts / total_cells
+
 
     @staticmethod
     def pers_dist(size: int, *, rng: np.random.Generator) -> np.ndarray:
