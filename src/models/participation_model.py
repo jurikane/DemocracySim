@@ -192,6 +192,30 @@ class ParticipationModel(mesa.Model):
             raise ValueError(f"num_colors must be int, got {type(num_colors)}")
         if num_colors < 2:
             raise ValueError("num_colors must be >= 2.")
+        num_agents = ensure_int_ge_0("num_agents", num_agents)
+        if num_agents < 1:
+            raise ValueError("num_agents must be >= 1.")
+        num_areas = ensure_int_ge_0("num_areas", num_areas)
+        if num_areas > int(height) * int(width):
+            raise ValueError(
+                f"num_areas={num_areas} exceeds available grid anchor slots "
+                f"({int(height) * int(width)} for {width}x{height})."
+            )
+        self.av_area_height = ensure_int_ge_0("av_area_height", av_area_height)
+        self.av_area_width = ensure_int_ge_0("av_area_width", av_area_width)
+        if self.av_area_height == 0 or self.av_area_width == 0:
+            raise ValueError("av_area_height and av_area_width must be >= 1.")
+        if self.av_area_height > int(height):
+            raise ValueError(
+                f"av_area_height={self.av_area_height} exceeds grid height={height}."
+            )
+        if self.av_area_width > int(width):
+            raise ValueError(
+                f"av_area_width={self.av_area_width} exceeds grid width={width}."
+            )
+        self.area_size_variance = ensure_finite_ge_0("area_size_variance", area_size_variance)
+        if self.area_size_variance > 1.0:
+            raise ValueError("area_size_variance must be in [0,1].")
         # Options are all permutations of colors; this grows as num_colors!.
         # Keep a conservative cap to avoid accidentally creating enormous option spaces.
         max_options = factorial(int(num_colors))
@@ -307,7 +331,10 @@ class ParticipationModel(mesa.Model):
         self.options = self.create_all_options(num_colors)
         # Simulation variables
         self.mu = ensure_rate_0_1("mu", mu)  # Mutation rate for the color cells (0.1 = 10 % mutate)
-        self.common_assets = 100*num_agents if common_assets is None else common_assets
+        if common_assets is None:
+            self.common_assets = float(100 * num_agents)
+        else:
+            self.common_assets = ensure_finite_ge_0("common_assets", common_assets)
         # Election impact factor on color mutation through a probability array
         self.election_impact_on_mutation = float(election_impact_on_mutation)
         if not np.isfinite(self.election_impact_on_mutation) or self.election_impact_on_mutation < 0.0:
@@ -329,9 +356,6 @@ class ParticipationModel(mesa.Model):
         # Area variables
         self.global_area = self.initialize_global_area()
         self.areas: List[Optional[Area]] = [None] * num_areas    # TODO change to using mesas AgentSet class!
-        self.av_area_height = av_area_height
-        self.av_area_width = av_area_width
-        self.area_size_variance = area_size_variance
         self._no_overlap = False  # True if areas are instantiated without overlap (speeds up things)
         # Adjust the color pattern to make it less random (see color patches)
         self.color_patches_steps = ensure_int_ge_0("color_patches_steps", color_patches_steps)
@@ -369,6 +393,9 @@ class ParticipationModel(mesa.Model):
                     membership[idx] += 1
         self._covered_cell_count = int(np.count_nonzero(membership))
         self._areas_are_disjoint = bool(np.max(membership) <= 1)
+        # no_overlap means "areas do not overlap" (disjointness only).
+        # Full-coverage/partition is tracked separately where needed.
+        self._no_overlap = bool(self._areas_are_disjoint)
         # Cache uncovered color counts (uncovered cells are never mutated by any area).
         uncovered_counts = np.zeros(self.num_colors, dtype=np.int64)
         if self._covered_cell_count < n_cells:

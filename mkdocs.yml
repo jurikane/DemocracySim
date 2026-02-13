@@ -21,6 +21,7 @@ nav:
     - Technical:
         - Overview: technical/technical_overview.md
         - Environment Dynamics: technical/environment_dynamics.md
+        - Structural Topology: technical/structural_topology.md
         - Learning:
             - Participation Learning: technical/participation_learning.md
             - Altruism Learning: technical/altruism_learning.md

@@ -1,99 +1,110 @@
 # Environment Dynamics
 
-This page documents the **environment / world evolution knobs** and the
-semantics that are locked by Pytests. These knobs affect the evolution of the
-grid (color cells), which in turn changes election outcomes and reward signals.
+This document is the single reference for **world-evolution semantics**:
+how grid colors are initialized and mutated, how global color distributions are
+computed, and which invariants are locked by tests for thesis runs.
 
-## Core Knobs
+## Where It Happens (Runtime Path)
 
-### `mu` (Mutation Rate)
+Environment dynamics happen in two phases:
 
-- Meaning: fraction of an area's cells that are recolored when mutation is applied.
-- Range: `[0, 1]`.
-- Timing: mutation from step `t` is applied at the **start of step `t+1`** (see step semantics).
+1. Initialization:
+   - sample initial colors from `_preset_color_dst`
+   - optional patching via `adjust_color_pattern(color_patches_steps, patch_power)`
+2. Per-step execution:
+   - `CustomScheduler.step()` applies mutation at the start of step `t+1`
+   - areas execute elections on the election-time state
+   - `update_global_color_distribution()` updates `global_color_dst`
 
-Locked by:
+Code references:
+
+- `src/models/participation_model.py::ParticipationModel.create_color_distribution`
+- `src/models/participation_model.py::ParticipationModel.adjust_color_pattern`
+- `src/models/participation_model.py::CustomScheduler.step`
+- `src/agents/area.py::Area.mutate_cells`
+- `src/models/participation_model.py::ParticipationModel.update_global_color_distribution`
+
+## Environment Semantics (Authoritative)
+
+### Mutation timing
+
+- Mutation from election step `t` is applied at the **start of step `t+1`**.
+- Elections and logged step-state are evaluated on election-time (pre-mutation-of-`t`) state.
+
+### Global color distribution
+
+- `global_color_dst` is the normalized color distribution of the realized grid state.
+- `update_global_color_distribution()` must be exact:
+  - if areas are disjoint, it may use cached per-area counts (+ cached uncovered-cell counts)
+  - otherwise it falls back to full grid counting
+
+## Knobs and Contracts
+
+### `mu`
+
+- Mutation rate in `[0,1]` (fraction of an area’s cells recolored per mutation event).
+
+### `election_impact_on_mutation`
+
+- Finite `>= 0`.
+- Shapes `color_probs` used to sample colors from elected orderings.
+- `0` implies uniform probability over elected-ordering positions.
+
+### `num_colors`
+
+- Integer `>= 2`, with fail-loud cap via factorial option-space bound.
+- Defines both grid color alphabet and election option dimensionality.
+
+### `heterogeneity`
+
+- Finite `>= 0`.
+- Controls spread of the preset initialization distribution.
+- `0` implies uniform preset distribution.
+
+### `color_patches_steps`
+
+- Integer `>= 0`.
+- Number of full-grid patching passes at initialization.
+- `0` is a no-op.
+
+### `patch_power`
+
+- Finite `>= 0`.
+- Controls branch behavior in patching (`preset distribution` vs `neighbor consensus`).
+
+## Why This Matters for Thesis Validity
+
+- Environment dynamics define the outcome process that drives rewards and learning.
+- Any silent drift in mutation timing or global-color computation can invalidate time-series interpretation.
+- Strong contracts on these knobs are required for reproducible, defensible comparisons across voting rules.
+
+## Logging and Integration Expectations
+
+- Logged `color_*` series must match election-time grid semantics.
+- `global_color_dst` used by learning/satisfaction paths must match realized grid counts.
+- Topology-dependent fast paths must preserve exactness (no approximation drift).
+
+## Test Coverage (What Is Locked By Pytests)
+
+Core contracts:
 
 - `tests/test_mu_mutation_contract.py`
-
-### `election_impact_on_mutation` (Bias Shape for Mutation Sampling)
-
-- Meaning: shapes the probability vector `color_probs` used when sampling colors from
-  the elected ordering during mutation.
-- Range: finite `>= 0`.
-- Special case: `0` means uniform sampling across the elected ordering.
-
-Locked by:
-
 - `tests/test_election_impact_on_mutation_contract.py`
-
-### `num_colors` (Option Space Size)
-
-- Meaning: number of colors in the grid, and the number of alternatives in elections.
-- Constraint: the model uses all **permutations** of colors as options; this grows as `num_colors!`.
-- Policy: fail loudly for configurations that would imply a huge option space.
-
-Locked by:
-
 - `tests/test_num_colors_contract.py`
-
-### `heterogeneity` (Preset Distribution Sharpness)
-
-- Meaning: controls the variability of the initial preset distribution used to sample
-  initial cell colors.
-- Range: finite `>= 0`.
-- Special case: `0` implies a uniform preset distribution.
-
-Locked by:
-
 - `tests/test_heterogeneity_contract.py`
-
-### `color_patches_steps` (Initialization-Only Patching Passes)
-
-- Meaning: number of full-grid “patching” passes applied after initial cell creation.
-- Range: integer `>= 0`.
-- Special case: `0` disables patching entirely (no-op).
-
-Locked by:
-
 - `tests/test_color_patches_steps_contract.py`
-
-### `patch_power` (Initialization Patching Strength)
-
-- Meaning: controls the strength of patching (via the Gaussian term in `color_patches()`),
-  i.e. how often patching draws from the preset distribution vs. following neighbor consensus.
-- Range: finite `>= 0`.
-- Special case: `0` forces the preset-distribution branch for any cell with non-zero bias distance.
-
-Locked by:
-
 - `tests/test_patch_power_contract.py`
-
-## Global Color Distribution Semantics
-
-The model maintains:
-
-- `global_color_dst`: the normalized global distribution of colors on the grid (election-time state)
-- `update_global_color_distribution()`: updates `global_color_dst`
-
-**Definition:** `global_color_dst` must match the realized grid state (count colors across all cells and normalize).
-
-Performance optimization:
-
-- If areas are **disjoint**, global counts can be computed exactly by summing cached per-area color counts,
-  plus a cached contribution from uncovered (static) cells.
-- If areas overlap, the model falls back to scanning the grid (can be improved in future).
-
-Locked by:
-
 - `tests/test_global_color_distribution_semantics_contract.py`
 
-## Interaction Test (Pipeline Sanity)
-
-Because these knobs interact (init distribution → patching → mutation → global distribution),
-we also lock a small end-to-end environment pipeline test that avoids coupling to the
-full learning/voting system by stubbing `Area.step()`.
-
-Locked by:
+Interaction test:
 
 - `tests/test_environment_dynamics_interactions.py`
+  - checks end-to-end environment pipeline (init distribution -> patching -> mutation timing -> global distribution consistency)
+
+## Recommended Thesis Run Policy
+
+For baseline experiment grids:
+
+- keep `num_colors` and mutation knobs fixed across rule comparisons
+- use moderate `mu` and `election_impact_on_mutation` chosen in calibration, then freeze
+- treat changes in `heterogeneity`/patching as explicit robustness analyses, not baseline variations

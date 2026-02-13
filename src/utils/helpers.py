@@ -92,6 +92,6 @@ def ensure_int_ge_0(name: str, value) -> int:
 
 def ensure_finite_ge_0(name: str, value) -> float:
     """Return value as float if it is finite and >= 0."""
-    if not isinstance(value, (int, float)) or not np.isfinite(value) or float(value) < 0.0:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(value) or float(value) < 0.0:
         raise ValueError(f"{name} must be finite and >= 0. Got: {value} type={type(value)}")
     return float(value)
