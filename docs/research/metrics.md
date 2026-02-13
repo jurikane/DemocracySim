@@ -10,7 +10,9 @@
 
 ### **Gini Index** *(Inequality Metric)*
 - Measures the inequality in asset distribution among agents within the system.
-- Ranges from **0** (perfect equality) to **1** (maximum inequality, where one agent holds all assets).
+- In the simulation outputs (`steps.parquet`, `area_steps.parquet`) this is stored as
+  a percentage-like value in **0–100** (`100 * gini`).
+- Interpretation is unchanged: **0** = perfect equality, **100** = maximum inequality.
 - Offers insights into how electoral decisions impact wealth/resource distribution over time.
 
 ### **Collective Accuracy**
