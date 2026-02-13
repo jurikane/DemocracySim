@@ -95,11 +95,18 @@ Core contracts:
 - `tests/test_color_patches_steps_contract.py`
 - `tests/test_patch_power_contract.py`
 - `tests/test_global_color_distribution_semantics_contract.py`
+- `tests/test_step_semantics_mutation_timing.py`
+  - locks mutation timing semantics (`t` mutation applied at start of `t+1`)
 
 Interaction test:
 
 - `tests/test_environment_dynamics_interactions.py`
   - checks end-to-end environment pipeline (init distribution -> patching -> mutation timing -> global distribution consistency)
+
+Related logging consistency guard:
+
+- `tests/test_area_steps_pre_mutation_snapshot.py`
+  - verifies area-level logged color distributions are pre-mutation election-time snapshots
 
 ## Recommended Thesis Run Policy
 

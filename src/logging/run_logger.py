@@ -468,12 +468,29 @@ class RunLoggerV2:
                 raise RuntimeError(
                     f"Missing pre-mutation area snapshot for step {step}, area {area_id}."
                 )
-            r["eligible_voters"] = np.int32(int(snapshot.get("eligible_voters", area.num_agents)))
-            r["participants"] = np.int32(int(snapshot.get("participants", 0)))
-            r["turnout"] = np.float32(float(snapshot.get("turnout", area.voter_turnout)))
-            r["election_cost_rate"] = np.float32(float(snapshot.get("election_cost_rate", model.election_cost_rate)))
-            r["fee_pool"] = np.float32(float(snapshot.get("fee_pool", getattr(area, "_election_fee_pool"))))
-            r["dist_to_reality"] = np.float32(float(snapshot.get("dist_to_reality", area.dist_to_reality)))
+            required = (
+                "eligible_voters",
+                "participants",
+                "turnout",
+                "election_cost_rate",
+                "fee_pool",
+                "dist_to_reality",
+                "area_color",
+                "elected_color",
+            )
+            missing = [k for k in required if k not in snapshot]
+            if missing:
+                raise RuntimeError(
+                    f"Missing required pre-mutation snapshot fields for step {step}, "
+                    f"area {area_id}: {missing}"
+                )
+
+            r["eligible_voters"] = np.int32(int(snapshot["eligible_voters"]))
+            r["participants"] = np.int32(int(snapshot["participants"]))
+            r["turnout"] = np.float32(float(snapshot["turnout"]))
+            r["election_cost_rate"] = np.float32(float(snapshot["election_cost_rate"]))
+            r["fee_pool"] = np.float32(float(snapshot["fee_pool"]))
+            r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
             if cd is None:
@@ -568,8 +585,15 @@ class RunLoggerV2:
 
         # estim_dst_color_* expanded columns
         dist = np.asarray(est_dist, dtype=np.float32) if est_dist is not None else None
-        if dist is None or dist.ndim != 1:
+        missing_or_invalid_estimate = (
+            dist is None
+            or dist.ndim != 1
+            or (dist.size > 0 and np.all(dist == 0.0))
+        )
+        if missing_or_invalid_estimate:
             # Emit NaNs to avoid masking missing estimate_real_distribution()
+            # (all-zero vectors are treated as invalid for this context because
+            # they cannot represent a valid probability distribution).
             num_colors = int(agent.model.num_colors)
             dist = np.full(num_colors, np.nan, dtype=np.float32)
         for i in range(dist.shape[0]):

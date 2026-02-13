@@ -41,7 +41,6 @@ Implemented distances (normalized to `[0,1]`):
 - **Agents**:
   - Independently acting entities modeled with preferences, budgets, and decision-making strategies.
   - Can participate in elections, have personal preferences and limited information about surroundings.
-  - Trained with decision-tree methods to simulate behavior.
   - Participation costs are modeled via `election_cost_rate` (fraction of current assets paid when voting).
   - Rewards/penalties are scaled by wealth via `reward_rate_common` and `reward_rate_personal` (fractions of assets).
   - Reward signs/magnitudes are controlled by break-even points: `break_even_distance_common` 
@@ -68,5 +67,7 @@ Implemented distances (normalized to `[0,1]`):
 Learn more in the following sections.
 
 Additional deep-dives:
+- `docs/technical/population_preferences.md` (population composition, information level, and static preference-shape knobs)
 - `docs/technical/participation_learning.md` (equations + implementation contract for participation learning)
 - `docs/technical/altruism_learning.md` (equations + implementation contract for altruism learning)
+- `docs/technical/run_control_output.md` (reproducibility, run control knobs, output contract)

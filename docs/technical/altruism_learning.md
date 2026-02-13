@@ -165,7 +165,8 @@ Individual contracts:
 - `tests/test_altruism_alpha_contract.py` (exact update, ratio metamorphic, logging)
 - `tests/test_altruism_clip_bounds_contract.py` (oracle clipping + metamorphic tightening + validation)
 - `tests/test_altruism_learning_toggle_contract.py` (toggle gates update, participant-only)
-- `tests/test_satisfaction_mode_contract.py` and `tests/test_satisfaction_baseline_alpha_contract.py`
+- `tests/test_satisfaction_mode_contract.py`, `tests/test_satisfaction_mode_validation_contract.py`,
+  and `tests/test_satisfaction_baseline_alpha_contract.py`
   (satisfaction inputs to altruism)
 
 Interaction tests (multi-knob, end-to-end through the step pipeline):

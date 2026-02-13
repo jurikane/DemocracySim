@@ -158,8 +158,10 @@ Vote signal table (participants only). This is the single source of
 
 - `votes.parquet` uses a fixed 3-rank wide layout to reduce row counts.
 - If fewer than 3 options exist, remaining rank_* fields should be null.
+- If estimate distributions are missing/invalid at vote time, `estim_dst_color_*` is written as `NaN` (fail-visible), not zeros.
 
 ## Notes
 
 - Vector columns are **expanded**: `*_0..*_{C-1}` where `C=num_colors`.
 - Validators live in `src/logging/output_schema.py` and allow safe dtype upcasts.
+- Missing required pre-mutation area snapshot fields fail loudly during logging (no silent fallback).

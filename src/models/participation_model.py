@@ -141,6 +141,150 @@ class ParticipationModel(mesa.Model):
         _no_overlap (bool): A flag indicating areas don't overlap. Speeds up certain computations if True.
     """
 
+    @staticmethod
+    def _validate_color_and_personality_space(
+        *,
+        num_colors,
+        num_personality_groups,
+    ) -> tuple[int, int]:
+        """Validate color-domain size and personality-group cardinality contracts."""
+        if not isinstance(num_colors, int):
+            raise ValueError(f"num_colors must be int, got {type(num_colors)}")
+        if num_colors < 2:
+            raise ValueError("num_colors must be >= 2.")
+
+        n_groups = ensure_int_ge_0("num_personality_groups", num_personality_groups)
+        if n_groups < 1:
+            raise ValueError("num_personality_groups must be >= 1.")
+
+        max_personality_groups = factorial(int(num_colors))
+        if n_groups > max_personality_groups:
+            raise ValueError(
+                f"num_personality_groups={n_groups} exceeds "
+                f"max unique permutations {max_personality_groups} for num_colors={num_colors}."
+            )
+
+        # Options are all permutations of colors; this grows as num_colors!.
+        # Keep a conservative cap to avoid accidentally creating enormous option spaces.
+        max_options = factorial(int(num_colors))
+        if max_options > 50_000:
+            raise ValueError(
+                f"num_colors={num_colors} implies {max_options} options (num_colors!), "
+                "which is too large for this simulation configuration. "
+                "Reduce num_colors (e.g. <= 8) or implement an alternative option representation."
+            )
+        return int(num_colors), int(n_groups)
+
+    @staticmethod
+    def _validate_population_topology_inputs(
+        *,
+        num_agents,
+        num_areas,
+        height,
+        width,
+        av_area_height,
+        av_area_width,
+        area_size_variance,
+    ) -> tuple[int, int, int, int, float]:
+        """Validate agent/area counts and geometry-related scalar inputs."""
+        n_agents = ensure_int_ge_0("num_agents", num_agents)
+        if n_agents < 1:
+            raise ValueError("num_agents must be >= 1.")
+
+        n_areas = ensure_int_ge_0("num_areas", num_areas)
+        if n_areas > int(height) * int(width):
+            raise ValueError(
+                f"num_areas={n_areas} exceeds available grid anchor slots "
+                f"({int(height) * int(width)} for {width}x{height})."
+            )
+
+        av_h = ensure_int_ge_0("av_area_height", av_area_height)
+        av_w = ensure_int_ge_0("av_area_width", av_area_width)
+        if av_h == 0 or av_w == 0:
+            raise ValueError("av_area_height and av_area_width must be >= 1.")
+        if av_h > int(height):
+            raise ValueError(f"av_area_height={av_h} exceeds grid height={height}.")
+        if av_w > int(width):
+            raise ValueError(f"av_area_width={av_w} exceeds grid width={width}.")
+
+        area_var = ensure_finite_ge_0("area_size_variance", area_size_variance)
+        if area_var > 1.0:
+            raise ValueError("area_size_variance must be in [0,1].")
+        return int(n_agents), int(n_areas), int(av_h), int(av_w), float(area_var)
+
+    def _configure_participation_learning(
+        self,
+        *,
+        participation_alpha,
+        participation_beta,
+        participation_init_q,
+        participation_q_max,
+        bias_toward_participation,
+        participation_baseline_alpha,
+    ) -> None:
+        """Validate and assign participation-learning knobs."""
+        self.participation_alpha = is_learning_rate(participation_alpha)
+
+        self.participation_beta = float(participation_beta)
+        if not np.isfinite(self.participation_beta) or self.participation_beta < 0.0:
+            raise ValueError("participation_beta must be finite and >= 0.")
+
+        self.participation_init_q = float(participation_init_q)
+        if not np.isfinite(self.participation_init_q):
+            raise ValueError("participation_init_q must be finite.")
+
+        self.participation_q_max = float(participation_q_max)
+        if not np.isfinite(self.participation_q_max) or self.participation_q_max < 0.0:
+            raise ValueError("participation_q_max must be finite and >= 0.")
+
+        self.bias_toward_participation = float(bias_toward_participation)
+        if not np.isfinite(self.bias_toward_participation) or not (-1.0 <= self.bias_toward_participation <= 1.0):
+            raise ValueError("bias_toward_participation must be finite and in [-1,1].")
+
+        self.participation_baseline_alpha = ensure_rate_0_1(
+            "participation_baseline_alpha", participation_baseline_alpha
+        )
+
+    def _configure_altruism_learning_and_satisfaction(
+        self,
+        *,
+        altruism_alpha,
+        altruism_init,
+        altruism_clip_min,
+        altruism_clip_max,
+        altruism_learning,
+        altruism_static,
+        satisfaction_mode,
+        satisfaction_baseline_alpha,
+    ) -> None:
+        """Validate and assign altruism-learning and satisfaction knobs."""
+        self.altruism_alpha = is_learning_rate(altruism_alpha)
+
+        self.altruism_init = float(altruism_init)
+        if not np.isfinite(self.altruism_init) or not (0.0 <= self.altruism_init <= 1.0):
+            raise ValueError("altruism_init must be finite and in [0,1].")
+
+        self.altruism_clip_min = float(altruism_clip_min)
+        self.altruism_clip_max = float(altruism_clip_max)
+        if (
+            (not np.isfinite(self.altruism_clip_min))
+            or (not np.isfinite(self.altruism_clip_max))
+            or (self.altruism_clip_min > self.altruism_clip_max)
+        ):
+            raise ValueError("altruism_clip_min/max must be finite and satisfy clip_min <= clip_max.")
+
+        self.altruism_learning = bool(altruism_learning)
+        self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
+
+        self.satisfaction_mode = ensure_choice(
+            "satisfaction_mode",
+            str(satisfaction_mode),
+            {"global", "area", "knowledge", "combination"},
+        )
+        self.satisfaction_baseline_alpha = ensure_rate_0_1(
+            "satisfaction_baseline_alpha", satisfaction_baseline_alpha
+        )
+
     def __init__(
         self,
         height,
@@ -188,100 +332,48 @@ class ParticipationModel(mesa.Model):
         super().__init__()
         self._seed = seed
         # --- Core sizing validation (fail-loud; avoids factorial explosions) ---
-        if not isinstance(num_colors, int):
-            raise ValueError(f"num_colors must be int, got {type(num_colors)}")
-        if num_colors < 2:
-            raise ValueError("num_colors must be >= 2.")
-        num_agents = ensure_int_ge_0("num_agents", num_agents)
-        if num_agents < 1:
-            raise ValueError("num_agents must be >= 1.")
-        num_areas = ensure_int_ge_0("num_areas", num_areas)
-        if num_areas > int(height) * int(width):
-            raise ValueError(
-                f"num_areas={num_areas} exceeds available grid anchor slots "
-                f"({int(height) * int(width)} for {width}x{height})."
-            )
-        self.av_area_height = ensure_int_ge_0("av_area_height", av_area_height)
-        self.av_area_width = ensure_int_ge_0("av_area_width", av_area_width)
-        if self.av_area_height == 0 or self.av_area_width == 0:
-            raise ValueError("av_area_height and av_area_width must be >= 1.")
-        if self.av_area_height > int(height):
-            raise ValueError(
-                f"av_area_height={self.av_area_height} exceeds grid height={height}."
-            )
-        if self.av_area_width > int(width):
-            raise ValueError(
-                f"av_area_width={self.av_area_width} exceeds grid width={width}."
-            )
-        self.area_size_variance = ensure_finite_ge_0("area_size_variance", area_size_variance)
-        if self.area_size_variance > 1.0:
-            raise ValueError("area_size_variance must be in [0,1].")
-        num_personality_groups = ensure_int_ge_0(
-            "num_personality_groups", num_personality_groups
+        num_colors, num_personality_groups = self._validate_color_and_personality_space(
+            num_colors=num_colors,
+            num_personality_groups=num_personality_groups,
         )
-        if num_personality_groups < 1:
-            raise ValueError("num_personality_groups must be >= 1.")
-        max_personality_groups = factorial(int(num_colors))
-        if num_personality_groups > max_personality_groups:
-            raise ValueError(
-                f"num_personality_groups={num_personality_groups} exceeds "
-                f"max unique permutations {max_personality_groups} for num_colors={num_colors}."
-            )
-        # Options are all permutations of colors; this grows as num_colors!.
-        # Keep a conservative cap to avoid accidentally creating enormous option spaces.
-        max_options = factorial(int(num_colors))
-        if max_options > 50_000:
-            raise ValueError(
-                f"num_colors={num_colors} implies {max_options} options (num_colors!), "
-                "which is too large for this simulation configuration. "
-                "Reduce num_colors (e.g. <= 8) or implement an alternative option representation."
-            )
-        # Store scalar params early because agent init depends on them.
+        num_agents, num_areas, av_h, av_w, area_var = self._validate_population_topology_inputs(
+            num_agents=num_agents,
+            num_areas=num_areas,
+            height=height,
+            width=width,
+            av_area_height=av_area_height,
+            av_area_width=av_area_width,
+            area_size_variance=area_size_variance,
+        )
+        self.av_area_height = av_h
+        self.av_area_width = av_w
+        self.area_size_variance = area_var
         self.known_cells = ensure_int_ge_0("known_cells", known_cells)
-        # Adaptive participation learning parameters (global per agent)
-        self.participation_alpha = is_learning_rate(participation_alpha)
-        self.participation_beta = float(participation_beta)  # Sensitivity
-        if not np.isfinite(self.participation_beta) or self.participation_beta < 0.0:
-            raise ValueError("participation_beta must be finite and >= 0.")
-        self.participation_init_q = float(participation_init_q)
-        if not np.isfinite(self.participation_init_q):
-            raise ValueError("participation_init_q must be finite.")
-        self.participation_q_max = float(participation_q_max)
-        if not np.isfinite(self.participation_q_max) or self.participation_q_max < 0.0:
-            raise ValueError("participation_q_max must be finite and >= 0.")
-        self.bias_toward_participation = float(bias_toward_participation)
-        if not np.isfinite(self.bias_toward_participation) or not (-1.0 <= self.bias_toward_participation <= 1.0):
-            raise ValueError("bias_toward_participation must be finite and in [-1,1].")
-        self.participation_baseline_alpha = ensure_rate_0_1(
-            "participation_baseline_alpha", participation_baseline_alpha
+
+        # Adaptive learning knobs
+        self._configure_participation_learning(
+            participation_alpha=participation_alpha,
+            participation_beta=participation_beta,
+            participation_init_q=participation_init_q,
+            participation_q_max=participation_q_max,
+            bias_toward_participation=bias_toward_participation,
+            participation_baseline_alpha=participation_baseline_alpha,
         )
-        # Adaptive altruism learning parameters (global per agent)
-        self.altruism_alpha = is_learning_rate(altruism_alpha)
-        self.altruism_init = float(altruism_init)
-        if not np.isfinite(self.altruism_init) or not (0.0 <= self.altruism_init <= 1.0):
-            raise ValueError("altruism_init must be finite and in [0,1].")
-        self.altruism_clip_min = float(altruism_clip_min)
-        self.altruism_clip_max = float(altruism_clip_max)
-        if (
-            (not np.isfinite(self.altruism_clip_min))
-            or (not np.isfinite(self.altruism_clip_max))
-            or (self.altruism_clip_min > self.altruism_clip_max)
-        ):
-            raise ValueError("altruism_clip_min/max must be finite and satisfy clip_min <= clip_max.")
-        self.altruism_learning = bool(altruism_learning)
-        self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
+        self._configure_altruism_learning_and_satisfaction(
+            altruism_alpha=altruism_alpha,
+            altruism_init=altruism_init,
+            altruism_clip_min=altruism_clip_min,
+            altruism_clip_max=altruism_clip_max,
+            altruism_learning=altruism_learning,
+            altruism_static=altruism_static,
+            satisfaction_mode=satisfaction_mode,
+            satisfaction_baseline_alpha=satisfaction_baseline_alpha,
+        )
         self.personal_preference_peakedness = ensure_finite_ge_0(
             "personal_preference_peakedness", personal_preference_peakedness
         )
         if self.personal_preference_peakedness <= 0.0:
             raise ValueError("personal_preference_peakedness must be > 0.")
-        self.satisfaction_mode = ensure_choice("satisfaction_mode",
-            str(satisfaction_mode),
-            {"global", "area", "knowledge", "combination"},
-        )
-        self.satisfaction_baseline_alpha = ensure_rate_0_1(
-            "satisfaction_baseline_alpha", satisfaction_baseline_alpha
-        )
         # Initialize RNGs early (centralized)
         set_seed(seed)
         self.np_random = np_rng()
@@ -293,7 +385,6 @@ class ParticipationModel(mesa.Model):
         self.random_debug = py_rng_debug()
         if seed is not None:
             print(f"Set models random seed to {seed}")
-
         # Step control
         self.max_steps: Optional[int] = max_steps
         self.running: bool = True

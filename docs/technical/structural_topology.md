@@ -95,6 +95,11 @@ Interaction test:
   - verifies structural invariants in both
   - verifies logging consistency (`steps` and `area_steps`) in both
 
+Additional regression guard:
+
+- `tests/test_overlap_runtime_regression.py`
+  - ensures overlapping topologies can execute multiple steps and produce valid v2 logs
+
 ## Recommended Thesis Run Policy
 
 For baseline experiment grids:

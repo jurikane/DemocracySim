@@ -23,6 +23,7 @@ nav:
         - Environment Dynamics: technical/environment_dynamics.md
         - Structural Topology: technical/structural_topology.md
         - Population & Preferences: technical/population_preferences.md
+        - Run Control & Output: technical/run_control_output.md
         - Learning:
             - Participation Learning: technical/participation_learning.md
             - Altruism Learning: technical/altruism_learning.md

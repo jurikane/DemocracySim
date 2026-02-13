@@ -147,7 +147,7 @@ Participation learning knobs (ModelConfig):
 - `participation_beta` (>= 0): sensitivity of probability to q (steepness of sigmoid)
 - `participation_init_q` (finite): initial q for all agents
 - `participation_q_max` (>= 0): symmetric clipping bound for q; `0` disables clipping
-- `bias_toward_participation` (finite): additive probability bias after sigmoid, clipped to `[0,1]`
+- `bias_toward_participation` (in `[-1,1]`): additive probability bias after sigmoid, then clipped to `[0,1]`
 - `participation_baseline_alpha` (in `[0,1]`): EMA step size for the baseline used in the signal
 
 Practical intuition:
@@ -197,6 +197,7 @@ The following tests lock the contract:
   - `tests/test_participation_q_max_contract.py`
   - `tests/test_bias_toward_participation_contract.py`
   - `tests/test_participation_baseline_alpha_contract.py`
+  - `tests/test_no_participation_debug_snapshot.py` (no-participation step keeps participation debug semantics consistent)
 - Interaction tests exercising multi-knob behavior under controlled RNG:
   - `tests/test_participation_learning_interactions.py`:
     - Baseline persistence: shows how `participation_baseline_alpha` changes how long a “surprise” signal persists,
