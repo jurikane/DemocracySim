@@ -1,8 +1,13 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from pathlib import Path
 
-class ModelConfig(BaseModel):
+
+class StrictBaseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ModelConfig(StrictBaseModel):
     """
     Configuration for the core simulation model.
     """
@@ -61,7 +66,7 @@ class ModelConfig(BaseModel):
     # Per-agent personal preference distribution shape ---
     personal_preference_peakedness: float = 1.0  # >1 more peaked, <1 flatter
 
-class VisualizationConfig(BaseModel):
+class VisualizationConfig(StrictBaseModel):
     """
     Configuration for visualization settings.
     """
@@ -76,7 +81,7 @@ class VisualizationConfig(BaseModel):
     agent_debug_max_agents: int = 50  # Limit agents rendered in debug panel
     agent_debug_max_field_len: int = 180  # Max chars per field in debug panel
 
-class SimulationConfig(BaseModel):
+class SimulationConfig(StrictBaseModel):
     """
     Configuration for simulation runs and storage.
     """
@@ -88,13 +93,13 @@ class SimulationConfig(BaseModel):
     base_seed: Optional[int] = None    # Simulations base random seed
 
 
-class OutputConfig(BaseModel):
+class OutputConfig(StrictBaseModel):
     """Configuration for where run artifacts are written."""
     # Absolute path is used as-is; relative paths are interpreted relative to project root.
     directory: Path = Path("data") / "simulation_output"
 
 
-class AppConfig(BaseModel):
+class AppConfig(StrictBaseModel):
     """
     Top-level application configuration.
     """

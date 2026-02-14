@@ -55,6 +55,12 @@ Headless execution and output writing:
 - Relative paths are resolved relative to project root.
 - `~` and environment variables are expanded.
 
+### Config parsing strictness
+
+- Config models are strict (`extra="forbid"`).
+- Unknown/stale keys fail at load time (no silent dropping).
+- Deprecated legacy keys (for example `common_assets`) are rejected.
+
 ### Schema-v2 fail-loud guarantees
 
 - Missing required pre-mutation area snapshot fields fail loudly (runtime error).
