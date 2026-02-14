@@ -201,7 +201,7 @@ class VoteAgent(Agent):
     def election_delta_rel(self) -> float:
         """Relative per-election delta stored at application time.
 
-        Defined as: delta_abs / max(assets_pre, eps) with eps=1.0.
+        Defined as: delta_abs / assets_pre for assets_pre > 0, else 0.0.
         """
         return float(self._delta_rel)
 
@@ -265,13 +265,13 @@ class VoteAgent(Agent):
 
         Computes and stores per-election signals *before* mutating assets:
           - delta_abs: pers + common - fee
-          - delta_rel: delta_abs / max(assets_pre, 1.0)
+          - delta_rel: delta_abs / assets_pre (if assets_pre > 0 else 0)
 
         And saves delta_abs into award_history.
         """
         assets_pre = float(self.assets)
         delta_abs = float(self.election_delta_abs)
-        self._delta_rel = float(delta_abs / max(assets_pre, 1.0))
+        self._delta_rel = float(delta_abs / assets_pre) if assets_pre > 0.0 else 0.0
 
         self.award_history.append(delta_abs)
         self.assets += delta_abs

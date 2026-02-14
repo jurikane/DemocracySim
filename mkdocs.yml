@@ -15,11 +15,15 @@ nav:
     - Teaser: teaser.md
     - Research:
         - Thesis Contract: research/thesis_contract.md
+        - Thesis Measurement Spec: research/thesis_measurement_spec.md
         - Broader Concept: research/research_concept.md
         - (All) Metrics: research/metrics.md
         - Future Goals: research/goals.md
     - Technical:
         - Overview: technical/technical_overview.md
+        - Semantics, Representations & RNG: technical/semantics_representation_rng.md
+        - Voting Rules Contract: technical/voting_rules.md
+        - Core Mechanics (Fees/Rewards/Distance): technical/core_mechanics.md
         - Environment Dynamics: technical/environment_dynamics.md
         - Structural Topology: technical/structural_topology.md
         - Population & Preferences: technical/population_preferences.md

@@ -1,27 +1,32 @@
-DemocracySim is set in a grid-based environment where agents interact with their surroundings and participate in group decision-making through elections. The system explores various scenarios and voting rules to understand key dynamics and challenges in democratic participation.
+DemocracySim is a grid-based multi-agent simulation where agents participate in repeated area-level elections and adapt behavior over time.
+The project studies how voting rules shape participation and inequality dynamics.
 
-## Key Features
+## Concept Summary
 
-### Simulated Environment:
-- The grid is designed without boundaries, and each unit (field) within it adopts one of **x** colors. Fields change color based on election results, with a mutation rate affected by prior outcomes.
-- Groups of fields form **territories**, which serve as the basis for elections and influence grid evolution.
+### Environment
 
-### Agents:
-- Agents are equipped with a basic artificial intelligence system and operate under a **"top-down" model**, learning decision-making strategies via training.
-- Each agent has a **limited budget** and must decide whether to participate in elections.
-- Agents have individual **preferences** over colors (called *personalities*) and are divided into **y** randomly distributed personality group types.  
-  *(The distribution of types forms majority-minority situations.)*
+- The world is a toroidal color grid.
+- Areas (territories) conduct elections on local color distributions.
+- Collective decisions feed into mutation dynamics that alter later election states.
 
-### Elections and Rewards (Two Dilemmas):
-1. **Elections:**
-    - Elections concern the frequency distribution of field colors in a given territory, representing an "objective truth" aimed at emulating wise group decisions.
-    - For an intuitive understanding, the election addresses the question:  
-      *"What is — or should be — the current color distribution within your territory?"*
+### Agents
 
-2. **Rewards:**
-    - Rewards are distributed to all agents in the territory, regardless of participation (*participation dilemma*).  
-      These rewards consist of:
-        - **Base reward:** Distributed equally based on how well agents guess the true color distribution.
-        - **Personal reward:** Allocated based on the alignment between election results and agent preferences, introducing a second dilemma:
-            - *Should agents vote selfishly (favoring their preferences) or vote with a focus on the group's accuracy (collective good)?*
+- Agents have heterogeneous preference structures (personality groups + per-agent preference distributions).
+- Agents hold a resource/capacity state (`assets`) and decide whether to participate in each election.
+- Agents have limited information (`known_cells`) and estimate local reality with uncertainty.
+- Adaptation uses fixed explicit update rules (participation learning and optional altruism learning).
 
+### Elections and Incentives
+
+- Elections aggregate agent score vectors into a collective ordering via a chosen voting rule.
+- Economic update per election combines:
+  - participation fee (`election_cost_rate`)
+  - common reward/penalty (reality distance based)
+  - personal reward/penalty (preference distance based)
+- Signs are controlled by break-even distances; magnitudes scale with current assets.
+
+### Core Tensions
+
+- Participation dilemma: participate and pay immediate cost vs abstain and rely on others.
+- Alignment dilemma: prioritize personal preference fit vs collective reality tracking.
+- Dynamic feedback: election outcomes affect both immediate payoffs and future environment states.
