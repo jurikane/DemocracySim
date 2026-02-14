@@ -368,6 +368,32 @@ class StepsTextElement(TextElement):
                 f"{len(model.voting_agents)}: {first_agents}")
 
 
+class ReplayGridStepStatusElement(TextElement):
+    """Show replay step/grid alignment status (useful for sparse grid snapshots)."""
+
+    def render(self, model) -> str:
+        if not hasattr(model, "replay_recorded_step") or not hasattr(model, "replay_grid_source_step"):
+            return ""
+
+        rec = int(getattr(model, "replay_recorded_step", getattr(model.scheduler, "steps", 0)))
+        src = int(getattr(model, "replay_grid_source_step", rec))
+
+        if rec == src:
+            return (
+                f"<div style='padding:6px 8px; margin:4px 0; border:1px solid #d7d7d7; "
+                f"background:#f8f8f8; font-family:monospace;'>"
+                f"Replay Step {rec} | Grid Step {src}"
+                f"</div>"
+            )
+
+        return (
+            f"<div style='padding:6px 8px; margin:4px 0; border:1px solid #d5a200; "
+            f"background:#fff8dc; font-family:monospace;'>"
+            f"Replay Step {rec} | Grid Step {src} (carry-forward snapshot)"
+            f"</div>"
+        )
+
+
 class AreaPersonalityGroupDists(TextElement):
     def __init__(self):
         super().__init__()

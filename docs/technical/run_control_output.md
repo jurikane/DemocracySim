@@ -44,6 +44,8 @@ Headless execution and output writing:
 - Replay behavior with sparse grids (`grid_interval > 1`):
   when `grid_t` is missing, replay carries forward the latest available snapshot
   at step `<= t`.
+- Replay UI shows both the replay step and the grid-source step at the top
+  (`Replay Step t | Grid Step k`) so carry-forward states are visible.
 - Filename padding width is `len(str(num_steps))`; pattern is exposed in `static.json`.
 
 ### Output location (`output.directory`)

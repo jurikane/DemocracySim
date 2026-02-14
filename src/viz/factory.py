@@ -137,6 +137,7 @@ def make_charts(cfg: AppConfig) -> list:
 
     # Advanced matplotlib-based elements
     from src.viz.visualisation_elements import (
+        ReplayGridStepStatusElement,
         PersonalityGroupDistribution,
         AreaDiagnosticsPanel,
         VoterTurnoutElement,
@@ -145,7 +146,7 @@ def make_charts(cfg: AppConfig) -> list:
         CohortElectionLearningDiagnostics,
     )
     from src.viz.debug_viz import AreaAgentDebugPanel
-    extras = []
+    extras = [ReplayGridStepStatusElement()]
     if show_area_stats:
         extras.append(AreaDiagnosticsPanel())
     if show_agent_debug_panel:

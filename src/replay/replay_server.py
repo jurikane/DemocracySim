@@ -157,6 +157,10 @@ class ReplayData:
         return data
 
     def load_grid(self, step: int) -> Optional[np.ndarray]:
+        grid, _grid_step = self.load_grid_with_source(step)
+        return grid
+
+    def load_grid_with_source(self, step: int) -> tuple[np.ndarray, int]:
         # Use pattern from static.json.
         if not self._grid_pattern:
             raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
@@ -168,7 +172,7 @@ class ReplayData:
         for t in range(s, -1, -1):
             gf = self.grids_dir / (self._grid_pattern % t)
             if gf.exists():
-                return np.load(str(gf))
+                return np.load(str(gf)), int(t)
 
         raise FileNotFoundError(
             f"Missing grid snapshot for step {s} and no earlier fallback found in {self.grids_dir}"
@@ -372,13 +376,21 @@ class ReplayModel(mesa.Model):
 
             self.color_cells.append(cell)
 
+        # Replay status for UI diagnostics (recorded step vs grid source step).
+        self.replay_recorded_step: int = 0
+        self.replay_grid_source_step: int = 0
+
         # Apply initial pre-election grid snapshot (grid_0000.npy) if available,
         # without advancing recorded step series. This keeps scheduler.steps==0 so
         # UI shows 'Current Step: 0' while the grid matches the true initial state.
-        g0 = self.data.load_grid(0)
+        g0, g0_src = self.data.load_grid_with_source(0)
         if g0 is not None:
             self._apply_grid(g0)
+            self.replay_grid_source_step = int(g0_src)
             self._initialized_with_grid0 = True
+        self.replay_recorded_step = 0
+        self.scheduler.steps = 0
+        self.scheduler.time = 0
 
         # Do NOT auto-advance recorded steps here. The first call to step() will
         # advance to the first recorded step (step=1). steps/area_steps color
@@ -445,9 +457,11 @@ class ReplayModel(mesa.Model):
         rec = self.data.load_step(idx)
         step = int(rec.get("step", idx))
 
-        grid = self.data.load_grid(step)
+        grid, grid_src_step = self.data.load_grid_with_source(step)
         if grid is not None:
             self._apply_grid(grid)
+        self.replay_recorded_step = int(step)
+        self.replay_grid_source_step = int(grid_src_step)
 
         # Model vars for charts (snake_case)
         model_block = rec.get("model") if isinstance(rec.get("model"), dict) else {}
