@@ -36,10 +36,11 @@ And the following per-election outcome signals:
 
 - `fee` (float): participation cost for participants, `fee = election_cost_rate * assets_pre`
 - `reward_common`, `reward_personal` (floats): outcome-dependent components, computed in asset units
-- `delta_abs` (float): absolute asset change for this election, `reward_common + reward_personal - fee`
-- `delta_rel` (float): relative change, `delta_abs / assets_pre` (if `assets_pre > 0`, else `0.0`)
+- `raw_delta_abs` (float): pre-clamp asset delta, `reward_common + reward_personal - fee`
+- `delta_abs` (float): realized absolute asset change after floor-clamp at zero assets
+- `delta_rel` (float): realized relative change, `delta_abs / assets_pre` (if `assets_pre > 0`, else `0.0`)
 
-`delta_abs`/`delta_rel` are computed and stored in `VoteAgent.reward_agent()` *before* assets are mutated.
+`delta_abs`/`delta_rel` are computed and stored in `VoteAgent.reward_agent()` from the realized post-clamp asset change.
 
 ## Participation Decision (Policy)
 

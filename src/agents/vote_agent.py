@@ -194,14 +194,14 @@ class VoteAgent(Agent):
 
     @property
     def election_delta_abs(self) -> float:
-        """Absolute per-election asset delta (pers + common - fee)."""
-        return self._reward_pers_comp + self._reward_common_comp - self._fee
+        """Realized absolute per-election asset delta after asset-floor clamp."""
+        return float(self._delta_abs)
 
     @property
     def election_delta_rel(self) -> float:
         """Relative per-election delta stored at application time.
 
-        Defined as: delta_abs / assets_pre for assets_pre > 0, else 0.0.
+        Defined as: realized_delta_abs / assets_pre for assets_pre > 0, else 0.0.
         """
         return float(self._delta_rel)
 
@@ -263,20 +263,22 @@ class VoteAgent(Agent):
     def reward_agent(self) -> None:
         """Reward the agent by increasing/decreasing her assets.
 
-        Computes and stores per-election signals *before* mutating assets:
-          - delta_abs: pers + common - fee
+        Computes and stores realized per-election signals:
+          - raw_delta_abs: pers + common - fee
+          - assets_post = max(0, assets_pre + raw_delta_abs)
+          - delta_abs: assets_post - assets_pre
           - delta_rel: delta_abs / assets_pre (if assets_pre > 0 else 0)
 
         And saves delta_abs into award_history.
         """
         assets_pre = float(self.assets)
-        delta_abs = float(self.election_delta_abs)
-        self._delta_rel = float(delta_abs / assets_pre) if assets_pre > 0.0 else 0.0
+        raw_delta_abs = float(self._reward_pers_comp + self._reward_common_comp - self._fee)
+        assets_post = max(0.0, assets_pre + raw_delta_abs)
+        self._delta_abs = float(assets_post - assets_pre)
+        self._delta_rel = float(self._delta_abs / assets_pre) if assets_pre > 0.0 else 0.0
 
-        self.award_history.append(delta_abs)
-        self.assets += delta_abs
-        if self.assets < 0:
-            self.assets = 0  # Ensure assets don't go negative
+        self.award_history.append(self._delta_abs)
+        self.assets = assets_post
 
     def ask_for_participation(self, area: Area) -> bool:
         """

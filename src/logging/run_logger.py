@@ -76,6 +76,7 @@ class RunLoggerV2:
         self._agent_rows: List[Dict[str, Any]] = []
         self._votes_rows: List[Dict[str, Any]] = []
         self._current_step: Optional[int] = None
+        self._num_colors: Optional[int] = None
         # Pre-mutation area snapshots keyed by (step, area_id)
         self._area_snapshots_by_step_area: Dict[tuple[int, int], Dict[str, Any]] = {}
 
@@ -124,6 +125,7 @@ class RunLoggerV2:
         num_colors = int(model.num_colors)
         num_areas = int(model.num_areas)
         num_agents = int(model.num_agents)
+        self._num_colors = int(num_colors)
 
         static = {
             "schema": {
@@ -226,6 +228,8 @@ class RunLoggerV2:
 
                 - vote sink: used by Area._tally_votes() to emit participant vote rows.
         """
+        if self._num_colors is None:
+            self._num_colors = int(model.num_colors)
         setattr(model, "_schema_v2_vote_sink", self._on_vote)
         setattr(model, "_schema_v2_area_snapshot_sink", self._on_area_snapshot)
 
@@ -286,24 +290,7 @@ class RunLoggerV2:
 
         votes_df = pd.DataFrame(self._votes_rows)
         if votes_df.empty:
-            # Create an empty frame with required columns so schema validation passes
-            votes_df = pd.DataFrame(
-                columns=[
-                    "run_seed",
-                    "rule_idx",
-                    "step",
-                    "area_id",
-                    "agent_id",
-                    "participating",
-                    "confidence",
-                    "rank_1_option_id",
-                    "rank_1_oppose_score",
-                    "rank_2_option_id",
-                    "rank_2_oppose_score",
-                    "rank_3_option_id",
-                    "rank_3_oppose_score",
-                ]
-            )
+            votes_df = self._empty_votes_df()
 
         # Validate before writing (helps fail fast during development)
         validate_steps_df(steps_df)
@@ -315,6 +302,31 @@ class RunLoggerV2:
         area_steps_df.to_parquet(self.ctx.out_dir / "area_steps.parquet", engine="pyarrow", compression=self.compression)
         agents_df.to_parquet(self.ctx.out_dir / "agents.parquet", engine="pyarrow", compression=self.compression)
         votes_df.to_parquet(self.ctx.out_dir / "votes.parquet", engine="pyarrow", compression=self.compression)
+
+    def _empty_votes_df(self) -> pd.DataFrame:
+        """Build a schema-valid empty votes frame with explicit dtypes."""
+        num_colors = int(self._num_colors) if self._num_colors is not None else 0
+        if num_colors <= 0:
+            raise RuntimeError("Cannot build empty votes.parquet schema: num_colors is not initialized.")
+
+        cols: Dict[str, pd.Series] = {
+            "run_seed": pd.Series(dtype="int32"),
+            "rule_idx": pd.Series(dtype="int16"),
+            "step": pd.Series(dtype="int32"),
+            "area_id": pd.Series(dtype="int32"),
+            "agent_id": pd.Series(dtype="int32"),
+            "participating": pd.Series(dtype="boolean"),
+            "confidence": pd.Series(dtype="float32"),
+            "rank_1_option_id": pd.Series(dtype="Int32"),
+            "rank_1_oppose_score": pd.Series(dtype="float32"),
+            "rank_2_option_id": pd.Series(dtype="Int32"),
+            "rank_2_oppose_score": pd.Series(dtype="float32"),
+            "rank_3_option_id": pd.Series(dtype="Int32"),
+            "rank_3_oppose_score": pd.Series(dtype="float32"),
+        }
+        for i in range(num_colors):
+            cols[f"estim_dst_color_{i}"] = pd.Series(dtype="float32")
+        return pd.DataFrame(cols)
 
     # -----------------
     # Extraction helpers

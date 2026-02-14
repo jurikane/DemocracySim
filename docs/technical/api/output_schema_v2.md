@@ -159,6 +159,7 @@ Vote signal table (participants only). This is the single source of
 - `votes.parquet` uses a fixed 3-rank wide layout to reduce row counts.
 - If fewer than 3 options exist, remaining rank_* fields should be null.
 - If estimate distributions are missing/invalid at vote time, `estim_dst_color_*` is written as `NaN` (fail-visible), not zeros.
+- If no agent participates in a run/step, `votes.parquet` may be empty (`0` rows) but remains schema-valid with typed columns.
 
 ## Notes
 

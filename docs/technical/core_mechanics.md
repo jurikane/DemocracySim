@@ -32,13 +32,27 @@ Personal reward component:
 - `pers_coeff = break_even_distance_personal - personality_distance`
 - `personal_component = reward_rate_personal * assets * pers_coeff`
 
-Per-election absolute delta:
+Per-election raw absolute delta:
 
-- `delta_abs = common_component + personal_component - fee`
+- `raw_delta_abs = common_component + personal_component - fee`
 
 Relative learning signal input:
 
+- `assets_post = max(0.0, assets_pre + raw_delta_abs)`
+- `delta_abs = assets_post - assets_pre` (realized absolute delta)
 - `delta_rel = delta_abs / assets_pre` (if `assets_pre > 0`, else `0.0`)
+
+Asset update order (as implemented):
+
+1. compute `raw_delta_abs` from reward components and fee
+2. compute `assets_post = max(0.0, assets_pre + raw_delta_abs)`
+3. compute realized `delta_abs = assets_post - assets_pre`
+4. compute `delta_rel` from realized `delta_abs` and `assets_pre`
+5. append realized `delta_abs` to `award_history`, set `assets = assets_post`
+
+Learning consumption contract:
+
+- participation learning consumes realized `delta_rel`
 
 ## Knob Semantics
 

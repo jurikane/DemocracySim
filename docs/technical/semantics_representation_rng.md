@@ -15,6 +15,15 @@ Consequences:
 
 - logged `steps.parquet` / `area_steps.parquet` are election-time aligned
 - grid snapshots and table series must refer to the same step meaning
+- live run, headless run, and replay must expose the same state for the same seed
+
+Authoritative execution order:
+
+1. `CustomScheduler.step` increments to `t`
+2. if `t > 1`, mutation from election `t-1` is applied
+3. area elections + rewards/learning for `t` are executed
+4. `ParticipationModel.step` collects DataCollector row for `t`
+5. headless logger writes `steps/area_steps` for `t` and optional `grid_t`
 
 Turnout and Gini unit policy:
 
@@ -59,6 +68,7 @@ Semantics and units:
 - `tests/test_step_semantics_mutation_timing.py`
 - `tests/test_turnout_units_schema_v2.py`
 - `tests/test_live_headless_replay_equivalence.py`
+- `tests/test_cp00_step_timing_single_source.py`
 
 Representation contracts:
 

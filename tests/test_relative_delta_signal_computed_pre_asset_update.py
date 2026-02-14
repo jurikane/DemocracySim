@@ -6,9 +6,9 @@ from tests.factory import create_test_model
 
 
 def test_relative_delta_signal_is_computed_pre_asset_update() -> None:
-    """Contract: delta_rel is computed right before assets mutate.
+    """Contract: delta_rel is computed from realized asset change.
 
-    delta_rel = delta_abs / assets_pre (if assets_pre > 0, else 0.0)
+    delta_rel = realized_delta_abs / assets_pre (if assets_pre > 0, else 0.0)
 
     This must be stored on the agent for learning + diagnostics.
     """
@@ -84,3 +84,21 @@ def test_relative_delta_signal_zero_when_assets_pre_zero() -> None:
 
     a.reward_agent()
     assert a.election_delta_rel == 0.0
+
+
+def test_relative_delta_signal_uses_realized_delta_when_asset_floor_hits() -> None:
+    """If raw delta would push assets below zero, delta_rel must use realized (clamped) delta."""
+    model, _ = create_test_model(seed=127, num_agents=1, num_colors=3, num_areas=1)
+    a = model.voting_agents[0]
+
+    a.assets = 1.0
+    a.reset_reward_variables()
+    a.add_common_reward(0.0)
+    a.add_personal_reward(0.0)
+    a.set_election_fee(3.0)  # raw delta_abs = -3.0, realized delta_abs = -1.0 due floor
+
+    a.reward_agent()
+
+    assert np.isclose(a.assets, 0.0)
+    assert np.isclose(a.election_delta_abs, -1.0)
+    assert np.isclose(a.election_delta_rel, -1.0)
