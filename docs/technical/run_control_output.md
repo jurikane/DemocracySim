@@ -26,6 +26,7 @@ Headless execution and output writing:
 ### `seed` / `base_seed` / `run_seed`
 
 - Per-run RNG seed is deterministic: `run_seed = base_seed + run_id`.
+- `base_seed=0` is valid and treated as an explicit deterministic seed (not as missing).
 - `run_seed` is written to `meta.yaml` and included in all parquet tables.
 - Same config + same `run_id` + same `base_seed` must reproduce identical outputs.
 

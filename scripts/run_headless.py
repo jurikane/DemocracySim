@@ -25,7 +25,8 @@ def run_once(run_id: int, cfg, out_dir: Path):
         # Copy the config for each run to avoid mutation issues
         cfg_for_run = cfg.model_copy(deep=True)
         sim_cfg = cfg_for_run.simulation
-        base_seed = int(sim_cfg.base_seed) or None
+        base_seed_raw = getattr(sim_cfg, "base_seed", None)
+        base_seed = int(base_seed_raw) if base_seed_raw is not None else None
         if base_seed is None:
             base_seed = random.SystemRandom().randint(0, 2 ** 31 - 1)
             print(f"No base_seed in config; using random seed {base_seed}")
