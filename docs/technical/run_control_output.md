@@ -41,6 +41,9 @@ Headless execution and output writing:
 - `store_grid=True`: initial election-time snapshot `grid_000..0.npy` is written as step 0.
 - Per-step grid snapshots are written for recorded steps according to interval:
   `step=1, 1+grid_interval, ...`.
+- Replay behavior with sparse grids (`grid_interval > 1`):
+  when `grid_t` is missing, replay carries forward the latest available snapshot
+  at step `<= t`.
 - Filename padding width is `len(str(num_steps))`; pattern is exposed in `static.json`.
 
 ### Output location (`output.directory`)

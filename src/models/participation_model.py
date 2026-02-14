@@ -193,6 +193,8 @@ class ParticipationModel(mesa.Model):
             raise ValueError("num_agents must be >= 1.")
 
         n_areas = ensure_int_ge_0("num_areas", num_areas)
+        if n_areas < 1:
+            raise ValueError("num_areas must be >= 1.")
         if n_areas > int(height) * int(width):
             raise ValueError(
                 f"num_areas={n_areas} exceeds available grid anchor slots "
@@ -686,7 +688,6 @@ class ParticipationModel(mesa.Model):
         areas are initialized.
 
         Initializes `num_areas` and places them directly on the grid.
-        But if `self.num_areas == 0`, the method exits early.
 
         Example:
             - Given `num_areas = 4` and `grid.width = grid.height = 10`,

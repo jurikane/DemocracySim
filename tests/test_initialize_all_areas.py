@@ -39,11 +39,9 @@ class TestParticipationModelInitializeAllAreas(unittest.TestCase):
         self.assertEqual(model.num_areas, 5)
 
     def test_initialize_all_areas_no_areas(self):
-        """Test that the method does nothing if num_areas is 0."""
-        model, _ = create_test_model(
-            num_areas=0,  # Set num_areas to 0
-        )
-        assert model.num_areas == 0  # Verify no areas were initialized
+        """num_areas=0 is invalid and must fail during model construction."""
+        with self.assertRaises(ValueError):
+            create_test_model(num_areas=0)
 
     def test_initialize_all_areas_random_additional_areas(self):
         """Test that additional areas are placed randomly if num_areas exceeds uniform grid capacity."""

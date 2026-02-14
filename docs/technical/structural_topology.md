@@ -44,9 +44,8 @@ This distinction matters for interpretation and for optimization choices.
 
 ### `num_areas`
 
-- Must be integer `>= 0`.
+- Must be integer `>= 1`.
 - Must be `<= width * height` (unique anchor-slot bound).
-- `0` creates no areas.
 - Valid input creates exactly `num_areas` areas.
 
 ### `av_area_height`, `av_area_width`
@@ -76,7 +75,7 @@ This distinction matters for interpretation and for optimization choices.
 Core contracts:
 
 - `tests/test_num_areas_contract.py`
-  - `num_areas` validation, zero-area behavior, exact count behavior
+  - `num_areas` validation and exact count behavior
 
 - `tests/test_area_geometry_knobs_contract.py`
   - `av_area_height/width` validation and bounds

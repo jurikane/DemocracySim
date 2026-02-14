@@ -160,10 +160,19 @@ class ReplayData:
         # Use pattern from static.json.
         if not self._grid_pattern:
             raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
-        gf = self.grids_dir / (self._grid_pattern % int(step))
-        if not gf.exists():
-            raise FileNotFoundError(f"Missing grid snapshot: {gf}")
-        return np.load(str(gf))
+
+        s = int(step)
+        # Sparse grid logging support:
+        # if grid_s is missing (e.g. grid_interval > 1), carry forward the most
+        # recent available snapshot <= s.
+        for t in range(s, -1, -1):
+            gf = self.grids_dir / (self._grid_pattern % t)
+            if gf.exists():
+                return np.load(str(gf))
+
+        raise FileNotFoundError(
+            f"Missing grid snapshot for step {s} and no earlier fallback found in {self.grids_dir}"
+        )
 
     def _load_step_v2(self, index: int) -> Dict[str, Any]:
         steps_df = self._steps_df if self._steps_df is not None else pd.DataFrame()

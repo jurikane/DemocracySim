@@ -54,3 +54,4 @@ Additional deep-dives:
 - `docs/technical/participation_learning.md` (equations + implementation contract for participation learning)
 - `docs/technical/altruism_learning.md` (equations + implementation contract for altruism learning)
 - `docs/technical/run_control_output.md` (reproducibility, run control knobs, output contract)
+- `docs/technical/decision_log.md` (risk-relevant semantic decisions and rationale)
