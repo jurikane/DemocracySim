@@ -55,17 +55,17 @@ def test_satisfaction_mode_oracle_matches_expected_targets() -> None:
     d_knowledge = distribution_distance_l1(agent.personality, np.asarray([1.0, 0.0], dtype=np.float64))
 
     model.satisfaction_mode = "area"
-    assert float(agent.compute_satisfaction_value(area=area0, model=model)) == pytest.approx(d_area, abs=1e-12)
+    assert float(agent.compute_dissatisfaction_value(area=area0, model=model)) == pytest.approx(d_area, abs=1e-12)
 
     model.satisfaction_mode = "global"
-    assert float(agent.compute_satisfaction_value(area=area0, model=model)) == pytest.approx(d_global, abs=1e-12)
+    assert float(agent.compute_dissatisfaction_value(area=area0, model=model)) == pytest.approx(d_global, abs=1e-12)
 
     model.satisfaction_mode = "knowledge"
-    assert float(agent.compute_satisfaction_value(area=area0, model=model)) == pytest.approx(d_knowledge, abs=1e-12)
+    assert float(agent.compute_dissatisfaction_value(area=area0, model=model)) == pytest.approx(d_knowledge, abs=1e-12)
 
     model.satisfaction_mode = "combination"
     expected = float((d_area + d_global + d_knowledge) / 3.0)
-    assert float(agent.compute_satisfaction_value(area=area0, model=model)) == pytest.approx(expected, abs=1e-12)
+    assert float(agent.compute_dissatisfaction_value(area=area0, model=model)) == pytest.approx(expected, abs=1e-12)
 
 
 def test_satisfaction_mode_metamorphic_global_vs_area_ordering() -> None:
@@ -81,9 +81,9 @@ def test_satisfaction_mode_metamorphic_global_vs_area_ordering() -> None:
     model.update_global_color_distribution()
 
     model.satisfaction_mode = "area"
-    sv_area = float(agent.compute_satisfaction_value(area=area0, model=model))
+    sv_area = float(agent.compute_dissatisfaction_value(area=area0, model=model))
     model.satisfaction_mode = "global"
-    sv_global = float(agent.compute_satisfaction_value(area=area0, model=model))
+    sv_global = float(agent.compute_dissatisfaction_value(area=area0, model=model))
 
     assert sv_area < sv_global
 
@@ -96,5 +96,5 @@ def test_satisfaction_mode_knowledge_requires_nonempty_known_cells() -> None:
     agent.known_cells = []
     model.satisfaction_mode = "knowledge"
     with pytest.raises(ValueError, match="no known cells"):
-        agent.compute_satisfaction_value(area=area0, model=model)
+        agent.compute_dissatisfaction_value(area=area0, model=model)
 

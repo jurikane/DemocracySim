@@ -11,6 +11,7 @@ import yaml
 
 from scripts.run_headless import run_once
 from src.config.loader import load_config
+from src.utils.metrics import gini_index_0_100
 
 
 pytestmark = pytest.mark.phase1
@@ -66,6 +67,17 @@ def _analyze_run_dir(run_dir: Path) -> dict:
     n_agents = int(agents["agent_id"].nunique())
     assert len(agents) == n_steps * n_agents
 
+    # --- dissatisfaction-inequality pipeline lock
+    assert {"step", "agent_id", "dissatisfaction_value"}.issubset(agents.columns)
+    diss_by_step = (
+        agents.groupby("step", sort=True)["dissatisfaction_value"]
+        .apply(lambda s: float(gini_index_0_100(s.to_numpy(dtype=float))))
+        .reset_index(drop=True)
+    )
+    assert len(diss_by_step) == n_steps
+    assert np.all(np.isfinite(diss_by_step.to_numpy(dtype=float)))
+    assert np.all((diss_by_step.to_numpy(dtype=float) >= 0.0) & (diss_by_step.to_numpy(dtype=float) <= 100.0 + 1e-6))
+
     meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
     rule_idx = int(meta["run"]["rule_idx"])
 
@@ -78,6 +90,8 @@ def _analyze_run_dir(run_dir: Path) -> dict:
         "final_turnout": float(turnout[-1]),
         "mean_gini": float(np.mean(gini)),
         "final_gini": float(gini[-1]),
+        "mean_gini_dissatisfaction": float(np.mean(diss_by_step.to_numpy(dtype=float))),
+        "final_gini_dissatisfaction": float(diss_by_step.to_numpy(dtype=float)[-1]),
         "final_collective_assets": float(assets[-1]),
         "mean_dist_to_reality": float(np.mean(area_steps["dist_to_reality"].to_numpy(dtype=float))),
     }
@@ -136,3 +150,5 @@ def test_thesis_analysis_pipeline_smoke_from_logged_artifacts_only(tmp_path: Pat
     assert set(summary["rule_idx"].tolist()) == {0, 1, 2, 3}
     assert np.all(np.isfinite(summary["mean_turnout"].to_numpy(dtype=float)))
     assert np.all(np.isfinite(summary["final_gini"].to_numpy(dtype=float)))
+    assert np.all(np.isfinite(summary["mean_gini_dissatisfaction"].to_numpy(dtype=float)))
+    assert np.all(np.isfinite(summary["final_gini_dissatisfaction"].to_numpy(dtype=float)))

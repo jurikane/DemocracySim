@@ -26,7 +26,7 @@ def test_satisfaction_baseline_alpha_oracle_signal_and_ema_update() -> None:
     alpha = 0.3
     model.satisfaction_baseline_alpha = alpha
 
-    a.satisfaction_baseline = baseline0
+    a.dissatisfaction_baseline = baseline0
     signal = sv - baseline0
     baseline1 = (1.0 - alpha) * baseline0 + alpha * sv
 

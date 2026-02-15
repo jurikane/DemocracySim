@@ -65,7 +65,7 @@ def test_altruism_learning_oracle_initialization_static_vs_learning() -> None:
 
 
 def test_altruism_learning_metamorphic_toggle_gates_update() -> None:
-    """Metamorphic: with identical state and satisfaction_signal, toggling altruism_learning
+    """Metamorphic: with identical state and dissatisfaction_signal, toggling altruism_learning
     determines whether altruism_factor changes during conduct_election().
     """
     cfg = dict(
@@ -120,7 +120,7 @@ def test_altruism_learning_metamorphic_toggle_gates_update() -> None:
     # Inject a known signal; conduct_election() will pass this through to altruism update
     # only if altruism_learning is enabled, and only for participating agents.
     for ag in [off_part, off_abs, on_part, on_abs]:
-        ag.satisfaction_signal = 0.5
+        ag.dissatisfaction_signal = 0.5
 
     off_part_a0 = float(off_part.altruism_factor)
     off_abs_a0 = float(off_abs.altruism_factor)

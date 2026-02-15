@@ -4,6 +4,8 @@ This document defines the operational metrics used for final thesis analysis.
 It aligns the thesis framing with the current simulation semantics and logging pipeline.
 Execution-level scope and triage are frozen in:
 `docs/research/execution_scope_freeze.md`.
+Field naming and interpretation dictionary is frozen in:
+`docs/research/metric_glossary.md`.
 
 ## Data Sources
 
@@ -37,14 +39,14 @@ Note: agents may be initialized equally, but inequality is evaluated dynamically
 
 ### Inequality: Experiential Dimension
 
-- Agent dissatisfaction: `D_i(t) = agents.satisfaction_value` at step `t`
+- Agent dissatisfaction: `D_i(t) = agents.dissatisfaction_value` at step `t`
 - `D_i(t)` is a normalized distribution-distance style quantity (`0..1` in current implementation)
 - Define:
   - `L_D(t) = mean_i D_i(t)` (mean dissatisfaction level)
   - `I_D(t) = Gini_0_100({D_i(t)})` (dissatisfaction inequality)
 
 Interpretation: heterogeneity in experienced preference-mismatch.
-Terminology convention in thesis text: use **dissatisfaction** (the current field name in code/logs remains `satisfaction_value`).
+Terminology convention in thesis text and code/logs: use **dissatisfaction** (`dissatisfaction_value`).
 
 ## Summary Statistics Per Run
 
@@ -79,10 +81,12 @@ Purpose:
 
 - characterize whether participating ballots are convergent or dispersed at step `t`.
 
-Operational candidates (implementation may use one or both):
+Frozen operational metric:
 
-- entropy of first-choice option distribution among participants
-- mean pairwise ballot-distance among participants (from vote-level signals)
+- `diversity_first_choice_entropy_t`
+- computed from `votes.rank_1_option_id` at step `t`
+- normalized entropy in `[0,1]`
+- if no votes in step `t`, value is `NaN` (excluded from mean-based summaries)
 
 ### Distance to Reference Optima
 
@@ -91,11 +95,17 @@ Purpose:
 - track how far realized collective outcomes are from fixed reference outcomes
   computed from static preference information.
 
-Reference families:
+Frozen reference families:
 
 - utilitarian reference
 - egalitarian reference
 - rawlsian reference
+
+Frozen output series:
+
+- `dist_to_ref_utilitarian_t`
+- `dist_to_ref_egalitarian_t`
+- `dist_to_ref_rawlsian_t`
 
 Interpretation rule:
 
@@ -112,3 +122,4 @@ Before final experiment execution:
 - Freeze config files + commit hash used for final runs.
 - Do not change metric formulas after observing final rule-comparison results.
 - Treat secondary descriptive metrics as non-normative diagnostics.
+- Do not rename or reinterpret glossary metric IDs after Gate B.

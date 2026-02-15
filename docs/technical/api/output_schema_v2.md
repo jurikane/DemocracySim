@@ -80,7 +80,7 @@ All Parquet tables include:
 | gini_index           |   int16 | 0–100                      |
 | turnout              | float32 | global average turnout (%) |
 | mean_altruism        | float32 | mean altruism_factor       |
-| mean_satisfaction    | float32 | mean satisfaction_value    |
+| mean_dissatisfaction    | float32 | mean dissatisfaction_value      |
 | color_0..color_{C-1} | float32 | optional, pre-mutation     |
 
 ### `area_steps.parquet`
@@ -126,9 +126,9 @@ Agent snapshot table (**agent state only**).
 | participation_baseline     | float32 | EMA baseline for participation learning      |
 | participation_signal       | float32 | baseline-corrected participation signal      |
 | altruism_factor            | float32 | agent altruism_factor                        |
-| satisfaction_value         | float32 | satisfaction (distance)                      |
-| satisfaction_baseline      | float32 | EMA baseline for satisfaction                |
-| satisfaction_signal        | float32 | baseline-corrected satisfaction signal       |
+| dissatisfaction_value         | float32 | dissatisfaction (distance)                   |
+| dissatisfaction_baseline      | float32 | EMA baseline for dissatisfaction             |
+| dissatisfaction_signal        | float32 | baseline-corrected dissatisfaction signal    |
 
 **Semantics:** the row for step `t` represents the agent’s final state after it
 participated in all elections it was eligible for during step `t`.

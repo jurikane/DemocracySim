@@ -2,6 +2,8 @@
 
 For final thesis analysis, the frozen operational definitions are documented in
 `docs/research/thesis_measurement_spec.md`.
+Frozen metric IDs and field interpretations are documented in
+`docs/research/metric_glossary.md`.
 Execution-level inclusion/exclusion and CP/TD triage are frozen in
 `docs/research/execution_scope_freeze.md`.
 
@@ -23,7 +25,7 @@ Execution-level inclusion/exclusion and CP/TD triage are frozen in
 - Interpretation is unchanged: **0** = perfect equality, **100** = maximum inequality.
 - For thesis analysis, inequality is two-dimensional:
   - `gini_assets` (resource dimension)
-  - `gini_dissatisfaction` (experiential dimension from `satisfaction_value`)
+  - `gini_dissatisfaction` (experiential dimension from `dissatisfaction_value`)
 
 ### **Collective Accuracy / Reality Distance**
 

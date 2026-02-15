@@ -816,11 +816,11 @@ class ParticipationModel(mesa.Model):
                 return 0.0
             vals = [float(a.altruism_factor) for a in agents if a is not None]
             return float(np.mean(vals)) if vals else 0.0
-        def mean_satisfaction(m: "ParticipationModel") -> float:
+        def mean_dissatisfaction(m: "ParticipationModel") -> float:
             agents = m.voting_agents
             if not agents:
                 return 0.0
-            vals = [float(a.satisfaction_value) for a in agents if a is not None]
+            vals = [float(a.dissatisfaction_value) for a in agents if a is not None]
             return float(np.mean(vals)) if vals else 0.0
 
         return mesa.DataCollector(
@@ -830,7 +830,7 @@ class ParticipationModel(mesa.Model):
                 "turnout": get_voter_turnout,
                 "mean_p_participation": mean_p_participation,
                 "mean_altruism": mean_altruism,
-                "mean_satisfaction": mean_satisfaction,
+                "mean_dissatisfaction": mean_dissatisfaction,
                 **color_data,
                 "grid_colors": get_grid_colors,
             },

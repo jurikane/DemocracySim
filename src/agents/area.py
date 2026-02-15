@@ -300,7 +300,7 @@ class Area(Agent):
         if self.model.altruism_learning:
             for a in self.agents:
                 if a.participating:
-                    a.apply_altruism_update(a.satisfaction_signal)
+                    a.apply_altruism_update(a.dissatisfaction_signal)
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
@@ -359,9 +359,9 @@ class Area(Agent):
             "q_participation": float(agent.q_participation),
             "p_participation": p_participation,
             "altruism_factor": float(agent.altruism_factor),
-            "satisfaction_value": float(agent.satisfaction_value),
-            "satisfaction_baseline": float(agent.satisfaction_baseline),
-            "satisfaction_signal": float(agent.satisfaction_signal),
+            "dissatisfaction_value": float(agent.dissatisfaction_value),
+            "dissatisfaction_baseline": float(agent.dissatisfaction_baseline),
+            "dissatisfaction_signal": float(agent.dissatisfaction_signal),
             "est_real_dist": est_real_dist,
             "confidence": float(agent.confidence),
             "known_cells_count": len(known_colors),
@@ -574,7 +574,7 @@ class Area(Agent):
         group_mean_altruism = [float("nan")] * num_groups
         group_mean_q_participation_participants = [float("nan")] * num_groups
         group_mean_q_participation_abstainers = [float("nan")] * num_groups
-        group_mean_satisfaction = [float("nan")] * num_groups
+        group_mean_dissatisfaction = [float("nan")] * num_groups
 
         if num_groups > 0:
             for g in range(num_groups):
@@ -596,7 +596,7 @@ class Area(Agent):
                     group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
                     group_mean_fee[g] = _mean_attr(g_agents, "_fee")
                     group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
-                    group_mean_satisfaction[g] = _mean_attr(g_agents, "satisfaction_value")
+                    group_mean_dissatisfaction[g] = _mean_attr(g_agents, "dissatisfaction_value")
 
         self._diag_history.append(
             {
@@ -621,7 +621,7 @@ class Area(Agent):
                 "group_mean_altruism": group_mean_altruism,
                 "group_mean_q_participation_participants": group_mean_q_participation_participants,
                 "group_mean_q_participation_abstainers": group_mean_q_participation_abstainers,
-                "group_mean_satisfaction": group_mean_satisfaction,
+                "group_mean_dissatisfaction": group_mean_dissatisfaction,
             }
         )
 
@@ -774,18 +774,18 @@ class Area(Agent):
         # Update knowledge for all agents before any learning/election logic.
         for agent in self.agents:
             agent.update_known_cells(area=self)
-            # Satisfaction is computed from current (pre-election) distributions.
+            # Dissatisfaction is computed from current (pre-election) distributions.
             # Baseline is EMA; if alpha=1.0, signal equals last-step delta.
-            sv = agent.compute_satisfaction_value(area=self, model=self.model)
-            agent.satisfaction_value = sv
-            if not np.isfinite(agent.satisfaction_baseline):
+            sv = agent.compute_dissatisfaction_value(area=self, model=self.model)
+            agent.dissatisfaction_value = sv
+            if not np.isfinite(agent.dissatisfaction_baseline):
                 # Initialize baseline on first observation to avoid a large spike.
-                agent.satisfaction_baseline = sv
-                agent.satisfaction_signal = 0.0
+                agent.dissatisfaction_baseline = sv
+                agent.dissatisfaction_signal = 0.0
             else:
-                baseline = agent.satisfaction_baseline
-                agent.satisfaction_signal = sv - baseline
+                baseline = agent.dissatisfaction_baseline
+                agent.dissatisfaction_signal = sv - baseline
                 alpha = float(self.model.satisfaction_baseline_alpha)
-                agent.satisfaction_baseline = (1.0 - alpha) * baseline + alpha * sv
+                agent.dissatisfaction_baseline = (1.0 - alpha) * baseline + alpha * sv
         self.conduct_election()
         # self.mutate_cells()

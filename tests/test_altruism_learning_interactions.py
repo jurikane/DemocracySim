@@ -117,7 +117,7 @@ def test_altruism_learning_interaction_baseline_alpha_controls_persistence() -> 
         for a in m.voting_agents:
             if a is None:
                 continue
-            a.compute_satisfaction_value = _sv.__get__(a, type(a))  # bind method
+            a.compute_dissatisfaction_value = _sv.__get__(a, type(a))  # bind method
 
     a_fast = m_fast.voting_agents[0]
     a_slow = m_slow.voting_agents[0]
@@ -235,7 +235,7 @@ def test_altruism_learning_interaction_clip_applies_in_pipeline() -> None:
     for a in model.voting_agents:
         if a is None:
             continue
-        a.compute_satisfaction_value = _sv.__get__(a, type(a))
+        a.compute_dissatisfaction_value = _sv.__get__(a, type(a))
 
     focal = model.voting_agents[0]
     assert focal is not None

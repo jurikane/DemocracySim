@@ -80,7 +80,7 @@ STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "gini_index",
     "turnout",
     "mean_altruism",
-    "mean_satisfaction",
+    "mean_dissatisfaction",
 )
 
 STEPS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -91,7 +91,7 @@ STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "gini_index": "int16",
     "turnout": "float32",
     "mean_altruism": "float32",
-    "mean_satisfaction": "float32",
+    "mean_dissatisfaction": "float32",
     # Optional per-color model series: color_0...color_{C-1} float32
 }
 
@@ -168,9 +168,9 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "participation_baseline",
     "participation_signal",
     "altruism_factor",
-    "satisfaction_value",
-    "satisfaction_baseline",
-    "satisfaction_signal",
+    "dissatisfaction_value",
+    "dissatisfaction_baseline",
+    "dissatisfaction_signal",
 )
 
 AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -187,9 +187,9 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "participation_baseline": "float32",
     "participation_signal": "float32",
     "altruism_factor": "float32",
-    "satisfaction_value": "float32",
-    "satisfaction_baseline": "float32",
-    "satisfaction_signal": "float32",
+    "dissatisfaction_value": "float32",
+    "dissatisfaction_baseline": "float32",
+    "dissatisfaction_signal": "float32",
 }
 
 AGENTS_TABLE: Final[TableSchema] = TableSchema(

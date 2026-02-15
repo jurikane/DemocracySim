@@ -20,7 +20,7 @@ Outcomes are evaluated as time-series and summary statistics, with primary focus
 
 - Participation dynamics: turnout over time.
 - Inequality dynamics (resource dimension): Gini over agent assets (`gini_assets`).
-- Inequality dynamics (experiential dimension): Gini over agent dissatisfaction (`gini_dissatisfaction`), where dissatisfaction is operationalized by `satisfaction_value` (distribution mismatch distance).
+- Inequality dynamics (experiential dimension): Gini over agent dissatisfaction (`gini_dissatisfaction`), where dissatisfaction is operationalized by `dissatisfaction_value` (distribution mismatch distance).
 
 Important semantic clarification for interpretation:
 `assets` are modeled as a generic resource/capacity state under relative reward/fee updates, not literal currency.

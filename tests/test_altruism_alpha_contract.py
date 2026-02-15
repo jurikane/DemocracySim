@@ -51,7 +51,7 @@ def test_altruism_alpha_oracle_exact_update_without_clipping() -> None:
 
     a._participating = True
     a.altruism_factor = 0.6
-    a.apply_altruism_update(satisfaction_signal=sig)
+    a.apply_altruism_update(dissatisfaction_signal=sig)
     assert float(a.altruism_factor) == pytest.approx(0.6 + alpha * sig, abs=1e-12)
 
 
@@ -74,8 +74,8 @@ def test_altruism_alpha_metamorphic_ratio_two_runs() -> None:
     x1.altruism_factor = 0.5
     x2.altruism_factor = 0.5
 
-    x1.apply_altruism_update(satisfaction_signal=sig)
-    x2.apply_altruism_update(satisfaction_signal=sig)
+    x1.apply_altruism_update(dissatisfaction_signal=sig)
+    x2.apply_altruism_update(dissatisfaction_signal=sig)
 
     da1 = float(x1.altruism_factor) - 0.5
     da2 = float(x2.altruism_factor) - 0.5
@@ -88,15 +88,15 @@ def test_altruism_alpha_zero_means_no_update() -> None:
     assert a is not None
     a._participating = True
     a.altruism_factor = 0.6
-    a.apply_altruism_update(satisfaction_signal=999.0)
+    a.apply_altruism_update(dissatisfaction_signal=999.0)
     assert float(a.altruism_factor) == pytest.approx(0.6, abs=0.0)
 
 
 def test_altruism_alpha_integration_logged_mean_altruism_changes_after_step(tmp_path: Path) -> None:
-    """Integration: with learning on and a forced positive satisfaction_signal on step 2,
+    """Integration: with learning on and a forced positive dissatisfaction_signal on step 2,
     schema v2 logging should show increased altruism.
 
-    We patch compute_satisfaction_value so:
+    We patch compute_dissatisfaction_value so:
     - step 1: sv=0.0 => baseline initializes, signal=0.0 (no altruism update)
     - step 2: sv=1.0 and satisfaction_baseline_alpha=0 => baseline stays 0, signal=+1.0
       => altruism_factor increases by altruism_alpha for participants.
@@ -136,7 +136,7 @@ def test_altruism_alpha_integration_logged_mean_altruism_changes_after_step(tmp_
     for a in model.voting_agents:
         if a is None:
             continue
-        a.compute_satisfaction_value = _sv.__get__(a, type(a))  # bind method
+        a.compute_dissatisfaction_value = _sv.__get__(a, type(a))  # bind method
 
     logger = RunLoggerV2(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=2, store_grid=False)
     logger.attach_to_model(model)

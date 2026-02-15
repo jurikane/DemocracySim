@@ -24,8 +24,8 @@ def test_participation_baseline_alpha_bounds() -> None:
         create_test_model(participation_baseline_alpha=1.1)
 
 
-def test_satisfaction_values_are_initialized() -> None:
+def test_dissatisfaction_values_are_initialized() -> None:
     model, _ = create_test_model()
     agent = model.voting_agents[0]
-    assert isinstance(agent.satisfaction_value, float)
-    assert isinstance(agent.satisfaction_baseline, float)
+    assert isinstance(agent.dissatisfaction_value, float)
+    assert isinstance(agent.dissatisfaction_baseline, float)

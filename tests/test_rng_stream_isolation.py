@@ -24,7 +24,7 @@ def _snapshot_model_state(model) -> dict:
                 float(a.assets),
                 float(a.q_participation),
                 float(a.altruism_factor),
-                float(a.satisfaction_value),
+                float(a.dissatisfaction_value),
             )
         )
     # Per-area snapshot

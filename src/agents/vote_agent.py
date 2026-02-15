@@ -84,14 +84,14 @@ class VoteAgent(Agent):
             raise ValueError("Position must be a tuple of two integers.")
         self._position = col, row  # Store as (col, row) like mesa standard
         self._assets = float(assets)
-        # Satisfaction value placeholder (learning signal for altruism).
+        # Dissatisfaction value placeholder (learning signal for altruism).
         # NOTE: computed each step; initialized to 0.0 until first update.
-        self.satisfaction_value: float = 0.0
-        # EMA baseline placeholder (computed each step alongside satisfaction).
+        self.dissatisfaction_value: float = 0.0
+        # EMA baseline placeholder (computed each step alongside dissatisfaction).
         # Initialized as NaN until first update.
-        self.satisfaction_baseline: float = float("nan")
-        # Satisfaction signal for learning (sv - baseline).
-        self.satisfaction_signal: float = 0.0
+        self.dissatisfaction_baseline: float = float("nan")
+        # Dissatisfaction signal for learning (dv - baseline).
+        self.dissatisfaction_signal: float = 0.0
         self._num_elections_participated = 0
         self.cell = model.grid.get_cell_list_contents([(col, row)])[0]
 
@@ -309,8 +309,8 @@ class VoteAgent(Agent):
         dist, _ = self.estimate_real_distribution(area)
         return np.asarray(dist, dtype=np.float64)
 
-    def compute_satisfaction_value(self, *, area: Area, model: ParticipationModel) -> float:
-        """Compute satisfaction value (distance) between personality and a target distribution."""
+    def compute_dissatisfaction_value(self, *, area: Area, model: ParticipationModel) -> float:
+        """Compute dissatisfaction value (distance) between personality and a target distribution."""
         personality = np.asarray(self.personality, dtype=np.float64)
         area_dist = np.asarray(area.color_distribution, dtype=np.float64)
         global_color_dst = np.asarray(model.global_color_dst, dtype=np.float64)
@@ -390,11 +390,11 @@ class VoteAgent(Agent):
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = q
 
-    def apply_altruism_update(self, satisfaction_signal: float) -> None:
+    def apply_altruism_update(self, dissatisfaction_signal: float) -> None:
         """Participant-only learning of altruism_factor (reality-weight).
 
         Update rule:
-            a = a + altruism_alpha * satisfaction_signal
+            a = a + altruism_alpha * dissatisfaction_signal
             a = clip(a, [altruism_clip_min, altruism_clip_max])
         """
         if not self.participating:
@@ -402,11 +402,11 @@ class VoteAgent(Agent):
         alpha = float(self.model.altruism_alpha)
         if alpha == 0.0:
             return
-        if not np.isfinite(satisfaction_signal):
+        if not np.isfinite(dissatisfaction_signal):
             return
 
         a = float(self.altruism_factor)
-        a = a + alpha * float(satisfaction_signal)
+        a = a + alpha * float(dissatisfaction_signal)
 
         lo = float(self.model.altruism_clip_min)
         hi = float(self.model.altruism_clip_max)

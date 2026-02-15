@@ -34,12 +34,12 @@ def test_altruism_clip_oracle_clips_at_bounds() -> None:
 
     # Push above max.
     a.altruism_factor = 0.7
-    a.apply_altruism_update(satisfaction_signal=+1.0)  # would go to 1.7
+    a.apply_altruism_update(dissatisfaction_signal=+1.0)  # would go to 1.7
     assert float(a.altruism_factor) == pytest.approx(0.8, abs=0.0)
 
     # Push below min.
     a.altruism_factor = 0.3
-    a.apply_altruism_update(satisfaction_signal=-1.0)  # would go to -0.7
+    a.apply_altruism_update(dissatisfaction_signal=-1.0)  # would go to -0.7
     assert float(a.altruism_factor) == pytest.approx(0.2, abs=0.0)
 
 
@@ -57,8 +57,8 @@ def test_altruism_clip_metamorphic_tightening_bounds_restricts_outcome() -> None
     a_w._participating = True
     a_n._participating = True
 
-    a_w.apply_altruism_update(satisfaction_signal=sig)  # would go to 1.5 => clipped to 1.0
-    a_n.apply_altruism_update(satisfaction_signal=sig)  # would go to 1.5 => clipped to 0.6
+    a_w.apply_altruism_update(dissatisfaction_signal=sig)  # would go to 1.5 => clipped to 1.0
+    a_n.apply_altruism_update(dissatisfaction_signal=sig)  # would go to 1.5 => clipped to 0.6
 
     assert 0.0 <= float(a_w.altruism_factor) <= 1.0
     assert 0.4 <= float(a_n.altruism_factor) <= 0.6

@@ -128,9 +128,9 @@ def make_charts(cfg: AppConfig) -> list:
         ],
         data_collector_name="datacollector",
     )
-    satisfaction_chart = ChartModule(
+    dissatisfaction_chart = ChartModule(
         [
-            {"Label": "mean_satisfaction", "Color": "Green"},
+            {"Label": "mean_dissatisfaction", "Color": "Green"},
         ],
         data_collector_name="datacollector",
     )
@@ -167,4 +167,4 @@ def make_charts(cfg: AppConfig) -> list:
     if calibration_mode:
         extras.append(CohortElectionLearningDiagnostics())
 
-    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, satisfaction_chart]
+    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, dissatisfaction_chart]

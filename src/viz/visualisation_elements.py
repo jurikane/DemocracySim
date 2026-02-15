@@ -43,7 +43,7 @@ class AreaDiagnosticsPanel(TextElement):
       Row 3 (Reserved):
         7) mean altruism by personality_group
         8) mean q_participation by personality_group (participants dotted)
-        9) mean satisfaction by personality_group
+        9) mean dissatisfaction by personality_group
     """
 
     def __init__(self, max_steps: int = 10):
@@ -212,7 +212,7 @@ class AreaDiagnosticsPanel(TextElement):
                 group_altruism = [h.get("group_mean_altruism", []) for h in hist]
                 group_q_p = [h.get("group_mean_q_participation_participants", []) for h in hist]
                 group_q_a = [h.get("group_mean_q_participation_abstainers", []) for h in hist]
-                group_satisfaction = [h.get("group_mean_satisfaction", []) for h in hist]
+                group_dissatisfaction = [h.get("group_mean_dissatisfaction", []) for h in hist]
 
                 num_groups = len(group_altruism[0]) if group_altruism and group_altruism[0] is not None else 0
                 cmap = plt.get_cmap("tab10")
@@ -221,7 +221,7 @@ class AreaDiagnosticsPanel(TextElement):
                     a_series = _series_at(g, group_altruism)
                     qp_series = _series_at(g, group_q_p)
                     qa_series = _series_at(g, group_q_a)
-                    s_series = _series_at(g, group_satisfaction)
+                    s_series = _series_at(g, group_dissatisfaction)
                     color = cmap(g % 10)
 
                     ax6.plot(step_axis, a_series, color=color, label=f"g{g}")
@@ -236,7 +236,7 @@ class AreaDiagnosticsPanel(TextElement):
 
             ax6.set_title("mean altruism by group")
             ax7.set_title("mean q_participation by group")
-            ax8.set_title("mean satisfaction by group")
+            ax8.set_title("mean dissatisfaction by group")
 
         plt.tight_layout()
         return save_plot_to_base64(fig)

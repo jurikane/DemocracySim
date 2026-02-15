@@ -37,7 +37,7 @@ Per model step (`t = 1,2,...`) the relevant path is:
 
 Code references:
 
-- Satisfaction baseline/signal: `src/agents/area.py::Area.step`
+- Dissatisfaction baseline/signal: `src/agents/area.py::Area.step`
 - Participant-only altruism update: `src/agents/area.py::Area.conduct_election`
 - Update rule: `src/agents/vote_agent.py::VoteAgent.apply_altruism_update`
 
@@ -46,28 +46,28 @@ Code references:
 Altruism learning uses:
 
 - `altruism_factor` (float): the agent’s current reality-weight
-- `satisfaction_value` (float): dissatisfaction / distance to a target distribution (depends on `satisfaction_mode`)
-- `satisfaction_baseline` (float): EMA baseline of satisfaction values, initialized as `NaN`
-- `satisfaction_signal` (float): baseline-corrected satisfaction surprise signal (`sv - baseline`)
+- `dissatisfaction_value` (float): dissatisfaction / distance to a target distribution (depends on `satisfaction_mode`)
+- `dissatisfaction_baseline` (float): EMA baseline of dissatisfaction values, initialized as `NaN`
+- `dissatisfaction_signal` (float): baseline-corrected dissatisfaction surprise signal (`dv - baseline`)
 
-## Satisfaction Signal (Input to Altruism Learning)
+## Dissatisfaction Signal (Input to Altruism Learning)
 
-Satisfaction is computed **before** the election in `Area.step()`:
+Dissatisfaction is computed **before** the election in `Area.step()`:
 
-1. compute `sv = agent.compute_satisfaction_value(area, model)`
+1. compute `dv = agent.compute_dissatisfaction_value(area, model)`
 2. baseline initialize on first observation:
 
     ```text
-    baseline <- sv
+    baseline <- dv
     signal   <- 0
     ```
 
 3. otherwise:
 
     ```text
-    signal   <- sv - baseline
+    signal   <- dv - baseline
     baseline <- (1 - satisfaction_baseline_alpha) * baseline
-              + satisfaction_baseline_alpha * sv
+              + satisfaction_baseline_alpha * dv
     ```
 
 Interpretation:
@@ -75,7 +75,7 @@ Interpretation:
 - `signal > 0` means “worse than expected” (more dissatisfied than baseline)
 - `signal < 0` means “better than expected” (less dissatisfied than baseline)
 
-Note: in this project, satisfaction is a **distance** (bigger = worse), so the sign interpretation differs
+Note: in this project, dissatisfaction is a **distance** (bigger = worse), so the sign interpretation differs
 from “reward signals”.
 
 ## Altruism Learning Toggle and Initialization
@@ -100,7 +100,7 @@ Altruism learning is applied **only** to participating agents, after the electio
 
 ```text
 if altruism_learning and participating:
-    altruism_factor <- altruism_factor + altruism_alpha * satisfaction_signal
+    altruism_factor <- altruism_factor + altruism_alpha * dissatisfaction_signal
     altruism_factor <- clip(altruism_factor, [altruism_clip_min, altruism_clip_max])
 ```
 
@@ -115,7 +115,7 @@ Practical intuition:
 - If dissatisfaction is higher than expected (`signal > 0`), altruism increases (agents shift weight toward reality-tracking).
 - If dissatisfaction is lower than expected (`signal < 0`), altruism decreases (agents shift weight toward self-interest).
 
-Whether this produces stable dynamics depends on the satisfaction signal statistics and `altruism_alpha`.
+Whether this produces stable dynamics depends on the dissatisfaction signal statistics and `altruism_alpha`.
 
 ## Knobs (What They Mean)
 
@@ -127,7 +127,7 @@ Altruism learning knobs (ModelConfig):
 - `altruism_alpha` (>= 0): learning rate for altruism updates
 - `altruism_clip_min`, `altruism_clip_max` (finite, `min <= max`): clip interval for altruism_factor
 
-Satisfaction knobs (inputs to altruism updates):
+Dissatisfaction knobs (inputs to altruism updates):
 
 - `satisfaction_mode`: `"global" | "area" | "knowledge" | "combination"`
 - `satisfaction_baseline_alpha` (in `[0,1]`): EMA step size for satisfaction baseline
@@ -148,13 +148,13 @@ without turning the thesis into a reinforcement learning project.
 If altruism dynamics look surprising, inspect per-agent traces of:
 
 - `altruism_factor`
-- `satisfaction_value`, `satisfaction_baseline`, `satisfaction_signal`
+- `dissatisfaction_value`, `dissatisfaction_baseline`, `dissatisfaction_signal`
 - whether the agent actually participated that step (`participating`)
 
 In schema v2 outputs:
 
-- `agents.parquet` includes `altruism_factor`, `satisfaction_value`, `satisfaction_baseline`, `satisfaction_signal`
-- `steps.parquet` includes `mean_altruism` and `mean_satisfaction`
+- `agents.parquet` includes `altruism_factor`, `dissatisfaction_value`, `dissatisfaction_baseline`, `dissatisfaction_signal`
+- `steps.parquet` includes `mean_altruism` and `mean_dissatisfaction`
 
 ## Test Coverage (What Is Locked By Pytests)
 
@@ -167,13 +167,13 @@ Individual contracts:
 - `tests/test_altruism_learning_toggle_contract.py` (toggle gates update, participant-only)
 - `tests/test_satisfaction_mode_contract.py`, `tests/test_satisfaction_mode_validation_contract.py`,
   and `tests/test_satisfaction_baseline_alpha_contract.py`
-  (satisfaction inputs to altruism)
+  (dissatisfaction inputs to altruism)
 
 Interaction tests (multi-knob, end-to-end through the step pipeline):
 
 - `tests/test_altruism_learning_interactions.py`:
   - Baseline persistence: shows how `satisfaction_baseline_alpha` changes whether altruism keeps updating
-    when satisfaction stays at its new level (1 update vs 2 updates in a controlled 3-step sequence).
-  - Mode interaction: constructs a case where **global satisfaction is constant** but the **local area flips**;
+    when dissatisfaction stays at its new level (1 update vs 2 updates in a controlled 3-step sequence).
+  - Mode interaction: constructs a case where **global dissatisfaction is constant** but the **local area flips**;
     `satisfaction_mode="global"` yields zero signal (no update), while `"area"` yields a nonzero signal (update).
   - Clip interaction: forces a large positive signal and asserts the resulting altruism is clipped exactly at `altruism_clip_max`.
