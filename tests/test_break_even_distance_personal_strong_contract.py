@@ -121,4 +121,3 @@ def test_break_even_distance_personal_produces_mixed_signs_across_agents(monkeyp
 
     assert float(getattr(a0, "_reward_pers_comp")) > 0.0
     assert float(getattr(a1, "_reward_pers_comp")) < 0.0
-

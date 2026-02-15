@@ -27,6 +27,14 @@ Common reward component:
 - `common_component = reward_rate_common * assets * common_coeff`
 - if abstaining: `common_component *= abstention_share`
 
+`dist_to_reality` contract:
+
+- uses tie-aware conversion of real color distributions
+- ties are resolved by:
+  - reference to `voted_ordering` when available (deterministic, no reward-path RNG)
+  - unbiased RNG tie-break only when no reference ordering exists
+- avoids option-id bias in tie handling
+
 Personal reward component:
 
 - `pers_coeff = break_even_distance_personal - personality_distance`

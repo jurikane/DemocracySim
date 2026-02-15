@@ -95,7 +95,7 @@ Merged area-state + election table.
 | rule_idx                             |   int16 |                                                |
 | step                                 |   int32 |                                                |
 | area_id                              |   int32 |                                                |
-| eligible_voters                      |   int32 | area.num_agents                                |
+| eligible_voters                      |   int32 | agents eligible for election in this area/step |
 | participants                         |   int32 | number who voted                               |
 | turnout                              | float32 | participants/eligible_voters * 100             |
 | election_cost_rate                   | float32 | fraction of assets paid by participants (0..1) |
@@ -123,6 +123,13 @@ Agent snapshot table (**agent state only**).
 | assets                     | float32 | matches simulation internal type             |
 | num_elections_participated |   int32 | cumulative counter across all areas/steps    |
 | personality_group_idx      |   int16 |                                              |
+| eligible_for_election      | boolean | eligibility flag in this area/step election  |
+| participating              | boolean | participation decision in this area/step     |
+| election_fee               | float32 | charged fee in this area/step                |
+| reward_common_component    | float32 | common reward/penalty component              |
+| reward_personal_component  | float32 | personal reward/penalty component            |
+| election_delta_abs         | float32 | realized absolute asset delta                |
+| election_delta_rel         | float32 | realized relative asset delta                |
 | participation_baseline     | float32 | EMA baseline for participation learning      |
 | participation_signal       | float32 | baseline-corrected participation signal      |
 | altruism_factor            | float32 | agent altruism_factor                        |

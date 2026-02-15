@@ -454,7 +454,7 @@ class RunLoggerV2:
                 "rule_idx": np.int16(self.ctx.rule_idx),
                 "step": np.int32(step),
                 "area_id": np.int32(area_id),
-                "eligible_voters": np.int32(area.num_agents),
+                "eligible_voters": np.int32(area.num_eligible_voters_last),
                 # Not tracked explicitly yet; default 0.
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
@@ -536,6 +536,13 @@ class RunLoggerV2:
                     "assets": np.float32(float(a.assets)),
                     "num_elections_participated": np.int32(int(a.num_elections_participated)),
                     "personality_group_idx": np.int16(a.personality_group_idx),
+                    "eligible_for_election": bool(a.eligible_for_election),
+                    "participating": bool(a.participating),
+                    "election_fee": np.float32(float(getattr(a, "_fee"))),
+                    "reward_common_component": np.float32(float(getattr(a, "_reward_common_comp"))),
+                    "reward_personal_component": np.float32(float(getattr(a, "_reward_pers_comp"))),
+                    "election_delta_abs": np.float32(float(a.election_delta_abs)),
+                    "election_delta_rel": np.float32(float(a.election_delta_rel)),
                     "participation_baseline": np.float32(float(a.participation_baseline)),
                     "participation_signal": np.float32(float(a.participation_signal)),
                     "altruism_factor": np.float32(float(a.altruism_factor)),

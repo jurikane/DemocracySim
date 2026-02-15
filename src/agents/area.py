@@ -7,7 +7,6 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.agents.color_cell import ColorCell
 from src.agents.vote_agent import VoteAgent
 from src.utils.representations import scores_to_ordering, validate_score_vector_unit_interval
-from src.utils.representations import distribution_to_ordering
 # from src.utils.rng import np_rng_debug
 
 
@@ -43,6 +42,7 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
+        self._num_eligible_voters_last = 0  # Eligible population used for turnout denominator
         self._diag_history: List[dict] = []  # Per-area diagnostics time series
         self._debug_history: List[dict] = []  # Per-area debug snapshots (optional)
         self._debug_last_votes: List[dict] = []  # Per-step vote records (optional)
@@ -105,6 +105,14 @@ class Area(Agent):
     @num_agents_participated_last.setter
     def num_agents_participated_last(self, n: int):
         self._num_agents_participated_last = n
+
+    @property
+    def num_eligible_voters_last(self) -> int:
+        return int(self._num_eligible_voters_last)
+
+    @num_eligible_voters_last.setter
+    def num_eligible_voters_last(self, n: int):
+        self._num_eligible_voters_last = int(n)
 
     @idx_field.setter
     def idx_field(self, pos: tuple):
@@ -248,13 +256,17 @@ class Area(Agent):
         """
         # Ask agents for participation and their votes
         preference_profile = self._tally_votes()
+        n_eligible = int(sum(1 for a in self.agents if a.eligible_for_election))
+        self.num_eligible_voters_last = n_eligible
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
             # Set to previous outcome but don't distribute rewards as usual
             print("Area", self.unique_id, "no one participated in the election")
             # If no previous outcome, use the real distribution ordering
-            real_color_ord = distribution_to_ordering(
-                self.color_distribution, rng=self.model.voting_rng
+            real_color_ord = self._ordering_from_distribution_tie_aware(
+                self.color_distribution,
+                reference_ordering=self._voted_ordering,
+                rng=self.model.voting_rng,
             )
             # Assumption is: if no (new) decision is made, things stay the same.
             #   Alternative to think about: randomly select any available option.
@@ -304,7 +316,7 @@ class Area(Agent):
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
-        area_voter_turnout = int((n / self.num_agents) * 100)
+        area_voter_turnout = int((n / n_eligible) * 100) if n_eligible > 0 else 0
         self._voter_turnout = area_voter_turnout  # Update in area state
         # Logging and diagnostics
         self._update_diag_history()
@@ -457,8 +469,10 @@ class Area(Agent):
         """
         dist_func = self.model.distance_func
         # Calculate the distance to the real distribution using distance_func in [0,1]
-        real_color_ord = distribution_to_ordering(
-            self.color_distribution, rng=self.model.voting_rng
+        real_color_ord = self._ordering_from_distribution_tie_aware(
+            self.color_distribution,
+            reference_ordering=self.voted_ordering,
+            rng=self.model.voting_rng,
         )
         search_pairs = self.model.color_search_pairs
         self._dist_to_reality = dist_func(
@@ -471,12 +485,7 @@ class Area(Agent):
         reward_rate_personal = self.model.reward_rate_personal
         abstention_share = self.model.abstention_share
         for a in self.agents:
-            # Personality-based reward factor
-            #   the closer the elected outcome to the agent's personality_group.
-            #   the higher the reward for the agent.
-            # TODO(thesis): later switch this to a centralized distribution-distance
-            #   between a.personal_opt_dist (agent personality dist) and the elected outcome
-            #   expressed as a distribution (not ordering).
+            # Personal reward uses the canonical agent preference ordering.
             p = dist_func(a.personality_group, self.voted_ordering, search_pairs)
             pers_coeff = (self.model.break_even_distance_personal - p)
 
@@ -491,6 +500,49 @@ class Area(Agent):
             a.add_personal_reward(pers_component)
             a.add_common_reward(common_component)
             a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
+
+    @staticmethod
+    def _ordering_from_distribution_tie_aware(
+            dist: np.ndarray,
+            *,
+            reference_ordering: np.ndarray | None,
+            rng: np.random.Generator | None,
+    ) -> np.ndarray:
+        """Deterministic ordering from distribution with reference-based tie handling.
+
+        For equal-probability colors:
+        - use their order in `reference_ordering` when available
+        - otherwise break ties uniformly at random with `rng` (unbiased)
+        """
+        arr = np.asarray(dist, dtype=np.float64)
+        if arr.ndim != 1:
+            raise ValueError("dist must be 1D")
+        n = int(arr.size)
+        if n <= 0:
+            return np.asarray([], dtype=np.int64)
+
+        ref_rank: dict[int, int] = {}
+        if reference_ordering is not None:
+            ref = np.asarray(reference_ordering, dtype=np.int64).tolist()
+            ref_rank = {int(c): i for i, c in enumerate(ref)}
+
+        ordering: list[int] = []
+        vals_desc = np.sort(np.unique(arr))[::-1]
+        for v in vals_desc:
+            group = np.nonzero(np.isclose(arr, v, rtol=0.0, atol=1e-12))[0].astype(np.int64).tolist()
+            if len(group) <= 1:
+                ordering.extend(group)
+                continue
+            if ref_rank:
+                group.sort(key=lambda c: ref_rank.get(int(c), n + int(c)))
+            else:
+                if rng is None:
+                    raise ValueError("rng is required for unbiased tie-breaking when no reference ordering exists.")
+                group = np.asarray(group, dtype=np.int64)
+                group = rng.permutation(group).astype(np.int64).tolist()
+            ordering.extend(group)
+
+        return np.asarray(ordering, dtype=np.int64)
 
     def update_color_distribution(self) -> None:
         """
@@ -714,7 +766,7 @@ class Area(Agent):
         if snapshot_sink is not None:
             election_cost_rate = self.model.election_cost_rate
             fee_pool = self._election_fee_pool
-            eligible_voters = self.num_agents
+            eligible_voters = self.num_eligible_voters_last
             participants = self.num_agents_participated_last
             turnout = self.voter_turnout
             dist_to_reality = self.dist_to_reality

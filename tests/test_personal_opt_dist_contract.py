@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from tests.factory import create_test_model
+from src.utils.ballots import ordering_from_distribution
 
 
 def _assert_is_dist(x: np.ndarray, *, tol: float = 1e-6) -> None:
@@ -35,6 +36,19 @@ def test_personal_opt_dist_is_valid_and_matches_personality_group_ordering() -> 
             f"personal_opt_dist ordering mismatch for agent {getattr(a, 'unique_id', '?')}: "
             f"implied={implied.tolist()} personality_group={ordering.tolist()}"
         )
+
+
+def test_personal_opt_dist_ordering_from_distribution_matches_personality_group() -> None:
+    """Contract: converting personal_opt_dist to an ordering reproduces personality_group."""
+    model, _cfg = create_test_model(seed=124)
+    agents = [a for a in (getattr(model, "voting_agents", []) or []) if a is not None]
+    assert agents
+
+    for a in agents:
+        dist = np.asarray(getattr(a, "personal_opt_dist"), dtype=np.float32)
+        ordering = np.asarray(getattr(a, "personality_group"), dtype=np.int64)
+        derived = ordering_from_distribution(dist)
+        assert np.array_equal(np.asarray(derived, dtype=np.int64), ordering)
 
 
 def test_personal_opt_dist_is_deterministic_given_seed() -> None:
