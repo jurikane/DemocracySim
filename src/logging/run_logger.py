@@ -332,54 +332,28 @@ class RunLoggerV2:
     # Extraction helpers
     # -----------------
     def _extract_steps_row(self, step: int, model: Model) -> Dict[str, Any]:
+        agents = [a for a in model.voting_agents if a is not None]
+        assets = [float(a.assets) for a in agents]
+        collective_assets = float(np.sum(assets)) if assets else 0.0
+        from src.utils.metrics import gini_index_0_100
+        gini_index = int(gini_index_0_100(assets)) if assets else 0
+        area_turnouts = [float(area.voter_turnout) for area in model.areas]
+        turnout = float(np.mean(area_turnouts)) if area_turnouts else 0.0
+        mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
+        mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
+
         row: Dict[str, Any] = {
             "run_seed": np.int32(self.ctx.run_seed),
             "rule_idx": np.int16(self.ctx.rule_idx),
             "step": np.int32(step),
-            "collective_assets": np.float32(0.0),
-            "gini_index": np.int16(0),
-            "turnout": np.float32(0.0),
-            "mean_altruism": np.float32(0.0),
-            "mean_dissatisfaction": np.float32(0.0),
+            "collective_assets": np.float32(collective_assets),
+            "gini_index": np.int16(gini_index),
+            "turnout": np.float32(turnout),
+            "mean_altruism": np.float32(mean_altruism),
+            "mean_dissatisfaction": np.float32(mean_dissatisfaction),
         }
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
-
-        df = model.datacollector.get_model_vars_dataframe()
-        if df is None or len(df) == 0:
-            if pre_colors is not None:
-                for i, v in enumerate(pre_colors):
-                    row[f"color_{i}"] = np.float32(v)
-            return row
-
-        last = df.iloc[-1].to_dict()
-
-        # Prefer snake_case (live + replay v2 use this)
-        if "collective_assets" in last:
-            row["collective_assets"] = np.float32(last["collective_assets"])
-        elif "Collective assets" in last:
-            row["collective_assets"] = np.float32(last["Collective assets"])
-
-        if "gini_index" in last:
-            row["gini_index"] = np.int16(last["gini_index"])
-        elif "Gini Index (0-100)" in last:
-            row["gini_index"] = np.int16(last["Gini Index (0-100)"])
-
-        if "turnout" in last:
-            row["turnout"] = np.float32(last["turnout"])
-        elif "Voter turnout globally (in percent)" in last:
-            row["turnout"] = np.float32(last["Voter turnout globally (in percent)"])
-        if "mean_altruism" in last:
-            row["mean_altruism"] = np.float32(last["mean_altruism"])
-        if "mean_dissatisfaction" in last:
-            row["mean_dissatisfaction"] = np.float32(last["mean_dissatisfaction"])
-
-        # Optional per-color series: snake_case color_0...color_{C-1} (preferred)
-        for k, v in last.items():
-            if isinstance(k, str) and k.startswith("color_"):
-                suf = k.split("_", 1)[1]
-                if suf.isdigit():
-                    row[k] = np.float32(v)
 
         if pre_colors is not None:
             for i, v in enumerate(pre_colors):
@@ -506,7 +480,7 @@ class RunLoggerV2:
                 area_color_vec=cd,
             )
 
-            # area gini from agents' assets (same as old replay logger)
+            # area gini uses full area population (including ineligible agents).
             agents = list(area.agents)
             if agents:
                 assets = [float(a.assets) for a in agents]

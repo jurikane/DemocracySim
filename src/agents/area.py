@@ -609,7 +609,7 @@ class Area(Agent):
 
         # Area gini (0-100)
         from src.utils.metrics import gini_index_0_100
-        assets = [float(a.assets) for a in eligible]
+        assets = [float(a.assets) for a in agents]
         gini = int(gini_index_0_100(assets)) if assets else 0
 
         # Per-personality_group metrics (area-level)

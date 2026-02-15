@@ -103,7 +103,7 @@ Merged area-state + election table.
 | winning_option_id                    |   int32 | option row index into `model.options`          |
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
 | dist_to_reality                      | float32 | distance(real_order, voted_order)              |
-| gini_index                           |   int16 | area gini 0–100                                |
+| gini_index                           |   int16 | area gini 0–100         |
 | area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                  |
 
 ### `agents.parquet`
