@@ -154,7 +154,6 @@ def test_area_snapshot_missing_required_fields_fails_loudly(tmp_path: Path) -> N
             area=area,
             snapshot={
                 # intentionally omit 'participants'
-                "election_cost_rate": 0.0,
                 "fee_pool": 0.0,
                 "eligible_voters": area.num_agents,
                 "turnout": 0.0,

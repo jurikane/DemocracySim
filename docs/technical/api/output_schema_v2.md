@@ -101,7 +101,6 @@ Merged area-state + election table.
 | eligible_voters                      |   int32 | agents eligible for election in this area/step |
 | participants                         |   int32 | number who voted                               |
 | turnout                              | float32 | participants/area_num_agents * 100             |
-| election_cost_rate                   | float32 | fraction of assets paid by participants (0..1) |
 | fee_pool                             | float32 | matches simulation internal type               |
 | winning_option_id                    |   int32 | option row index into `model.options`          |
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
@@ -124,8 +123,6 @@ Agent snapshot table (**agent state only**).
 | rule_idx                   |   int16 |                                              |
 | step                       |   int32 |                                              |
 | agent_id                   |   int32 |                                              |
-| row                        |   int16 |                                              |
-| col                        |   int16 |                                              |
 | assets                     | float32 | matches simulation internal type             |
 | num_elections_participated |   int32 | cumulative counter across all areas/steps    |
 | personality_group_idx      |   int16 |                                              |

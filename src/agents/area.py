@@ -819,7 +819,6 @@ class Area(Agent):
         if snapshot_sink is not None:
             from src.utils.metrics import gini_index_0_100
 
-            election_cost_rate = self.model.election_cost_rate
             fee_pool = self.election_fee_pool
             eligible_voters = self.num_eligible_voters_last
             participants = self.num_agents_participated_last
@@ -836,7 +835,6 @@ class Area(Agent):
             snapshot_sink(
                 area=self,
                 snapshot={
-                    "election_cost_rate": election_cost_rate,
                     "fee_pool": fee_pool,
                     "eligible_voters": eligible_voters,
                     "participants": participants,

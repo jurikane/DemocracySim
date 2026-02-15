@@ -35,7 +35,6 @@ def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
         "turnout": 12.5,
         "participants": 1,
         "eligible_voters": int(area.num_agents),
-        "election_cost_rate": float(model.election_cost_rate),
         "fee_pool": float(getattr(area, "_election_fee_pool", 0.0)),
         "gini_index": 13,
         "dist_to_reality": 0.123,

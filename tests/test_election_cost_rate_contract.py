@@ -132,7 +132,7 @@ def test_election_cost_rate_out_of_range_raises() -> None:
         _model_all_agents_in_one_area(election_cost_rate=1.01)
 
 
-def test_area_steps_logs_election_cost_rate_and_fee_pool(tmp_path: Path) -> None:
+def test_area_steps_logs_fee_pool(tmp_path: Path) -> None:
     rate = 0.2
     model = _model_all_agents_in_one_area(
         seed=777,
@@ -161,5 +161,4 @@ def test_area_steps_logs_election_cost_rate_and_fee_pool(tmp_path: Path) -> None
     rows = [r for r in logger._area_steps_rows if int(r["area_id"]) == int(area.unique_id)]
     assert rows
     row = rows[0]
-    assert float(row["election_cost_rate"]) == pytest.approx(rate, abs=1e-6)
     assert float(row["fee_pool"]) == pytest.approx(expected_fee_pool, abs=1e-6)

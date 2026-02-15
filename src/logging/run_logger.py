@@ -437,7 +437,6 @@ class RunLoggerV2:
                 # participants is overwritten from the pre-mutation area snapshot below.
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
-                "election_cost_rate": np.float32(float(model.election_cost_rate)),
                 "fee_pool": np.float32(float(area.election_fee_pool)),
                 "winning_option_id": np.int32(-1),
                 "dist_to_reality": np.float32(
@@ -458,7 +457,6 @@ class RunLoggerV2:
                 "eligible_voters",
                 "participants",
                 "turnout",
-                "election_cost_rate",
                 "fee_pool",
                 "dist_to_reality",
                 "dist_to_ref_utilitarian",
@@ -478,7 +476,6 @@ class RunLoggerV2:
             r["eligible_voters"] = np.int32(int(snapshot["eligible_voters"]))
             r["participants"] = np.int32(int(snapshot["participants"]))
             r["turnout"] = np.float32(float(snapshot["turnout"]))
-            r["election_cost_rate"] = np.float32(float(snapshot["election_cost_rate"]))
             r["fee_pool"] = np.float32(float(snapshot["fee_pool"]))
             r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
             r["dist_to_ref_utilitarian"] = np.float32(float(snapshot["dist_to_ref_utilitarian"]))
@@ -512,8 +509,6 @@ class RunLoggerV2:
                     "rule_idx": np.int16(self.ctx.rule_idx),
                     "step": np.int32(step),
                     "agent_id": np.int32(int(a.unique_id)),
-                    "row": np.int16(int(a.row)),
-                    "col": np.int16(int(a.col)),
                     "assets": np.float32(float(a.assets)),
                     "num_elections_participated": np.int32(int(a.num_elections_participated)),
                     "personality_group_idx": np.int16(a.personality_group_idx),

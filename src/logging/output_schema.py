@@ -121,7 +121,6 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "eligible_voters",
     "participants",
     "turnout",
-    "election_cost_rate",
     "fee_pool",
     # Outcome
     "winning_option_id",
@@ -144,7 +143,6 @@ AREA_STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "eligible_voters": "int32",
     "participants": "int32",
     "turnout": "float32",
-    "election_cost_rate": "float32",
     # fee_pool must match simulation internal type; allow float.
     "fee_pool": "float32",
     "winning_option_id": "int32",
@@ -172,8 +170,6 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "rule_idx",
     "step",
     "agent_id",
-    "row",
-    "col",
     "assets",
     "num_elections_participated",
     "personality_group_idx",
@@ -197,8 +193,6 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "rule_idx": "int16",
     "step": "int32",
     "agent_id": "int32",
-    "row": "int16",
-    "col": "int16",
     # assets must match simulation internal type; allow float.
     "assets": "float32",
     "num_elections_participated": "int32",
