@@ -1,177 +1,50 @@
-from src.utils.social_welfare_functions import approval_voting
-from tests.test_majority_rule import simple, paradoxical
+from __future__ import annotations
+
 import numpy as np
 
-# TODO adapt to approval voting (state = merely copied from majority_rule.py)
+from src.utils.social_welfare_functions import (
+    APPROVAL_THRESHOLD_TAU,
+    approval_voting,
+    approval_voting_custom,
+)
 
-# Simple and standard cases
-approval_simple_cases = [
-    (simple, [[2, 1, 0]]),  # TODO: Whats the expected result?
-    (paradoxical, [[2, 1, 0, 3, 4], [2, 1, 3, 0, 4]])  # TODO '' ''
-]
 
-# Following "paradoxical" example is taken from
-# https://pub.dss.in.tum.de/brandt-research/minpara.pdf
-#
-#    5 4 3 2
-#    -------
-#    a e d b
-#    c b c d
-#    b c b e
-#    d d e c
-#    e a a a
+def test_approval_voting_canonical_fixed_threshold_oracle() -> None:
+    """Canonical approval uses a fixed threshold tau on disagreement scores."""
+    pref = np.array(
+        [
+            [0.71990938, 0.83556922, 0.28187783],
+            [0.21521817, 0.63933138, 0.80505483],
+            [0.96367087, 0.15052483, 0.48221239],
+        ],
+        dtype=np.float64,
+    )
+    # tau = 0.5 -> approvals:
+    # col0:1, col1:1, col2:2 -> col2 must win.
+    # Tie between col0 and col1 is resolved by lower total disagreement (col1).
+    out = np.asarray(approval_voting(pref.copy(), rng=np.random.default_rng(1)), dtype=np.int64)
+    assert list(out) == [2, 1, 0]
 
-def test_approval_voting():
-    # Test predefined cases
-    for pref_table, expected in approval_simple_cases:
-        res_ranking = approval_voting(pref_table, rng=np.random.default_rng())
-        is_correct = False
-        for exp in expected:
-            if list(res_ranking) == exp:
-                is_correct = True
-        assert is_correct
 
-# Cases with ties - "all equally possible"
+def test_approval_voting_custom_variant_is_available() -> None:
+    """Legacy adaptive variant remains accessible for exploratory comparisons."""
+    pref = np.array(
+        [
+            [0.8, 0.2, 0.1],
+            [0.1, 0.9, 0.3],
+            [0.3, 0.2, 0.7],
+        ],
+        dtype=np.float64,
+    )
+    out = np.asarray(approval_voting_custom(pref.copy(), rng=np.random.default_rng(7)), dtype=np.int64)
+    assert out.shape == (pref.shape[1],)
 
-with_ties_all = np.array([
-        [0.25, 0.25, 0.25, 0.25],
-        [0.25, 0.25, 0.25, 0.25],
-        [0.25, 0.25, 0.25, 0.25],
-        [0.25, 0.25, 0.25, 0.25],
-        [0.25, 0.25, 0.25, 0.25]
-    ])
 
-with_overall_tie = np.array([
-    [0.4, 0.3, 0.2, 0.1],
-    [0.1, 0.4, 0.3, 0.2],
-    [0.2, 0.1, 0.4, 0.3],
-    [0.3, 0.2, 0.1, 0.4],
-])
-
-with_ties_mixed = np.array([
-    [0.4, 0.3, 0.2, 0.1],
-    [0.25, 0.25, 0.25, 0.25],
-    [0.25, 0.25, 0.25, 0.25],
-    [0.1, 0.4, 0.3, 0.2],
-    [0.2, 0.1, 0.4, 0.3],
-    [0.25, 0.25, 0.25, 0.25],
-    [0.3, 0.2, 0.1, 0.4],
-])
-
-all_equally_possible = [with_ties_all, with_overall_tie, with_ties_mixed]
-
-def test_equally_possible():
-    for pref_rel in all_equally_possible:
-        winners = set()
-        for _ in range(500):
-            winner = approval_voting(pref_rel, rng=np.random.default_rng())
-            winners.add(winner[0])
-        assert set(winners) == {0, 1, 2, 3}
-
-# # Cases with ties - "not all equally possible"
-# with_ties_unequal = np.array([
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.4, 0.3, 0.2, 0.1],
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25],
-#         [0.25, 0.25, 0.25, 0.25]
-#     ])
-#
-# with_ties_all_ab = np.array([
-#         [0.3, 0.3, 0.2, 0.2],
-#         [0.25, 0.25, 0.25, 0.25]
-#     ])  # all possible (a or b up first is more likely)
-#
-# with_ties_ab = np.array([
-#         [0.3, 0.3, 0.2, 0.2],
-#         [0.3, 0.3, 0.2, 0.2],
-#         [0.25, 0.25, 0.25, 0.25]
-#     ])  # all possible (a or b up first is more likely)
-#
-# with_ties_unequal = [with_ties_unequal, with_ties_all_ab, with_ties_ab]
-#
-# def test_with_ties_unequal():
-#     for pref_rel in with_ties_unequal:
-#         cv = majority_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
-#         print(f"CV: {cv}")
-#         assert cv > 0.125
-#
-# # Random matrix
-#
-# def random_pref_profile(num_agents, num_options):
-#     rand_matrix = np.random.rand(num_agents, num_options)
-#     # Normalize the matrix
-#     matrix_rand = rand_matrix / rand_matrix.sum(axis=1, keepdims=True)
-#     return matrix_rand
-#
-# def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000):
-#     """
-#     Run majority rule with ties multiple times, check winners
-#     and calculate the coefficient of variation (CV) of the winners.
-#     :param num_agents: Number of agents.
-#     :param num_options: Number of options.
-#     :param iterations: Number of iterations.
-#     -------
-#     :return: Dictionary of winner counts {option: count}.
-#     """
-#     winner_counts = {}
-#     for _ in range(iterations):
-#         # Create random matrix
-#         matrix_rand = random_pref_profile(num_agents, num_options)
-#         ranking = majority_rule(matrix_rand)
-#         winner = ranking[0]
-#         # Count winners
-#         winner_counts[winner] = winner_counts.get(winner, 0) + 1
-#     return winner_counts
-#
-#
-# def test_with_random_matrix_small():
-#     """
-#     Test majority rule on a small random matrix with many iterations.
-#     """
-#     num_agents = np.random.randint(2, 200)
-#     # Keep num options small to expect all options to win at least once.
-#     num_options = np.random.randint(2, 90)
-#     iterations = 100*num_options
-#     start_time = time.time()
-#     wc = majority_rule_with_rand_matrix(num_agents, num_options, iterations)
-#     stop_time = time.time()
-#     # Extract winners from winner-counts dictionary and sort them
-#     sorted_winners = list(wc.keys())
-#     sorted_winners.sort()
-#     assert sorted_winners == list(range(num_options))
-#     # Extract count values
-#     counts = np.array(list(wc.values()))
-#     # Calculate the coefficient of variation (CV)
-#     cv = np.std(counts) / np.mean(counts)
-#     assert cv < 0.125
-#     print(f"\nCV: {cv}")
-#     # Print the time taken
-#     elapsed_time = stop_time - start_time
-#     print(f"\nTime taken: {elapsed_time:.2f} sec. On {iterations} iterations."
-#           f"With {num_agents} agents and {num_options} options.")
-#
-#
-# def test_with_random_matrix_large():
-#     """
-#     Test majority rule on a large random matrix (many agents, many options).
-#     """
-#     num_its = 100
-#     num_agents = np.random.randint(1000, 3000)
-#     num_options = np.random.randint(2000, 3000)
-#     # Run majority rule test with random matrix
-#     start_time = time.time()
-#     wc = majority_rule_with_rand_matrix(num_agents, num_options, num_its)
-#     stop_time = time.time()
-#     # Len of winners should be approximately equal to the number of iterations
-#     # because with a large number of options, winners should be mostly unique.
-#     winners, counts = list(wc.keys()), list(wc.values())
-#     assert abs(np.mean(counts) - 1) < 0.1
-#     assert abs((len(winners) / num_its) - 1) < 0.1
-#     # Calculate the coefficient of variation (CV)
-#     cv = np.std(counts) / np.mean(counts)
-#     assert cv < 0.2
-#     # Print the time taken
-#     elapsed_time = stop_time - start_time
-#     print(f"\nTime taken: {elapsed_time:.2f} sec. On {num_its} iterations."
-#           f"With {num_agents} agents and {num_options} options.")
+def test_approval_voting_tie_randomness_under_full_symmetry() -> None:
+    """With full symmetry, winners should vary across seeds."""
+    pref = np.full((20, 4), APPROVAL_THRESHOLD_TAU, dtype=np.float64)
+    winners = set()
+    for seed in range(200):
+        out = np.asarray(approval_voting(pref.copy(), rng=np.random.default_rng(seed)), dtype=np.int64)
+        winners.add(int(out[0]))
+    assert winners == {0, 1, 2, 3}

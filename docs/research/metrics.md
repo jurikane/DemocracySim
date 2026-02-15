@@ -2,6 +2,8 @@
 
 For final thesis analysis, the frozen operational definitions are documented in
 `docs/research/thesis_measurement_spec.md`.
+Execution-level inclusion/exclusion and CP/TD triage are frozen in
+`docs/research/execution_scope_freeze.md`.
 
 ### **Participation Rate** *(Aggregate Behavioral Variable)*
 
@@ -33,6 +35,12 @@ For final thesis analysis, the frozen operational definitions are documented in
 - Evaluates the variation in agents' expressed preferences.
 - Tracks whether participating agents provide diverse input or converge to similar opinion patterns.
 
+### **Distance to Reference Optima** *(Optional Descriptive)*
+
+- Tracks distance between realized collective outcomes and fixed reference outcomes
+  (utilitarian / egalitarian / rawlsian style references).
+- Used as descriptive benchmark trajectories, not as normative claims of democratic optimality.
+
 ### Out of Scope for This Thesis Baseline
 
-- Normative “distance-to-optimum” criteria (utilitarian/egalitarian/Rawlsian) are not used as baseline evaluation targets.
+- Normative policy recommendations or claims about optimal democratic design.

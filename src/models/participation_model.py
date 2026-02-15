@@ -19,6 +19,8 @@ from src.utils.rng import (
     np_rng,
     np_rng_viz,
     np_rng_debug,
+    np_rng_participation,
+    np_rng_voting,
     py_rng,
     py_rng_viz,
     py_rng_debug,
@@ -319,7 +321,6 @@ class ParticipationModel(mesa.Model):
         self.break_even_distance_personal = is_rate_btw_0_and_1(break_even_distance_personal)
         self.abstention_share = is_rate_btw_0_and_1(abstention_share)
 
-        self.voting_rng = self.np_random
         self.distance_idx = distance_idx
         dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
         self.distance_func = dist
@@ -452,6 +453,8 @@ class ParticipationModel(mesa.Model):
         # Initialize RNGs early (centralized)
         set_seed(seed)
         self.np_random = np_rng()
+        self.participation_rng = np_rng_participation()
+        self.voting_rng = np_rng_voting()
         self.random = py_rng()
         # Dedicated streams for visualization/debug to avoid perturbing simulation RNG.
         self.rng_viz = np_rng_viz()

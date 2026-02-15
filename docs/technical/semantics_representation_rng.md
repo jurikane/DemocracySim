@@ -53,6 +53,8 @@ Tie policy:
 
 - Run seed derivation is deterministic (`run_seed = base_seed + run_id`)
 - Simulation RNG stream is isolated from visualization/debug streams
+- Participation decisions and voting/tie-breaking consume separate RNG streams
+  (voting RNG consumption must not perturb participation paths)
 - same config + same seed must reproduce identical core outputs
 
 ## Why This Matters for Thesis Validity
@@ -81,5 +83,6 @@ RNG and tie behavior:
 
 - `tests/test_headless_determinism.py`
 - `tests/test_rng_stream_isolation.py`
+- `tests/test_cp10_rng_stream_isolation_participation_voting.py`
 - `tests/test_tie_break_fairness.py`
 - `tests/test_rule_tie_seed_contract.py`

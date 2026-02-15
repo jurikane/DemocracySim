@@ -36,8 +36,8 @@ class DefaultParticipationStrategy:
         if bias != 0.0:
             # Simple additive bias in probability space.
             p = float(np.clip(p + bias, 0.0, 1.0))
-        # determinism: use model-level NumPy RNG
-        return bool(agent.model.np_random.random() < p)
+        # determinism + stream isolation: participation has its own RNG stream.
+        return bool(agent.model.participation_rng.random() < p)
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,10 @@ Implemented canonical rules:
 - `utilitarian_rule`
 - `borda_rule`
 
+Additional non-baseline variant available:
+
+- `approval_voting_custom` (adaptive `mean-variance` threshold mapping)
+
 For baseline thesis experiments, the voting rule is the only intentionally varied independent variable.
 
 ## Rule Input/Output Contract
@@ -30,6 +34,14 @@ No-participation edge:
 - area keeps previous outcome (or initializes from current area reality ordering on first occurrence)
 - this behavior is explicit and logged (not silently fabricated as a vote profile)
 
+Approval mapping policy:
+
+- `approval_voting` uses a fixed threshold on disagreement scores (`score <= tau`, with `tau=0.5`)
+- ties on approval counts are resolved by:
+  1. lower aggregate disagreement
+  2. seeded RNG as final tie-break
+- `approval_voting_custom` keeps the legacy adaptive threshold behavior for exploratory use only
+
 ## Rule Identity and Auditability
 
 Run metadata stores rule identity in multiple forms:
@@ -45,6 +57,8 @@ This protects analysis from silent remapping or refactor drift.
 - ties are resolved using explicit RNG in rule implementations
 - same seed => deterministic replay of tied outcomes
 - across many seeds, tied outcomes should not show systematic option-id bias
+- `majority_rule` randomization is restricted to genuine first-choice ties;
+  strict (non-tied) first choices are not perturbed by noise.
 
 ## Why This Matters for Thesis Validity
 
@@ -70,4 +84,3 @@ Fairness / invariance / determinism:
 - `tests/test_tie_break_fairness.py`
 - `tests/test_rule_label_permutation_invariance.py`
 - `tests/test_rule_tie_seed_contract.py`
-

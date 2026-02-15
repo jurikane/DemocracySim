@@ -10,7 +10,8 @@ This design allows non-discrete and non-equidistant preferences.
 
 Implemented rules (schema B1):
 - majority_rule (first-choice plurality after tie-prep)
-- approval_voting (thresholded approvals)
+- approval_voting (canonical fixed-threshold approval mapping)
+- approval_voting_custom (legacy adaptive approval mapping; non-canonical)
 - utilitarian_rule (minimize total disagreement)
 - borda_rule (positional scoring derived from per-voter orderings)
 """
@@ -20,6 +21,11 @@ from __future__ import annotations
 import numpy as np
 
 from src.utils.representations import validate_ordering, scores_to_ordering
+
+
+# Canonical approval mapping threshold on normalized disagreement scores in [0,1].
+# Lower score = better; approve if score <= tau.
+APPROVAL_THRESHOLD_TAU = 0.5
 
 
 def complete_ranking(
@@ -46,46 +52,37 @@ def complete_ranking(
 
 def run_tie_breaking_preparation_for_majority(
     pref_table: np.ndarray,
-    noise_factor: int = 100,
+    eps: float = 1e-9,
     *,
     rng: np.random.Generator,
 ) -> np.ndarray:
     """
-    This function prepares the preference table for majority rule such that
-    it handles ties in the voters' preferences.
-    Because majority rule cannot usually deal with ties.
-    The tie breaking is randomized to ensure anonymity and neutrality.
+    Prepare ballots for majority rule by breaking *only first-choice ties*.
 
     Args:
         pref_table (np.ndarray): Preferences per agent (rows) per option (cols).
-        noise_factor (int): Controls noise magnitude.
+        eps (float): Tiny jitter amplitude used only on tied minimal entries.
         rng (np.random.Generator): Random number generator.
     Returns:
-        np.ndarray: Table without ties in first choices.
+        np.ndarray: Table where per-row minimal-score ties are broken.
     """
-    # Add some random noise to break ties (based on the variances)
-    variances = np.var(pref_table, axis=1)
-    # If variances are zero, all values are equal, then select a random option
-    mask = (variances == 0)
-    # Split
-    pref_tab_var_zero = pref_table[mask]
-    pref_tab_var_non_zero = pref_table[~mask]
-    n, m = pref_tab_var_non_zero.shape
+    prepared = np.array(pref_table, dtype=np.float64, copy=True)
+    if prepared.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    n, m = prepared.shape
+    if m <= 0:
+        return prepared
 
-    # Set exactly one option to 0 (the first choice) and the rest to 1/(m-1)
-    pref_tab_var_zero.fill(1 / (m - 1))
-    for i in range(pref_tab_var_zero.shape[0]):
-        rand_option = int(rng.integers(0, m))
-        pref_tab_var_zero[i, rand_option] = 0
-    # On the non-zero part, add some noise to the values to break ties
-    non_zero_variances = variances[~mask]
-    # Generate noise based on the variances
-    noise_eps = non_zero_variances / noise_factor
-    noise = rng.uniform(-noise_eps[:, np.newaxis], noise_eps[:, np.newaxis], (n, m))
-    pref_tab_var_non_zero += noise
-
-    # Put the parts back together
-    return np.concatenate((pref_tab_var_non_zero, pref_tab_var_zero))
+    for i in range(n):
+        row = prepared[i]
+        min_val = float(np.min(row))
+        # Tie only among exactly equal first-choice values.
+        tied_min = np.flatnonzero(row == min_val)
+        if tied_min.size > 1:
+            jitter = np.zeros(m, dtype=np.float64)
+            jitter[tied_min] = rng.uniform(-eps, eps, size=tied_min.size)
+            prepared[i] = row + jitter
+    return prepared
 
 def majority_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
     """
@@ -98,18 +95,29 @@ def majority_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.nda
     Returns:
         np.ndarray: Ordering (permutation) of options.
     """
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
     n, m = pref_table.shape  # n agents, m options
-    pref_table = run_tie_breaking_preparation_for_majority(pref_table, rng=rng)
-    first_choices = np.argmin(pref_table, axis=1)
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+    if n <= 0:
+        return np.arange(m, dtype=np.int64)
+
+    prepared = run_tie_breaking_preparation_for_majority(pref_table, rng=rng)
+    first_choices = np.argmin(prepared, axis=1).astype(np.int64)
+    # Preserve legacy majority tie resolution pattern:
+    # randomize ballot order, then stable-sort by plurality counts.
     rng.shuffle(first_choices)
-    first_choice_counts = {}
+    first_choice_counts: dict[int, int] = {}
     for choice in first_choices:
-        first_choice_counts[int(choice)] = first_choice_counts.get(int(choice), 0) + 1
+        c = int(choice)
+        first_choice_counts[c] = first_choice_counts.get(c, 0) + 1
     option_count_pairs = list(first_choice_counts.items())
     option_count_pairs.sort(key=lambda x: x[1], reverse=True)
-    ordering = np.array([pair[0] for pair in option_count_pairs])
+    ordering = np.array([pair[0] for pair in option_count_pairs], dtype=np.int64)
     if ordering.shape[0] < m:
         ordering = complete_ranking(ordering, m, rng=rng)
+    validate_ordering(ordering, m)
     return ordering
 
 def preprocessing_for_approval(
@@ -157,9 +165,22 @@ def imp_prepr_for_approval(pref_table: np.ndarray) -> np.ndarray:
     return (pref_table < threshold.reshape(-1, 1)).astype(int)
 
 
+def approval_voting_custom(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+    """
+    Legacy/custom approval mapping using adaptive per-voter threshold (mean-variance).
+
+    Kept for exploratory comparisons; not used as canonical approval in thesis baseline.
+    """
+    pref_table = imp_prepr_for_approval(pref_table)
+    approval_counts = np.sum(pref_table, axis=0)
+    eps = 1e-6
+    noise = rng.uniform(-eps, eps, len(approval_counts))
+    return np.argsort(-(approval_counts + noise))
+
+
 def approval_voting(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
     """
-    This function implements the approval voting social welfare function.
+    Canonical approval voting with fixed threshold mapping.
 
     Args:
         pref_table (np.ndarray): ScoreVector table (disagreement values).
@@ -168,11 +189,23 @@ def approval_voting(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.n
     Returns:
         np.ndarray: Ordering (permutation) of options.
     """
-    pref_table = imp_prepr_for_approval(pref_table)
-    approval_counts = np.sum(pref_table, axis=0)
-    eps = 1e-6
-    noise = rng.uniform(-eps, eps, len(approval_counts))
-    return np.argsort(-(approval_counts + noise))
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    _n, m = pref_table.shape
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+
+    approvals = preprocessing_for_approval(pref_table, threshold=APPROVAL_THRESHOLD_TAU)
+    approval_counts = np.sum(approvals, axis=0).astype(np.int64)
+    # Tie-break policy:
+    # 1) higher approval count wins
+    # 2) lower total disagreement wins (content-based, label-neutral)
+    # 3) randomized final tie-break (deterministic for fixed seed)
+    totals = np.sum(pref_table, axis=0).astype(np.float64)
+    rand = rng.random(m)
+    ordering = np.lexsort((rand, totals, -approval_counts)).astype(np.int64)
+    validate_ordering(ordering, m)
+    return ordering
 
 
 def utilitarian_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:

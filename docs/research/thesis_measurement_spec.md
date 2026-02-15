@@ -2,6 +2,8 @@
 
 This document defines the operational metrics used for final thesis analysis.
 It aligns the thesis framing with the current simulation semantics and logging pipeline.
+Execution-level scope and triage are frozen in:
+`docs/research/execution_scope_freeze.md`.
 
 ## Data Sources
 
@@ -60,11 +62,45 @@ Recommended volatility definition:
 
 ## Cross-Table Consistency Checks (Must Hold)
 
-- `steps.turnout(t) == mean_a area_steps.turnout(a,t)`
+- `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a eligible_voters(a,t)` (if denominator is 0, turnout is defined as 0)
 - `area_steps.participants(a,t) == count(votes rows for (a,t))`
 - One `agents` row per `(agent_id, step)`
 - All probability-vector columns sum to 1 within numeric tolerance
 - No `NaN/inf` in thesis-critical series
+
+## Secondary Descriptive Metrics (Included)
+
+These are included as descriptive diagnostics and must not be interpreted as
+normative welfare-optimality claims.
+
+### Diversity of Shared Opinions
+
+Purpose:
+
+- characterize whether participating ballots are convergent or dispersed at step `t`.
+
+Operational candidates (implementation may use one or both):
+
+- entropy of first-choice option distribution among participants
+- mean pairwise ballot-distance among participants (from vote-level signals)
+
+### Distance to Reference Optima
+
+Purpose:
+
+- track how far realized collective outcomes are from fixed reference outcomes
+  computed from static preference information.
+
+Reference families:
+
+- utilitarian reference
+- egalitarian reference
+- rawlsian reference
+
+Interpretation rule:
+
+- these are benchmark trajectories for comparison, not claims about “true”
+  democratic optimality.
 
 ## Experimental Freeze Rules
 
@@ -75,3 +111,4 @@ Before final experiment execution:
 - Fix overlap mode (baseline choice) and topology settings.
 - Freeze config files + commit hash used for final runs.
 - Do not change metric formulas after observing final rule-comparison results.
+- Treat secondary descriptive metrics as non-normative diagnostics.

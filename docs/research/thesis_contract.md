@@ -27,3 +27,6 @@ Important semantic clarification for interpretation:
 Accordingly, `gini_assets` is interpreted as inequality in simulation resource capacity.
 
 The thesis explicitly excludes strategic voting, complex learning models, empirical validation, policy recommendations, and normative notions such as optimal democratic design.
+
+Execution-level implementation scope and experiment triage are frozen in:
+`docs/research/execution_scope_freeze.md`.
