@@ -411,6 +411,7 @@ class ParticipationModel(mesa.Model):
         self._seed = seed
         self._av_area_color_dst = np.asarray([], dtype=np.float64)
         self.global_color_dst = np.asarray([], dtype=np.float64)
+        self.step_metrics_snapshot: dict[str, float | int] = {}
         # Optional schema-v2 logging sinks (set by RunLoggerV2 in headless runs).
         self._schema_v2_vote_sink = None
         self._schema_v2_area_snapshot_sink = None
@@ -513,6 +514,7 @@ class ParticipationModel(mesa.Model):
         self.personality_groups = self.create_personality_groups(num_personality_groups)
         pg_dst = ParticipationModel.pers_dist(num_personality_groups, rng=self.np_random)
         self.initialize_voting_agents(intended_dst=pg_dst, id_start=num_areas)
+        self._assert_dense_agent_and_cell_state()
         self.personality_group_distribution = self._initialize_personality_group_distribution()  # Static
         # Area variables
         self.global_area = self.initialize_global_area()
@@ -528,12 +530,15 @@ class ParticipationModel(mesa.Model):
         # Analyze area coverage once so global distributions can be updated fast + correctly
         # for disjoint area layouts (including layouts with gaps).
         self._analyze_area_coverage()
+        self._assert_dense_area_state()
         # Data collector
         self.datacollector: Optional[mesa.DataCollector] = None
         if bool(enable_datacollector):
             self.datacollector = self.initialize_datacollector()
             # Collect initial data
             self.datacollector.collect(self)
+        # Canonical step-metrics snapshot used by headless logger.
+        self.step_metrics_snapshot = self._compute_step_metrics_snapshot()
 
     def _analyze_area_coverage(self) -> None:
         """Compute and cache area coverage/overlap information.
@@ -563,6 +568,18 @@ class ParticipationModel(mesa.Model):
                     # If needed in the future, we could save uncovered cells here.
                     uncovered_counts[int(cell.color)] += 1
         self._uncovered_color_counts = uncovered_counts
+
+    def _assert_dense_agent_and_cell_state(self) -> None:
+        """Fail loudly if dense model collections unexpectedly contain None."""
+        if any(c is None for c in self.color_cells):
+            raise RuntimeError("Model invariant violated: color_cells contains None entries.")
+        if any(a is None for a in self.voting_agents):
+            raise RuntimeError("Model invariant violated: voting_agents contains None entries.")
+
+    def _assert_dense_area_state(self) -> None:
+        """Fail loudly if area collection contains None entries after initialization."""
+        if any(a is None for a in self.areas):
+            raise RuntimeError("Model invariant violated: areas contains None entries.")
 
     @property
     def height(self) -> int:
@@ -823,20 +840,20 @@ class ParticipationModel(mesa.Model):
             agents = m.voting_agents
             if not agents:
                 return 0.0
-            vals = [float(a.participation_probability()) for a in agents if a is not None]
+            vals = [float(a.participation_probability()) for a in agents]
             return float(np.mean(vals)) if vals else 0.0
 
         def mean_altruism(m: "ParticipationModel") -> float:
             agents = m.voting_agents
             if not agents:
                 return 0.0
-            vals = [float(a.altruism_factor) for a in agents if a is not None]
+            vals = [float(a.altruism_factor) for a in agents]
             return float(np.mean(vals)) if vals else 0.0
         def mean_dissatisfaction(m: "ParticipationModel") -> float:
             agents = m.voting_agents
             if not agents:
                 return 0.0
-            vals = [float(a.dissatisfaction_value) for a in agents if a is not None]
+            vals = [float(a.dissatisfaction_value) for a in agents]
             return float(np.mean(vals)) if vals else 0.0
 
         return mesa.DataCollector(
@@ -860,6 +877,25 @@ class ParticipationModel(mesa.Model):
             },
         )
 
+    def _compute_step_metrics_snapshot(self) -> dict[str, float | int]:
+        """Build canonical scalar step metrics for logging."""
+        agents = self.voting_agents
+        assets = [float(a.assets) for a in agents]
+        collective_assets = float(np.sum(assets)) if assets else 0.0
+        from src.utils.metrics import gini_index_0_100
+        gini_index = int(gini_index_0_100(assets)) if assets else 0
+        area_turnouts = [float(area.voter_turnout) for area in self.areas]
+        turnout = float(np.mean(area_turnouts)) if area_turnouts else 0.0
+        mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
+        mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
+        return {
+            "collective_assets": collective_assets,
+            "gini_index": gini_index,
+            "turnout": turnout,
+            "mean_altruism": mean_altruism,
+            "mean_dissatisfaction": mean_dissatisfaction,
+        }
+
 
     def step(self):
         """
@@ -872,6 +908,8 @@ class ParticipationModel(mesa.Model):
         # Conduct elections in the areas
         # and then mutate the color cells according to election outcomes
         self.scheduler.step()
+        # Canonical scalar snapshot at election-time state (post-election/reward, pre-mutation).
+        self.step_metrics_snapshot = self._compute_step_metrics_snapshot()
         # Collect data for monitoring and data analysis (pre-mutation).
         if self.datacollector is not None:
             self.datacollector.collect(self)

@@ -1,20 +1,17 @@
-"""RunLoggerV2
+"""RunLoggerV2.
 
-Phase: schema v2 migration (Batch 1.0)
+Responsibilities:
+- Write schema-v2 metadata files: `meta.yaml`, `static.json`
+- Write schema-v2 parquet tables:
+  - `steps.parquet`
+  - `area_steps.parquet`
+  - `agents.parquet`
+  - `votes.parquet`
 
-Responsibilities (Batch 1.0 only):
-- Write schema v2 run metadata files: meta.yaml, static.json
-- Write Parquet tables with real rows:
-  - steps.parquet
-  - area_steps.parquet
-  - agents.parquet
-
-Not implemented yet (future batches):
-- votes.parquet
-
-This module intentionally keeps core model logic unchanged. For steps.parquet and
-area_steps.parquet, color distributions are captured from pre-mutation (post-election)
-snapshots. Grid snapshots are pre-mutation.
+Timing semantics:
+- Recorded step `t` is election-time state for step `t` (post election/reward,
+  pre mutation of step `t`).
+- Grid snapshots written by this logger are election-time snapshots.
 """
 
 from __future__ import annotations
@@ -226,7 +223,8 @@ class RunLoggerV2:
     def attach_to_model(self, model: Model) -> None:
         """Attach schema-v2 sinks to the model.
 
-                - vote sink: used by Area._tally_votes() to emit participant vote rows.
+        - vote sink: used by `Area._tally_votes()` to emit participant vote rows
+        - area snapshot sink: used by `Area._capture_area_snapshot_for_logger()`
         """
         if self._num_colors is None:
             self._num_colors = int(model.num_colors)
@@ -331,25 +329,29 @@ class RunLoggerV2:
     # Extraction helpers
     # -----------------
     def _extract_steps_row(self, step: int, model: Model) -> Dict[str, Any]:
-        agents = [a for a in model.voting_agents if a is not None]
-        assets = [float(a.assets) for a in agents]
-        collective_assets = float(np.sum(assets)) if assets else 0.0
-        from src.utils.metrics import gini_index_0_100
-        gini_index = int(gini_index_0_100(assets)) if assets else 0
-        area_turnouts = [float(area.voter_turnout) for area in model.areas]
-        turnout = float(np.mean(area_turnouts)) if area_turnouts else 0.0
-        mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
-        mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
+        snap = getattr(model, "step_metrics_snapshot", None)
+        if not isinstance(snap, dict):
+            raise RuntimeError(f"Missing step_metrics_snapshot for step {step}.")
+        required = (
+            "collective_assets",
+            "gini_index",
+            "turnout",
+            "mean_altruism",
+            "mean_dissatisfaction",
+        )
+        missing = [k for k in required if k not in snap]
+        if missing:
+            raise RuntimeError(f"Missing step_metrics_snapshot fields for step {step}: {missing}")
 
         row: Dict[str, Any] = {
             "run_seed": np.int32(self.ctx.run_seed),
             "rule_idx": np.int16(self.ctx.rule_idx),
             "step": np.int32(step),
-            "collective_assets": np.float32(collective_assets),
-            "gini_index": np.int16(gini_index),
-            "turnout": np.float32(turnout),
-            "mean_altruism": np.float32(mean_altruism),
-            "mean_dissatisfaction": np.float32(mean_dissatisfaction),
+            "collective_assets": np.float32(float(snap["collective_assets"])),
+            "gini_index": np.int16(int(snap["gini_index"])),
+            "turnout": np.float32(float(snap["turnout"])),
+            "mean_altruism": np.float32(float(snap["mean_altruism"])),
+            "mean_dissatisfaction": np.float32(float(snap["mean_dissatisfaction"])),
         }
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
@@ -384,7 +386,7 @@ class RunLoggerV2:
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        areas = list(model.areas)
+        areas = model.areas
         num_colors = int(model.num_colors)
 
         options = np.asarray(model.options)
@@ -413,8 +415,6 @@ class RunLoggerV2:
                     r_dict[f"area_color_{i}"] = np.float32(cdv[i])
 
         for area in areas:
-            if area is None:
-                continue
             area_id = int(area.unique_id)
 
             # Base row
@@ -424,13 +424,15 @@ class RunLoggerV2:
                 "step": np.int32(step),
                 "area_id": np.int32(area_id),
                 "eligible_voters": np.int32(area.num_eligible_voters_last),
-                # Not tracked explicitly yet; default 0.
+                # participants is overwritten from the pre-mutation area snapshot below.
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
                 "election_cost_rate": np.float32(float(model.election_cost_rate)),
                 "fee_pool": np.float32(float(area.election_fee_pool)),
                 "winning_option_id": np.int32(-1),
-                "dist_to_reality": np.float32(float(area.dist_to_reality)),
+                "dist_to_reality": np.float32(
+                    float(area.dist_to_reality) if area.dist_to_reality is not None else 0.0
+                ),
                 "gini_index": np.int16(0),
             }
 
@@ -446,6 +448,7 @@ class RunLoggerV2:
                 "election_cost_rate",
                 "fee_pool",
                 "dist_to_reality",
+                "gini_index",
                 "area_color",
                 "elected_color",
             )
@@ -462,6 +465,7 @@ class RunLoggerV2:
             r["election_cost_rate"] = np.float32(float(snapshot["election_cost_rate"]))
             r["fee_pool"] = np.float32(float(snapshot["fee_pool"]))
             r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
+            r["gini_index"] = np.int16(int(snapshot["gini_index"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
             if cd is None:
@@ -475,25 +479,14 @@ class RunLoggerV2:
                 area_color_vec=cd,
             )
 
-            # area gini uses full area population (including ineligible agents).
-            agents = list(area.agents)
-            if agents:
-                assets = [float(a.assets) for a in agents]
-                # reuse metric helper indirectly: gini_index_0_100 exists in utils.metrics
-                from src.utils.metrics import gini_index_0_100
-
-                r["gini_index"] = np.int16(int(gini_index_0_100(assets)))
-
             rows.append(r)
 
         return rows
 
     def _extract_agent_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
-        agents = list(model.voting_agents)
+        agents = model.voting_agents
         for a in agents:
-            if a is None:
-                continue
             rows.append(
                 {
                     "run_seed": np.int32(self.ctx.run_seed),

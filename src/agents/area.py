@@ -768,12 +768,16 @@ class Area(Agent):
         # --- optional schema v2 hook: snapshot right before mutation (pre-mutation)
         snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
         if snapshot_sink is not None:
+            from src.utils.metrics import gini_index_0_100
+
             election_cost_rate = self.model.election_cost_rate
             fee_pool = self.election_fee_pool
             eligible_voters = self.num_eligible_voters_last
             participants = self.num_agents_participated_last
             turnout = self.voter_turnout
             dist_to_reality = self.dist_to_reality
+            assets = [float(a.assets) for a in self.agents]
+            gini_index = int(gini_index_0_100(assets)) if assets else 0
             area_color = None
             if self.color_distribution is not None:
                 area_color = self.color_distribution.copy()
@@ -789,6 +793,7 @@ class Area(Agent):
                     "participants": participants,
                     "turnout": turnout,
                     "dist_to_reality": dist_to_reality,
+                    "gini_index": gini_index,
                     "area_color": area_color,
                     "elected_color": elected_color
                 },
