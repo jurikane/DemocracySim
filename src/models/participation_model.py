@@ -5,7 +5,11 @@ from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
 from src.utils.social_welfare_functions import (majority_rule, approval_voting,
                                                 utilitarian_rule, borda_rule)
-from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
+from src.utils.distance_functions import (
+    spearman_fr_order,
+    kendall_tau_order,
+    distribution_distance_l1,
+)
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors)
@@ -411,6 +415,9 @@ class ParticipationModel(mesa.Model):
         self._seed = seed
         self._av_area_color_dst = np.asarray([], dtype=np.float64)
         self.global_color_dst = np.asarray([], dtype=np.float64)
+        self._ref_dist_utilitarian_global: Optional[np.ndarray] = None
+        self._ref_dist_egalitarian_global: Optional[np.ndarray] = None
+        self._ref_dist_rawlsian_global: Optional[np.ndarray] = None
         self.step_metrics_snapshot: dict[str, float | int] = {}
         # Optional schema-v2 logging sinks (set by RunLoggerV2 in headless runs).
         self._schema_v2_vote_sink = None
@@ -530,6 +537,8 @@ class ParticipationModel(mesa.Model):
         # Analyze area coverage once so global distributions can be updated fast + correctly
         # for disjoint area layouts (including layouts with gaps).
         self._analyze_area_coverage()
+        # Static global reference optima (from static personal preferences).
+        self._initialize_global_reference_optima()
         self._assert_dense_area_state()
         # Data collector
         self.datacollector: Optional[mesa.DataCollector] = None
@@ -889,13 +898,93 @@ class ParticipationModel(mesa.Model):
         turnout = (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
         mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
         mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
+        dist_to_ref_utilitarian, dist_to_ref_egalitarian, dist_to_ref_rawlsian = self._compute_global_reference_distances()
         return {
             "collective_assets": collective_assets,
             "gini_index": gini_index,
             "turnout": turnout,
             "mean_altruism": mean_altruism,
             "mean_dissatisfaction": mean_dissatisfaction,
+            "dist_to_ref_utilitarian": dist_to_ref_utilitarian,
+            "dist_to_ref_egalitarian": dist_to_ref_egalitarian,
+            "dist_to_ref_rawlsian": dist_to_ref_rawlsian,
         }
+
+    @staticmethod
+    def _compute_reference_optima_from_personal_dists(
+        personal_dists: np.ndarray,
+    ) -> tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+        """Compute (utilitarian, egalitarian, rawlsian) reference distributions.
+
+        Inputs:
+        - personal_dists: shape (n_agents, num_colors), each row a valid distribution.
+
+        Returns:
+        - tuple of distributions (or None if n_agents == 0).
+        """
+        dists = np.asarray(personal_dists, dtype=np.float64)
+        if dists.ndim != 2 or dists.shape[0] == 0:
+            return None, None, None
+
+        util = np.mean(dists, axis=0)
+        util_sum = float(np.sum(util))
+        if util_sum > 0.0:
+            util = util / util_sum
+
+        # Candidate set: unique personal distributions + utilitarian reference.
+        candidates = np.vstack([dists, util.reshape(1, -1)])
+        candidates = np.unique(np.round(candidates, decimals=12), axis=0).astype(np.float64)
+
+        # Distances from each candidate to each agent preference.
+        # dmat shape: (num_candidates, n_agents)
+        dmat = 0.5 * np.sum(np.abs(candidates[:, None, :] - dists[None, :, :]), axis=2)
+        means = np.mean(dmat, axis=1)
+        worst = np.max(dmat, axis=1)
+        from src.utils.metrics import gini_index_0_100
+        gini = np.asarray([float(gini_index_0_100(row)) for row in dmat], dtype=np.float64)
+
+        def _pick(primary: np.ndarray) -> np.ndarray:
+            primary_min = float(np.min(primary))
+            mask_primary = np.isclose(primary, primary_min, rtol=0.0, atol=1e-12)
+            secondary_min = float(np.min(means[mask_primary]))
+            mask_secondary = np.isclose(means, secondary_min, rtol=0.0, atol=1e-12)
+            tied = candidates[mask_primary & mask_secondary]
+            if tied.shape[0] == 1:
+                out = tied[0]
+            else:
+                out = np.mean(tied, axis=0)
+            s = float(np.sum(out))
+            if s > 0.0:
+                out = out / s
+            return out.astype(np.float64)
+
+        egal = _pick(gini)
+        rawl = _pick(worst)
+        return util.astype(np.float64), egal, rawl
+
+    def _initialize_global_reference_optima(self) -> None:
+        personal = np.asarray(
+            [np.asarray(a.personal_opt_dist, dtype=np.float64) for a in self.voting_agents],
+            dtype=np.float64,
+        )
+        util, egal, rawl = self._compute_reference_optima_from_personal_dists(personal)
+        self._ref_dist_utilitarian_global = util
+        self._ref_dist_egalitarian_global = egal
+        self._ref_dist_rawlsian_global = rawl
+
+    def _compute_global_reference_distances(self) -> tuple[float, float, float]:
+        color = np.asarray(self.global_color_dst, dtype=np.float64)
+
+        def _dist(ref: Optional[np.ndarray]) -> float:
+            if ref is None:
+                return float("nan")
+            return float(distribution_distance_l1(color, np.asarray(ref, dtype=np.float64)))
+
+        return (
+            _dist(self._ref_dist_utilitarian_global),
+            _dist(self._ref_dist_egalitarian_global),
+            _dist(self._ref_dist_rawlsian_global),
+        )
 
 
     def step(self):

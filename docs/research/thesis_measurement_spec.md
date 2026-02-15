@@ -101,11 +101,54 @@ Frozen reference families:
 - egalitarian reference
 - rawlsian reference
 
-Frozen output series:
+Frozen output columns (time-indexed by table `step`):
 
-- `dist_to_ref_utilitarian_t`
-- `dist_to_ref_egalitarian_t`
-- `dist_to_ref_rawlsian_t`
+- `dist_to_ref_utilitarian`
+- `dist_to_ref_egalitarian`
+- `dist_to_ref_rawlsian`
+
+Frozen operational definitions (exact):
+
+Let:
+
+- `d_i` = static `personal_opt_dist` of agent `i` (distribution over colors)
+- `delta(x, y) = 0.5 * ||x - y||_1` (normalized L1 distance in `[0,1]`)
+- `u_i(p) = 1 - delta(p, d_i)` (utility of reference distribution `p` for agent `i`)
+
+For each area `a` with agent set `I_a`:
+
+- `p_utilitarian(a) = mean_{i in I_a} d_i`
+- Candidate set for optimization-based references:
+  - `P_a = unique({d_i | i in I_a} U {p_utilitarian(a)})`
+- `p_egalitarian(a)`:
+  - primary objective: minimize `Gini_0_100({delta(p, d_i)}_{i in I_a})` over `p in P_a`
+  - secondary objective: among primary minimizers, minimize `mean_{i in I_a} delta(p, d_i)`
+  - final tie rule: if still tied, use the arithmetic mean of tied candidates as reference
+- `p_rawlsian(a)`:
+  - primary objective: minimize `max_{i in I_a} delta(p, d_i)` over `p in P_a`
+  - secondary objective: among primary minimizers, minimize `mean_{i in I_a} delta(p, d_i)`
+  - final tie rule: if still tied, use the arithmetic mean of tied candidates as reference
+
+Per-step area metrics (`area_steps`):
+
+- `dist_to_ref_utilitarian(a,t) = delta(area_color_distribution(a,t), p_utilitarian(a))`
+- `dist_to_ref_egalitarian(a,t) = delta(area_color_distribution(a,t), p_egalitarian(a))`
+- `dist_to_ref_rawlsian(a,t) = delta(area_color_distribution(a,t), p_rawlsian(a))`
+
+Global counterparts use the global agent set `I` and global color distribution:
+
+- define `p_utilitarian(global)`, `p_egalitarian(global)`, `p_rawlsian(global)` analogously
+- `dist_to_ref_*(global,t) = delta(global_color_distribution(t), p_*(global))`
+- store as `steps` columns with the same names:
+  - `dist_to_ref_utilitarian`
+  - `dist_to_ref_egalitarian`
+  - `dist_to_ref_rawlsian`
+
+NaN policy:
+
+- if an area has `|I_a| == 0`, all three area-level `dist_to_ref_*` values are `NaN`
+- global `dist_to_ref_*` is `NaN` iff global agent set is empty
+- no-participant election steps are still defined (distance is based on color distributions, not vote rows)
 
 Interpretation rule:
 

@@ -6,6 +6,7 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell
 from src.agents.vote_agent import VoteAgent
+from src.utils.distance_functions import distribution_distance_l1
 from src.utils.representations import scores_to_ordering, validate_score_vector_unit_interval
 # from src.utils.rng import np_rng_debug
 
@@ -40,6 +41,12 @@ class Area(Agent):
         self._voted_ordering = None
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
+        self._ref_dist_utilitarian: np.ndarray | None = None
+        self._ref_dist_egalitarian: np.ndarray | None = None
+        self._ref_dist_rawlsian: np.ndarray | None = None
+        self._dist_to_ref_utilitarian: float = float("nan")
+        self._dist_to_ref_egalitarian: float = float("nan")
+        self._dist_to_ref_rawlsian: float = float("nan")
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
         self._num_eligible_voters_last = 0  # Eligible population count for diagnostics/logging
@@ -89,6 +96,18 @@ class Area(Agent):
     @property
     def election_fee_pool(self) -> float:
         return float(self._election_fee_pool)
+
+    @property
+    def dist_to_ref_utilitarian(self) -> float:
+        return float(self._dist_to_ref_utilitarian)
+
+    @property
+    def dist_to_ref_egalitarian(self) -> float:
+        return float(self._dist_to_ref_egalitarian)
+
+    @property
+    def dist_to_ref_rawlsian(self) -> float:
+        return float(self._dist_to_ref_rawlsian)
 
     @property
     def diag_history(self) -> List[dict]:
@@ -176,6 +195,7 @@ class Area(Agent):
         self._idx_field = (adjusted_x, adjusted_y)
         self.update_color_distribution()
         self._update_personality_group_distribution()
+        self._initialize_reference_optima()
 
     def _set_dimensions(self, width, height, size_var):
         """
@@ -283,6 +303,7 @@ class Area(Agent):
                 real_color_ord, self._voted_ordering,
                 self.model.color_search_pairs
             )
+            self._update_dist_to_reference_optima()
             # Thought: agents could be punished here for all abstaining.
             self.num_agents_participated_last = 0
             self._voter_turnout = 0
@@ -298,6 +319,7 @@ class Area(Agent):
         self._voted_ordering = self.model.options[winning_option]
         # Calculate and distribute rewards
         self._distribute_rewards()
+        self._update_dist_to_reference_optima()
 
         # Adaptive participation learning update (eligible agents only)
         for a in self.agents:
@@ -564,6 +586,31 @@ class Area(Agent):
         if self.num_cells > 0:
             self._color_distribution = counts.astype(np.float64) / float(self.num_cells)
 
+    def _initialize_reference_optima(self) -> None:
+        """Compute static reference optima from resident agents' personal distributions."""
+        personal = np.asarray(
+            [np.asarray(a.personal_opt_dist, dtype=np.float64) for a in self.agents],
+            dtype=np.float64,
+        )
+        util, egal, rawl = self.model._compute_reference_optima_from_personal_dists(personal)
+        self._ref_dist_utilitarian = util
+        self._ref_dist_egalitarian = egal
+        self._ref_dist_rawlsian = rawl
+        self._update_dist_to_reference_optima()
+
+    def _update_dist_to_reference_optima(self) -> None:
+        """Update per-step distances to static area reference optima."""
+        color = np.asarray(self.color_distribution, dtype=np.float64)
+
+        def _dist(ref: np.ndarray | None) -> float:
+            if ref is None:
+                return float("nan")
+            return float(distribution_distance_l1(color, np.asarray(ref, dtype=np.float64)))
+
+        self._dist_to_ref_utilitarian = _dist(self._ref_dist_utilitarian)
+        self._dist_to_ref_egalitarian = _dist(self._ref_dist_egalitarian)
+        self._dist_to_ref_rawlsian = _dist(self._ref_dist_rawlsian)
+
     def _filter_cells(self, cell_list):
         """
         This method is used to filter a given list of cells to return only
@@ -795,6 +842,9 @@ class Area(Agent):
                     "participants": participants,
                     "turnout": turnout,
                     "dist_to_reality": dist_to_reality,
+                    "dist_to_ref_utilitarian": self.dist_to_ref_utilitarian,
+                    "dist_to_ref_egalitarian": self.dist_to_ref_egalitarian,
+                    "dist_to_ref_rawlsian": self.dist_to_ref_rawlsian,
                     "gini_index": gini_index,
                     "area_color": area_color,
                     "elected_color": elected_color
