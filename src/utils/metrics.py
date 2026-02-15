@@ -76,19 +76,14 @@ def compute_gini_index(model):
 
 
 def get_voter_turnout(model):
-    """Return global voter turnout as the mean across *stepped* areas.
+    """Return global voter turnout in percent across area-election resident population.
 
-    Note: the model currently does NOT run elections for `model.global_area`.
-    If global elections are ever implemented, they should be included here
-    explicitly (and only then).
+    Turnout semantics:
+      100 * (sum participants across stepped areas) / (sum resident agents across stepped areas)
     """
-    voter_turnout_sum = 0.0
-    num_areas = int(model.num_areas)
-    if num_areas == 0:
-        return 0
-    for area in model.areas:
-        voter_turnout_sum += float(area.voter_turnout)
-    return voter_turnout_sum / num_areas
+    total_participants = float(sum(int(area.num_agents_participated_last or 0) for area in model.areas))
+    total_resident = float(sum(int(area.num_agents) for area in model.areas))
+    return (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
 
 
 def get_agents_per_cell_grid(model) -> np.ndarray:

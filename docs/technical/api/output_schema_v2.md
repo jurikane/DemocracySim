@@ -97,7 +97,7 @@ Merged area-state + election table.
 | area_id                              |   int32 |                                                |
 | eligible_voters                      |   int32 | agents eligible for election in this area/step |
 | participants                         |   int32 | number who voted                               |
-| turnout                              | float32 | participants/eligible_voters * 100             |
+| turnout                              | float32 | participants/area_num_agents * 100             |
 | election_cost_rate                   | float32 | fraction of assets paid by participants (0..1) |
 | fee_pool                             | float32 | matches simulation internal type               |
 | winning_option_id                    |   int32 | option row index into `model.options`          |

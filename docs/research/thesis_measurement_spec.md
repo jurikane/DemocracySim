@@ -64,7 +64,7 @@ Recommended volatility definition:
 
 ## Cross-Table Consistency Checks (Must Hold)
 
-- `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a eligible_voters(a,t)` (if denominator is 0, turnout is defined as 0)
+- `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a area_num_agents(a)` (if denominator is 0, turnout is defined as 0)
 - `area_steps.participants(a,t) == count(votes rows for (a,t))`
 - One `agents` row per `(agent_id, step)`
 - All probability-vector columns sum to 1 within numeric tolerance

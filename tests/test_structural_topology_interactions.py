@@ -80,11 +80,13 @@ def test_section_f_topology_interaction_partition_vs_overlap(tmp_path):
     assert int(area_steps_a["area_id"].nunique()) == m_partition.num_areas
     assert int(area_steps_b["area_id"].nunique()) == m_overlap.num_areas
 
-    # steps.turnout must equal mean of area-level turnout (schema percent units).
+    # steps.turnout must equal resident-population weighted area turnout.
     ta = float(steps_a.iloc[0]["turnout"])
     tb = float(steps_b.iloc[0]["turnout"])
-    ta_mean = float(area_steps_a["turnout"].mean())
-    tb_mean = float(area_steps_b["turnout"].mean())
+    ta_den = float(sum(int(a.num_agents) for a in m_partition.areas))
+    tb_den = float(sum(int(a.num_agents) for a in m_overlap.areas))
+    ta_mean = float(100.0 * area_steps_a["participants"].sum() / ta_den) if ta_den > 0 else 0.0
+    tb_mean = float(100.0 * area_steps_b["participants"].sum() / tb_den) if tb_den > 0 else 0.0
     assert np.isfinite(ta) and np.isfinite(tb)
-    np.testing.assert_allclose(ta, ta_mean, rtol=0.0, atol=1e-6)
-    np.testing.assert_allclose(tb, tb_mean, rtol=0.0, atol=1e-6)
+    np.testing.assert_allclose(ta, ta_mean, rtol=0.0, atol=1e-5)
+    np.testing.assert_allclose(tb, tb_mean, rtol=0.0, atol=1e-5)

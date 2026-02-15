@@ -5,12 +5,8 @@ import numpy as np
 from tests.factory import create_test_model
 
 
-def test_global_turnout_equals_mean_of_area_turnouts_only() -> None:
-    """Regression: global turnout must not include global_area.
-
-    The scheduler steps only `model.areas` (not `model.global_area`), so the
-    model-level turnout reporter should equal the mean of per-area turnouts.
-    """
+def test_global_turnout_equals_population_weighted_area_turnout() -> None:
+    """Regression: global turnout uses resident-population weighting across stepped areas."""
 
     model, _ = create_test_model(seed=123, num_agents=50, num_colors=3, num_areas=2, max_steps=3)
 
@@ -23,11 +19,9 @@ def test_global_turnout_equals_mean_of_area_turnouts_only() -> None:
 
     global_turnout_series = df_model["turnout"].to_numpy(dtype=float)
 
-    # Mean of current per-area turnouts at each recorded step.
-    area_turnouts = []
-    for area in model.areas:
-        area_turnouts.append(float(area.voter_turnout))
-    expected = float(np.mean(area_turnouts))
+    total_participants = float(sum(int(area.num_agents_participated_last) for area in model.areas))
+    total_resident = float(sum(int(area.num_agents) for area in model.areas))
+    expected = (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
 
-    # The last recorded model turnout should match the current mean per-area turnout.
+    # The last recorded model turnout should match resident-population weighted turnout.
     assert np.isclose(float(global_turnout_series[-1]), expected)

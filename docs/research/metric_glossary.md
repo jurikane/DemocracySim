@@ -16,6 +16,12 @@ It complements:
 | `gini_dissatisfaction_t` | Gini over `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..100` | higher = more inequality |
 | `dist_to_reality_t` | area-level election quality aggregated at step `t` | derived from `area_steps.parquet` | `0..1` | lower = better |
 
+`turnout_pct_t` aggregation rule (frozen):
+
+- population-based aggregation across areas:
+  - `100 * sum_a participants(a,t) / sum_a area_num_agents(a)`
+- if denominator is zero, define value as `0`.
+
 `dist_to_reality_t` aggregation rule (frozen):
 
 - eligible-weighted mean across areas:

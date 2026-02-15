@@ -42,7 +42,7 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
-        self._num_eligible_voters_last = 0  # Eligible population used for turnout denominator
+        self._num_eligible_voters_last = 0  # Eligible population count for diagnostics/logging
         self._diag_history: List[dict] = []  # Per-area diagnostics time series
         self._debug_history: List[dict] = []  # Per-area debug snapshots (optional)
         self._debug_last_votes: List[dict] = []  # Per-step vote records (optional)
@@ -256,11 +256,13 @@ class Area(Agent):
         and may receive rewards based on the outcome.
 
         Returns:
-            int: The voter turnout in percent. Returns 0 if no agent participates.
+            int: The voter turnout in percent over resident area population.
+            Returns 0 if no agent participates.
         """
         # Ask agents for participation and their votes
         preference_profile = self._tally_votes()
         n_eligible = int(sum(1 for a in self.agents if a.eligible_for_election))
+        n_resident = int(self.num_agents)
         self.num_eligible_voters_last = n_eligible
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
@@ -320,7 +322,7 @@ class Area(Agent):
         # Statistics
         n = preference_profile.shape[0]  # Number agents participated
         self.num_agents_participated_last = n
-        area_voter_turnout = int((n / n_eligible) * 100) if n_eligible > 0 else 0
+        area_voter_turnout = int((n / n_resident) * 100) if n_resident > 0 else 0
         self._voter_turnout = area_voter_turnout  # Update in area state
         # Logging and diagnostics
         self._update_diag_history()

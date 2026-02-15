@@ -884,8 +884,9 @@ class ParticipationModel(mesa.Model):
         collective_assets = float(np.sum(assets)) if assets else 0.0
         from src.utils.metrics import gini_index_0_100
         gini_index = int(gini_index_0_100(assets)) if assets else 0
-        area_turnouts = [float(area.voter_turnout) for area in self.areas]
-        turnout = float(np.mean(area_turnouts)) if area_turnouts else 0.0
+        total_participants = float(sum(int(area.num_agents_participated_last or 0) for area in self.areas))
+        total_resident = float(sum(int(area.num_agents) for area in self.areas))
+        turnout = (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
         mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
         mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
         return {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -43,10 +44,18 @@ def _analyze_run_dir(run_dir: Path) -> dict:
     assert np.all(np.isfinite(assets))
 
     # --- cross-table consistency checks (silent wrongness guard)
-    # global turnout must equal mean area turnout per step
-    area_turnout_mean = area_steps.groupby("step", sort=True)["turnout"].mean().reset_index(drop=True)
+    # global turnout must equal resident-population weighted area turnout per step
+    static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
+    area_info = ((static.get("personality_group_info") or {}).get("areas") or {})
+    resident_total = float(sum(int(v.get("num_agents", 0)) for v in area_info.values()))
+    by_step = area_steps.groupby("step", sort=True)[["participants"]].sum()
+    area_turnout_mean = np.where(
+        resident_total > 0.0,
+        100.0 * by_step["participants"].to_numpy(dtype=float) / resident_total,
+        0.0,
+    )
     np.testing.assert_allclose(
-        area_turnout_mean.to_numpy(dtype=float),
+        area_turnout_mean.astype(float),
         steps["turnout"].to_numpy(dtype=float),
         rtol=0.0,
         atol=1e-6,
