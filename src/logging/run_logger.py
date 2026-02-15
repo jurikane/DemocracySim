@@ -362,29 +362,25 @@ class RunLoggerV2:
 
     def _get_pre_mutation_global_colors(self, *, step: int, model: Model) -> Optional[np.ndarray]:
         # Authoritative source for global color_* in steps.parquet:
-        # exact grid-count distribution at election-time state.
+        # model.global_color_dst at election-time state.
         num_colors = int(model.num_colors)
         if num_colors <= 0:
             return None
-        cells = list(getattr(model, "color_cells", []))
-        if not cells:
-            return None
 
-        counts = np.zeros(num_colors, dtype=np.float64)
-        for cell in cells:
-            if cell is None:
-                continue
-            c = int(cell.color)
-            if c < 0 or c >= num_colors:
-                raise RuntimeError(
-                    f"Invalid color id {c} found while extracting pre-mutation global colors for step {step}."
-                )
-            counts[c] += 1.0
+        vals = np.asarray(model.global_color_dst, dtype=np.float64)
+        if vals.ndim != 1 or vals.size != num_colors:
+            raise RuntimeError(
+                f"Invalid model.global_color_dst shape at step {step}: expected ({num_colors},), got {vals.shape}."
+            )
+        if not np.all(np.isfinite(vals)):
+            raise RuntimeError(f"Invalid model.global_color_dst values at step {step}: non-finite entries found.")
 
-        total = float(np.sum(counts))
+        total = float(np.sum(vals))
         if total <= 0.0:
-            return None
-        return (counts / total).astype(np.float32)
+            raise RuntimeError(f"Invalid model.global_color_dst values at step {step}: sum must be > 0.")
+
+        # Normalize defensively to keep a valid distribution even under tiny drift.
+        return (vals / total).astype(np.float32)
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
