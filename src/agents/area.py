@@ -87,6 +87,10 @@ class Area(Agent):
         return self._dist_to_reality
 
     @property
+    def election_fee_pool(self) -> float:
+        return float(self._election_fee_pool)
+
+    @property
     def diag_history(self) -> List[dict]:
         return self._diag_history
 
@@ -363,9 +367,9 @@ class Area(Agent):
             "eligible": bool(agent.eligible_for_election),
             "participating": bool(agent.participating),
             "num_elections_participated": agent.num_elections_participated,
-            "fee": float(getattr(agent, "_fee")),
-            "reward_common": float(getattr(agent, "_reward_common_comp")),
-            "reward_personal": float(getattr(agent, "_reward_pers_comp")),
+            "fee": float(agent.election_fee),
+            "reward_common": float(agent.reward_common_component),
+            "reward_personal": float(agent.reward_personal_component),
             "delta_abs": delta_abs,
             "delta_rel": float(agent.election_delta_rel),
             "q_participation": float(agent.q_participation),
@@ -599,8 +603,8 @@ class Area(Agent):
         mean_delta_rel_abstainers = _mean_attr(abstainers, "election_delta_rel")
 
         # Reward components (absolute)
-        mean_common_reward = _mean_attr(eligible, "_reward_common_comp")
-        mean_personal_reward = _mean_attr(eligible, "_reward_pers_comp")
+        mean_common_reward = _mean_attr(eligible, "reward_common_component")
+        mean_personal_reward = _mean_attr(eligible, "reward_personal_component")
 
         # Learning signals
         mean_q_participation = _mean_attr(eligible, "q_participation")
@@ -644,9 +648,9 @@ class Area(Agent):
                     group_mean_q_participation_abstainers[g] = _mean_attr(g_abstainers, "q_participation")
                 if g_agents:
                     group_mean_assets[g] = _mean_attr(g_agents, "assets")
-                    group_mean_common_reward[g] = _mean_attr(g_agents, "_reward_common_comp")
-                    group_mean_personal_reward[g] = _mean_attr(g_agents, "_reward_pers_comp")
-                    group_mean_fee[g] = _mean_attr(g_agents, "_fee")
+                    group_mean_common_reward[g] = _mean_attr(g_agents, "reward_common_component")
+                    group_mean_personal_reward[g] = _mean_attr(g_agents, "reward_personal_component")
+                    group_mean_fee[g] = _mean_attr(g_agents, "election_fee")
                     group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
                     group_mean_dissatisfaction[g] = _mean_attr(g_agents, "dissatisfaction_value")
 
@@ -765,7 +769,7 @@ class Area(Agent):
         snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
         if snapshot_sink is not None:
             election_cost_rate = self.model.election_cost_rate
-            fee_pool = self._election_fee_pool
+            fee_pool = self.election_fee_pool
             eligible_voters = self.num_eligible_voters_last
             participants = self.num_agents_participated_last
             turnout = self.voter_turnout

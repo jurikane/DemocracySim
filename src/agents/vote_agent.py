@@ -215,6 +215,21 @@ class VoteAgent(Agent):
         """Whether the agent is participating in the current election (per-election flag)."""
         return bool(self._participating)
 
+    @property
+    def election_fee(self) -> float:
+        """Election participation fee component for current step."""
+        return float(self._fee)
+
+    @property
+    def reward_common_component(self) -> float:
+        """Common reward component for current step."""
+        return float(self._reward_common_comp)
+
+    @property
+    def reward_personal_component(self) -> float:
+        """Personal reward component for current step."""
+        return float(self._reward_pers_comp)
+
     def mark_ineligible_for_election(self) -> None:
         self._eligible_for_election = False
 

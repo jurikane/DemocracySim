@@ -230,15 +230,14 @@ class RunLoggerV2:
         """
         if self._num_colors is None:
             self._num_colors = int(model.num_colors)
-        setattr(model, "_schema_v2_vote_sink", self._on_vote)
-        setattr(model, "_schema_v2_area_snapshot_sink", self._on_area_snapshot)
+        model.register_schema_v2_sinks(
+            vote_sink=self._on_vote,
+            area_snapshot_sink=self._on_area_snapshot,
+        )
 
     def detach_from_model(self, model: Model) -> None:
         """Detach schema-v2 sinks from the model."""
-        if getattr(model, "_schema_v2_vote_sink", None) is self._on_vote:
-            delattr(model, "_schema_v2_vote_sink")
-        if getattr(model, "_schema_v2_area_snapshot_sink", None) is self._on_area_snapshot:
-            delattr(model, "_schema_v2_area_snapshot_sink")
+        model.clear_schema_v2_sinks()
 
     def log_step(self, step: int, model: Model, grid_snapshot: Optional[np.ndarray] = None) -> None:
         """Append schema-v2 rows for this step.
@@ -433,7 +432,7 @@ class RunLoggerV2:
                 "participants": np.int32(0),
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
                 "election_cost_rate": np.float32(float(model.election_cost_rate)),
-                "fee_pool": np.float32(getattr(area, "_election_fee_pool")),
+                "fee_pool": np.float32(float(area.election_fee_pool)),
                 "winning_option_id": np.int32(-1),
                 "dist_to_reality": np.float32(float(area.dist_to_reality)),
                 "gini_index": np.int16(0),
@@ -512,9 +511,9 @@ class RunLoggerV2:
                     "personality_group_idx": np.int16(a.personality_group_idx),
                     "eligible_for_election": bool(a.eligible_for_election),
                     "participating": bool(a.participating),
-                    "election_fee": np.float32(float(getattr(a, "_fee"))),
-                    "reward_common_component": np.float32(float(getattr(a, "_reward_common_comp"))),
-                    "reward_personal_component": np.float32(float(getattr(a, "_reward_pers_comp"))),
+                    "election_fee": np.float32(float(a.election_fee)),
+                    "reward_common_component": np.float32(float(a.reward_common_component)),
+                    "reward_personal_component": np.float32(float(a.reward_personal_component)),
                     "election_delta_abs": np.float32(float(a.election_delta_abs)),
                     "election_delta_rel": np.float32(float(a.election_delta_rel)),
                     "participation_baseline": np.float32(float(a.participation_baseline)),

@@ -411,6 +411,9 @@ class ParticipationModel(mesa.Model):
         self._seed = seed
         self._av_area_color_dst = np.asarray([], dtype=np.float64)
         self.global_color_dst = np.asarray([], dtype=np.float64)
+        # Optional schema-v2 logging sinks (set by RunLoggerV2 in headless runs).
+        self._schema_v2_vote_sink = None
+        self._schema_v2_area_snapshot_sink = None
         # --- Core sizing validation (fail-loud; avoids factorial explosions) ---
         num_colors, num_personality_groups = self._validate_color_and_personality_space(
             num_colors=num_colors,
@@ -592,6 +595,16 @@ class ParticipationModel(mesa.Model):
     @property
     def no_overlap(self) -> bool:
         return self._no_overlap
+
+    def register_schema_v2_sinks(self, *, vote_sink, area_snapshot_sink) -> None:
+        """Register schema-v2 sink callbacks used by logging."""
+        self._schema_v2_vote_sink = vote_sink
+        self._schema_v2_area_snapshot_sink = area_snapshot_sink
+
+    def clear_schema_v2_sinks(self) -> None:
+        """Clear schema-v2 sink callbacks used by logging."""
+        self._schema_v2_vote_sink = None
+        self._schema_v2_area_snapshot_sink = None
 
     def _initialize_color_cells(self, id_start=0) -> None:
         """
