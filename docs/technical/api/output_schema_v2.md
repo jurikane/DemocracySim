@@ -43,7 +43,8 @@ Recorded step `t` (where **t starts at 1**) corresponds to the election-time sta
 - Elections and rewards/learning happen on this state during step `t`.
 - No mutation occurs during step `t`; mutation from step `t` is applied at the start of step `t+1`.
 - `area_color_*` in `area_steps.parquet` reflects the election-time distribution for step `t`.
-- `color_*` in `steps.parquet` reflects the global election-time distribution for step `t`.
+- `color_*` in `steps.parquet` reflects the global election-time distribution for step `t`,
+  computed from exact grid counts (not from averaging area distributions).
 - Grid snapshots (`grids/grid_*.npy`) are the election-time state for step `t` and match the distributions.
 - When snapshots are stored sparsely (`grid_interval > 1`), replay uses carry-forward semantics:
   for step `t` it shows the latest available `grid_k` with `k <= t`.

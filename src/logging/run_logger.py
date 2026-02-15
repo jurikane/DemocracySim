@@ -388,40 +388,30 @@ class RunLoggerV2:
         return row
 
     def _get_pre_mutation_global_colors(self, *, step: int, model: Model) -> Optional[np.ndarray]:
-        areas = [a for a in model.areas if a is not None]
-        if not areas:
-            return None
+        # Authoritative source for global color_* in steps.parquet:
+        # exact grid-count distribution at election-time state.
         num_colors = int(model.num_colors)
         if num_colors <= 0:
             return None
+        cells = list(getattr(model, "color_cells", []))
+        if not cells:
+            return None
 
-        sums = np.zeros(num_colors, dtype=np.float32)
-        missing: list[int] = []
-        for area in areas:
-            area_id = int(area.unique_id)
-            snapshot = self._area_snapshots_by_step_area.get((int(step), area_id))
-            if snapshot is None:
-                missing.append(area_id)
+        counts = np.zeros(num_colors, dtype=np.float64)
+        for cell in cells:
+            if cell is None:
                 continue
-            area_color = snapshot.get("area_color", None)
-            if area_color is None:
-                missing.append(area_id)
-                continue
-            cdv = np.asarray(area_color, dtype=np.float32)
-            if cdv.size != num_colors:
+            c = int(cell.color)
+            if c < 0 or c >= num_colors:
                 raise RuntimeError(
-                    f"Pre-mutation snapshot for step {step} area {area_id} has "
-                    f"{cdv.size} colors, expected {num_colors}."
+                    f"Invalid color id {c} found while extracting pre-mutation global colors for step {step}."
                 )
-            sums += cdv
+            counts[c] += 1.0
 
-        if missing:
-            raise RuntimeError(
-                f"Missing pre-mutation area_color snapshot for step {step} "
-                f"(areas={sorted(missing)})."
-            )
-
-        return sums / float(len(areas))
+        total = float(np.sum(counts))
+        if total <= 0.0:
+            return None
+        return (counts / total).astype(np.float32)
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
