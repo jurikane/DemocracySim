@@ -26,11 +26,10 @@ def test_ranks_to_ordering_rejects_ties_fail_loud() -> None:
 
 
 def test_distribution_to_ordering_tie_behavior_contract() -> None:
-    # With ties and no RNG: deterministic, stable tie handling.
+    # With ties and no RNG: fail loudly (no biased fallback).
     d = np.array([0.5, 0.5, 0.0, 0.0], dtype=np.float64)
-    o1 = distribution_to_ordering(d, rng=None)
-    o2 = distribution_to_ordering(d, rng=None)
-    assert np.array_equal(o1, o2)
+    with pytest.raises(ValueError, match="pass rng"):
+        distribution_to_ordering(d, rng=None)
 
     # With RNG: ties are broken fairly (both tied top options should win often).
     wins = {0: 0, 1: 0}
@@ -51,13 +50,10 @@ def test_scores_to_ordering_requires_rng_when_scores_tie() -> None:
         scores_to_ordering(s, rng=None)
 
 
-def test_distribution_to_ordering_warns_only_when_ties_without_rng(capsys: pytest.CaptureFixture[str]) -> None:
-    # No ties -> no warning.
+def test_distribution_to_ordering_requires_rng_only_for_ties() -> None:
+    # No ties -> works without rng.
     distribution_to_ordering(np.array([0.7, 0.2, 0.1], dtype=np.float64), rng=None)
-    out = capsys.readouterr().out
-    assert "tie-breaking is biased" not in out
 
-    # Ties and no RNG -> warning.
-    distribution_to_ordering(np.array([0.5, 0.5, 0.0], dtype=np.float64), rng=None)
-    out = capsys.readouterr().out
-    assert "tie-breaking is biased" in out
+    # Ties and no RNG -> fail loudly.
+    with pytest.raises(ValueError, match="pass rng"):
+        distribution_to_ordering(np.array([0.5, 0.5, 0.0], dtype=np.float64), rng=None)

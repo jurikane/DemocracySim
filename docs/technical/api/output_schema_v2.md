@@ -78,7 +78,7 @@ All Parquet tables include:
 | step                 |   int32 | **1..S**                   |
 | collective_assets    | float32 | model sum of assets        |
 | gini_index           |   int16 | 0–100                      |
-| turnout              | float32 | global average turnout (%) |
+| turnout              | float32 | global population-based turnout (%) |
 | mean_altruism        | float32 | mean altruism_factor       |
 | mean_dissatisfaction    | float32 | mean dissatisfaction_value      |
 | color_0..color_{C-1} | float32 | optional, pre-mutation     |
@@ -170,6 +170,7 @@ Vote signal table (participants only). This is the single source of
 - If fewer than 3 options exist, remaining rank_* fields should be null.
 - If estimate distributions are missing/invalid at vote time, `estim_dst_color_*` is written as `NaN` (fail-visible), not zeros.
 - If no agent participates in a run/step, `votes.parquet` may be empty (`0` rows) but remains schema-valid with typed columns.
+- For tied oppose scores, top-k rank extraction uses seeded RNG tie-breaking (unbiased); id-based tie fallback is not used.
 
 ## Notes
 

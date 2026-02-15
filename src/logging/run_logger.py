@@ -76,6 +76,10 @@ class RunLoggerV2:
         self._num_colors: Optional[int] = None
         # Pre-mutation area snapshots keyed by (step, area_id)
         self._area_snapshots_by_step_area: Dict[tuple[int, int], Dict[str, Any]] = {}
+        # Logger-local RNG for unbiased tie-breaks in logged top-k ranks.
+        # Must be isolated from simulation RNG streams.
+        seed = (int(run_seed) * 1_000_003 + int(rule_idx) * 9_173 + 17) % (2**63 - 1)
+        self._vote_log_rng = np.random.default_rng(seed)
 
     # -----------------
     # Metadata
@@ -530,8 +534,9 @@ class RunLoggerV2:
             return
 
         # Pick the 3 best (lowest oppose score) options.
-        # For ties, use a stable secondary sort by option id for determinism.
-        order = np.lexsort((agent.model.option_vec, scores))
+        # Tie-break must be unbiased and must not consume simulation RNG.
+        rand = self._vote_log_rng.random(scores.shape[0]).astype(np.float32)
+        order = np.lexsort((rand, scores))
         top = order[:3].tolist()
 
         row: Dict[str, Any] = {

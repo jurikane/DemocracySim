@@ -154,7 +154,7 @@ def distribution_to_ordering(
     Fairness contract:
     - If there are ties and this ordering influences decisions, pass `rng` to break ties
       randomly (still deterministic given seed).
-    - If rng is None, stable argsort is used (deterministic but biased in ties).
+    - If rng is None and ties exist, fail loudly (no biased id-based fallback).
     """
     arr = np.asarray(dist, dtype=np.float64)
     validate_distribution(arr, int(arr.size))
@@ -163,7 +163,7 @@ def distribution_to_ordering(
         noise = rng.uniform(-eps, eps, size=arr.size)
         arr = arr + noise
     elif has_ties:
-        print("Warning: tie-breaking is biased, if not in debug/testing, always provide rng for fair tie-breaking.")
+        raise ValueError("Distribution contains ties; pass rng for unbiased tie-breaking.")
     kind = "stable" if stable else "quicksort"
     return np.argsort(arr, kind=kind)[::-1].astype(np.int64)
 
