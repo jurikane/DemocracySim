@@ -38,7 +38,7 @@ def run_once(run_id: int, cfg, out_dir: Path):
         n_steps = int(getattr(sim_cfg, "num_steps", 100))
 
         # Create model instance
-        model = make_model(model_cfg_for_run)
+        model = make_model(model_cfg_for_run, enable_datacollector=False)
 
         # Schema v2 logger (v2-only)
         rule_idx = int(getattr(model_cfg_for_run, "rule_idx", 0) or 0)

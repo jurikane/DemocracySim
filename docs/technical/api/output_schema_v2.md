@@ -175,4 +175,5 @@ Vote signal table (participants only). This is the single source of
 
 - Vector columns are **expanded**: `*_0..*_{C-1}` where `C=num_colors`.
 - Validators live in `src/logging/output_schema.py` and allow safe dtype upcasts.
+- Validators reject unknown columns (strict schema lock). Only documented fields and documented vector prefixes are accepted.
 - Missing required pre-mutation area snapshot fields fail loudly during logging (no silent fallback).

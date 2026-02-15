@@ -333,11 +333,12 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
     return params
 
 
-def make_model(model_cfg: ModelConfig) -> ParticipationModel:
+def make_model(model_cfg: ModelConfig, *, enable_datacollector: bool = True) -> ParticipationModel:
     """
     Instantiate the model using the loaded config (non-UI usage).
     """
     kwargs = build_model_kwargs(model_cfg)
+    kwargs["enable_datacollector"] = bool(enable_datacollector)
     return ParticipationModel(**kwargs)
 
 

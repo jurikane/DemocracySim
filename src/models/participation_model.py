@@ -404,7 +404,8 @@ class ParticipationModel(mesa.Model):
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
         satisfaction_baseline_alpha: float = 0.1,
         personal_preference_peakedness: float = 1.0,
-        initial_agent_assets: float = 100.0
+        initial_agent_assets: float = 100.0,
+        enable_datacollector: bool = True,
     ):
         super().__init__()
         self._seed = seed
@@ -525,9 +526,11 @@ class ParticipationModel(mesa.Model):
         # for disjoint area layouts (including layouts with gaps).
         self._analyze_area_coverage()
         # Data collector
-        self.datacollector = self.initialize_datacollector()
-        # Collect initial data
-        self.datacollector.collect(self)
+        self.datacollector: Optional[mesa.DataCollector] = None
+        if bool(enable_datacollector):
+            self.datacollector = self.initialize_datacollector()
+            # Collect initial data
+            self.datacollector.collect(self)
 
     def _analyze_area_coverage(self) -> None:
         """Compute and cache area coverage/overlap information.
@@ -857,7 +860,8 @@ class ParticipationModel(mesa.Model):
         # and then mutate the color cells according to election outcomes
         self.scheduler.step()
         # Collect data for monitoring and data analysis (pre-mutation).
-        self.datacollector.collect(self)
+        if self.datacollector is not None:
+            self.datacollector.collect(self)
         # Enforce step limit after step executed
         if self.max_steps is not None and self.scheduler.steps >= self.max_steps:
             # Model intentionally stops after the last election-time snapshot;

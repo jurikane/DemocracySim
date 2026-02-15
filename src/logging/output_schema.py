@@ -388,6 +388,26 @@ def _validate_dtypes(df: pd.DataFrame, expected_dtypes: Mapping[str, str], table
         raise SchemaValidationError(f"{table_name}: dtype mismatches: {msg}")
 
 
+def _validate_no_unknown_columns(
+    df: pd.DataFrame,
+    *,
+    table_name: str,
+    exact_allowed: set[str],
+    allowed_prefixes: tuple[str, ...] = (),
+) -> None:
+    unknown: list[str] = []
+    for c in df.columns:
+        cs = str(c)
+        if cs in exact_allowed:
+            continue
+        if any(cs.startswith(p) for p in allowed_prefixes):
+            continue
+        unknown.append(cs)
+    if unknown:
+        unknown = sorted(unknown)
+        raise SchemaValidationError(f"{table_name}: unknown columns not allowed: {unknown}")
+
+
 def _validate_expanded_prefix(
     df: pd.DataFrame,
     prefix: str,
@@ -435,6 +455,12 @@ def validate_steps_df(df: pd.DataFrame) -> None:
     """Validate a DataFrame read from steps.parquet."""
     table = STEPS_TABLE
     _validate_required_columns(df, table.columns, table.name)
+    _validate_no_unknown_columns(
+        df,
+        table_name=table.name,
+        exact_allowed=set(table.columns),
+        allowed_prefixes=("color_",),
+    )
     _validate_dtypes(df, table.dtypes, table.name)
     # optional: allow color_0... columns if present; validate if they exist
     color_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("color_")]
@@ -446,6 +472,12 @@ def validate_area_steps_df(df: pd.DataFrame) -> None:
     """Validate a DataFrame read from area_steps.parquet."""
     table = AREA_STEPS_TABLE
     _validate_required_columns(df, table.columns, table.name)
+    _validate_no_unknown_columns(
+        df,
+        table_name=table.name,
+        exact_allowed=set(table.columns),
+        allowed_prefixes=("elected_color_", "area_color_"),
+    )
     _validate_dtypes(df, table.dtypes, table.name)
     _validate_expanded_prefix(df, prefix="elected_color", dtype="int16", table_name=table.name)
     _validate_expanded_prefix(df, prefix="area_color", dtype="float32", table_name=table.name)
@@ -455,6 +487,11 @@ def validate_agents_df(df: pd.DataFrame) -> None:
     """Validate a DataFrame read from agents.parquet."""
     table = AGENTS_TABLE
     _validate_required_columns(df, table.columns, table.name)
+    _validate_no_unknown_columns(
+        df,
+        table_name=table.name,
+        exact_allowed=set(table.columns),
+    )
     _validate_dtypes(df, table.dtypes, table.name)
 
 
@@ -462,6 +499,12 @@ def validate_votes_df(df: pd.DataFrame) -> None:
     """Validate a DataFrame read from votes.parquet."""
     table = VOTES_TABLE
     _validate_required_columns(df, table.columns, table.name)
+    _validate_no_unknown_columns(
+        df,
+        table_name=table.name,
+        exact_allowed=set(table.columns),
+        allowed_prefixes=("estim_dst_color_",),
+    )
     _validate_dtypes(df, table.dtypes, table.name)
 
     # Validate estim_dst_color_* expansion (must exist for vote context)
