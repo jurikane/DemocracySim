@@ -81,9 +81,6 @@ STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "turnout",
     "mean_altruism",
     "mean_dissatisfaction",
-    "dist_to_ref_utilitarian",
-    "dist_to_ref_egalitarian",
-    "dist_to_ref_rawlsian",
 )
 
 STEPS_BASE_DTYPES: Final[dict[str, str]] = {
@@ -95,9 +92,6 @@ STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "turnout": "float32",
     "mean_altruism": "float32",
     "mean_dissatisfaction": "float32",
-    "dist_to_ref_utilitarian": "float32",
-    "dist_to_ref_egalitarian": "float32",
-    "dist_to_ref_rawlsian": "float32",
     # Optional per-color model series: color_0...color_{C-1} float32
 }
 
@@ -129,9 +123,6 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     # - area_color_0.. area_color_{C-1} (float32)
     # Metrics
     "dist_to_reality",
-    "dist_to_ref_utilitarian",
-    "dist_to_ref_egalitarian",
-    "dist_to_ref_rawlsian",
     "gini_index",
 )
 
@@ -147,9 +138,6 @@ AREA_STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "fee_pool": "float32",
     "winning_option_id": "int32",
     "dist_to_reality": "float32",
-    "dist_to_ref_utilitarian": "float32",
-    "dist_to_ref_egalitarian": "float32",
-    "dist_to_ref_rawlsian": "float32",
     "gini_index": "int16",
     # expanded vectors documented but validated dynamically
 }

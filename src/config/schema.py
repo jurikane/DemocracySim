@@ -87,7 +87,6 @@ class SimulationConfig(StrictBaseModel):
     """
     runs: int             # Number of simulation runs
     num_steps: int        # Number of steps per run
-    processes: int        # Number of parallel processes
     store_grid: bool      # Whether to store grid state
     grid_interval: int    # Interval for storing grid state
     base_seed: Optional[int] = None    # Simulations base random seed

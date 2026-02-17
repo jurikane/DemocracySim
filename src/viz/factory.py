@@ -3,20 +3,7 @@ from src.config.schema import VisualizationConfig
 from src.config.loader import AppConfig
 from mesa.visualization.modules import CanvasGrid, ChartModule
 from src.agents.color_cell import ColorCell
-
-# Central color palette (index-aligned with color IDs)
-COLORS = [
-    "LightGray",   # 0
-    "Red",         # 1
-    "Green",       # 2
-    "Blue",        # 3
-    "Orange",      # 4
-    "Maroon",      # 5
-    "Lime",        # 6
-    "Yellow",      # 7
-    #"Aqua",       # 8
-    #"Fuchsia",    # 9
-]
+from src.viz.color_palette import COLORS
 
 # Module-level store for visualization config
 _VIS_CFG: VisualizationConfig | None = None

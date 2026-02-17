@@ -58,9 +58,6 @@ def test_schema_coverage_thesis_fields_exist_in_logged_tables(tmp_path: Path) ->
         "turnout",
         "gini_index",
         "collective_assets",
-        "dist_to_ref_utilitarian",
-        "dist_to_ref_egalitarian",
-        "dist_to_ref_rawlsian",
     ):
         assert col in steps.columns
     for col in (
@@ -71,9 +68,6 @@ def test_schema_coverage_thesis_fields_exist_in_logged_tables(tmp_path: Path) ->
         "participants",
         "eligible_voters",
         "dist_to_reality",
-        "dist_to_ref_utilitarian",
-        "dist_to_ref_egalitarian",
-        "dist_to_ref_rawlsian",
     ):
         assert col in area_steps.columns
     for col in ("step", "agent_id", "assets", "altruism_factor", "dissatisfaction_value", "participation_signal"):
@@ -158,9 +152,6 @@ def test_area_snapshot_missing_required_fields_fails_loudly(tmp_path: Path) -> N
                 "eligible_voters": area.num_agents,
                 "turnout": 0.0,
                 "dist_to_reality": 0.0,
-                "dist_to_ref_utilitarian": 0.0,
-                "dist_to_ref_egalitarian": 0.0,
-                "dist_to_ref_rawlsian": 0.0,
                 "area_color": area.color_distribution.copy(),
                 "elected_color": area.voted_ordering if area.voted_ordering is not None else np.array([0, 1, 2]),
             },

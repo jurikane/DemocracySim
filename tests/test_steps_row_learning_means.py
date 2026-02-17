@@ -30,6 +30,3 @@ def test_steps_row_includes_learning_means(tmp_path: Path) -> None:
     row = logger._extract_steps_row(step=step, model=model)
     assert "mean_altruism" in row
     assert "mean_dissatisfaction" in row
-    assert "dist_to_ref_utilitarian" in row
-    assert "dist_to_ref_egalitarian" in row
-    assert "dist_to_ref_rawlsian" in row

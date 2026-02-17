@@ -33,9 +33,12 @@ It complements:
 | Metric ID | Definition | Source | Unit | Direction |
 |---|---|---|---|---|
 | `diversity_first_choice_entropy_t` | normalized entropy of `rank_1_option_id` distribution at step `t` | `votes.parquet` | `[0,1]` | higher = more diverse |
-| `dist_to_ref_utilitarian` | distance between realized collective outcome and utilitarian reference | `area_steps` + `steps` | `0..1` | lower = closer |
-| `dist_to_ref_egalitarian` | distance between realized collective outcome and egalitarian reference | `area_steps` + `steps` | `0..1` | lower = closer |
-| `dist_to_ref_rawlsian` | distance between realized collective outcome and rawlsian reference | `area_steps` + `steps` | `0..1` | lower = closer |
+| `dist_to_ref_utilitarian` | distance to utilitarian benchmark reference | analysis output | `0..1` | lower = closer |
+| `dist_to_ref_nash` | distance to nash benchmark reference | analysis output | `0..1` | lower = closer |
+| `dist_to_ref_egalitarian` | distance to egalitarian benchmark reference (`lambda=1`) | analysis output | `0..1` | lower = closer |
+| `dist_to_ref_rawlsian` | distance to rawlsian benchmark reference | analysis output | `0..1` | lower = closer |
+| `dist_to_ref_egalitarian_lam025` | distance to egalitarian sensitivity reference (`lambda=0.25`) | analysis output | `0..1` | lower = closer |
+| `dist_to_ref_egalitarian_lam400` | distance to egalitarian sensitivity reference (`lambda=4.0`) | analysis output | `0..1` | lower = closer |
 
 ## Naming Convention
 

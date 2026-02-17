@@ -38,9 +38,6 @@ def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
         "fee_pool": float(getattr(area, "_election_fee_pool", 0.0)),
         "gini_index": 13,
         "dist_to_reality": 0.123,
-        "dist_to_ref_utilitarian": 0.11,
-        "dist_to_ref_egalitarian": 0.22,
-        "dist_to_ref_rawlsian": 0.33,
     }
 
     logger.log_step(step=1, model=model, grid_snapshot=None)
@@ -54,9 +51,6 @@ def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
     assert int(row["participants"]) == 1
     assert int(row["gini_index"]) == 13
     assert np.isclose(float(row["dist_to_reality"]), 0.123)
-    assert np.isclose(float(row["dist_to_ref_utilitarian"]), 0.11)
-    assert np.isclose(float(row["dist_to_ref_egalitarian"]), 0.22)
-    assert np.isclose(float(row["dist_to_ref_rawlsian"]), 0.33)
     # area_color_* should match the pre-mutation snapshot, not the current area state
     for i in range(num_colors):
         assert np.isclose(

@@ -30,11 +30,10 @@ Headless execution and output writing:
 - `run_seed` is written to `meta.yaml` and included in all parquet tables.
 - Same config + same `run_id` + same `base_seed` must reproduce identical outputs.
 
-### `num_steps`, `runs`, `processes`
+### `num_steps`, `runs`
 
 - `num_steps` controls recorded steps (`1..num_steps`) in parquet tables.
 - `runs` controls number of run directories (`run_0..run_{runs-1}`) in a batch.
-- `processes` is currently metadata-only (batch execution is sequential).
 
 ### `store_grid`, `grid_interval`, filename/indexing
 
@@ -93,5 +92,60 @@ Interaction tests in this section:
 ## Recommended Thesis Run Policy
 
 - Fix `base_seed`, `num_steps`, `store_grid`, and `grid_interval` before final experiment batches.
-- Keep `processes` fixed (or document it explicitly) even though execution is currently sequential.
 - Freeze run outputs with `config_used.yaml` + commit hash/version string for traceability.
+
+## Summary Tooling (G4, Batch 1 + 2)
+
+Run-level summaries are generated from logged artifacts only:
+
+```bash
+python -m scripts.generate_summary --run-dir <path_to_run_dir>
+```
+
+Mode selection:
+
+- `--mode full` (default): compute all benchmark families (`utilitarian`, `nash`, `rawlsian`, `egalitarian` + sensitivity)
+- `--mode fast`: compute only `utilitarian` and `nash`; expensive benchmark families are skipped (distance columns kept as `NaN`)
+
+Reference-cache control:
+
+- default uses cache files in `analysis/` (`reference_cache_full.json` / `reference_cache_fast.json`)
+- pass `--no-cache` to force recomputation
+
+By default, generated summary PDFs are auto-opened (best-effort) in reverse launch order
+so stacked windows appear in reading order. To disable auto-opening:
+
+```bash
+python -m scripts.generate_summary --run-dir <path_to_run_dir> --closed
+```
+
+Current outputs:
+
+- `analysis/summary_global_series.csv`
+- `analysis/summary_area_series.csv`
+- `analysis/summary_stats.json`
+- `analysis/static_overview.pdf`
+- `analysis/global_summary.pdf`
+
+Planned next G4 outputs:
+
+- `analysis/areas_overview.pdf`
+- `analysis/area_<id>.pdf`
+
+`global_summary.pdf` currently includes:
+
+- core global thesis metrics
+- `dist_to_reality`, `dist_to_ref_*`, diversity diagnostics
+- global color curves over time
+- a fixed-reference-optima panel (utilitarian/egalitarian/rawlsian distributions)
+- grid snapshots for step 1 and final step
+
+Benchmark-reference note:
+
+- `dist_to_ref_*` used in summary artifacts are computed post-run in analysis from
+  logged color distributions + static preferences (not from simulation-time reward logic).
+- Current benchmark families in analysis outputs:
+  - utilitarian (`L2^2` mean reference)
+  - nash (`KL` geometric-mean reference)
+  - egalitarian (`mean + lambda * Gini`, with `lambda` sensitivity)
+  - rawlsian (minimax `L2^2`)

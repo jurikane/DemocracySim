@@ -342,9 +342,6 @@ class RunLoggerV2:
             "turnout",
             "mean_altruism",
             "mean_dissatisfaction",
-            "dist_to_ref_utilitarian",
-            "dist_to_ref_egalitarian",
-            "dist_to_ref_rawlsian",
         )
         missing = [k for k in required if k not in snap]
         if missing:
@@ -359,9 +356,6 @@ class RunLoggerV2:
             "turnout": np.float32(float(snap["turnout"])),
             "mean_altruism": np.float32(float(snap["mean_altruism"])),
             "mean_dissatisfaction": np.float32(float(snap["mean_dissatisfaction"])),
-            "dist_to_ref_utilitarian": np.float32(float(snap["dist_to_ref_utilitarian"])),
-            "dist_to_ref_egalitarian": np.float32(float(snap["dist_to_ref_egalitarian"])),
-            "dist_to_ref_rawlsian": np.float32(float(snap["dist_to_ref_rawlsian"])),
         }
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
@@ -442,9 +436,6 @@ class RunLoggerV2:
                 "dist_to_reality": np.float32(
                     float(area.dist_to_reality) if area.dist_to_reality is not None else 0.0
                 ),
-                "dist_to_ref_utilitarian": np.float32(float(area.dist_to_ref_utilitarian)),
-                "dist_to_ref_egalitarian": np.float32(float(area.dist_to_ref_egalitarian)),
-                "dist_to_ref_rawlsian": np.float32(float(area.dist_to_ref_rawlsian)),
                 "gini_index": np.int16(0),
             }
 
@@ -459,9 +450,6 @@ class RunLoggerV2:
                 "turnout",
                 "fee_pool",
                 "dist_to_reality",
-                "dist_to_ref_utilitarian",
-                "dist_to_ref_egalitarian",
-                "dist_to_ref_rawlsian",
                 "gini_index",
                 "area_color",
                 "elected_color",
@@ -478,9 +466,6 @@ class RunLoggerV2:
             r["turnout"] = np.float32(float(snapshot["turnout"]))
             r["fee_pool"] = np.float32(float(snapshot["fee_pool"]))
             r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
-            r["dist_to_ref_utilitarian"] = np.float32(float(snapshot["dist_to_ref_utilitarian"]))
-            r["dist_to_ref_egalitarian"] = np.float32(float(snapshot["dist_to_ref_egalitarian"]))
-            r["dist_to_ref_rawlsian"] = np.float32(float(snapshot["dist_to_ref_rawlsian"]))
             r["gini_index"] = np.int16(int(snapshot["gini_index"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)

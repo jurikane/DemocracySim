@@ -14,7 +14,6 @@ def _write_cfg(
     *,
     out_dir: Path,
     runs: int,
-    processes: int,
     base_seed: int,
     num_steps: int = 2,
     store_grid: bool = False,
@@ -22,7 +21,6 @@ def _write_cfg(
 ) -> None:
     cfg = load_config("toy.yaml").model_copy(deep=True)
     cfg.simulation.runs = int(runs)
-    cfg.simulation.processes = int(processes)
     cfg.simulation.base_seed = int(base_seed)
     cfg.simulation.num_steps = int(num_steps)
     cfg.simulation.store_grid = bool(store_grid)
@@ -50,7 +48,7 @@ def _run_seed(run_dir: Path) -> int:
 def test_runs_oracle_creates_exact_number_of_run_dirs(tmp_path: Path) -> None:
     cfg_path = tmp_path / "cfg.yaml"
     out_dir = tmp_path / "out"
-    _write_cfg(cfg_path, out_dir=out_dir, runs=3, processes=1, base_seed=410)
+    _write_cfg(cfg_path, out_dir=out_dir, runs=3, base_seed=410)
     batch_run(str(cfg_path))
 
     run_root = _latest_run_root(out_dir)
@@ -66,8 +64,8 @@ def test_runs_metamorphic_increasing_runs_adds_tail_run_with_expected_seed(tmp_p
     cfg_b = tmp_path / "cfg_b.yaml"
     out_a = tmp_path / "out_a"
     out_b = tmp_path / "out_b"
-    _write_cfg(cfg_a, out_dir=out_a, runs=1, processes=1, base_seed=500)
-    _write_cfg(cfg_b, out_dir=out_b, runs=2, processes=1, base_seed=500)
+    _write_cfg(cfg_a, out_dir=out_a, runs=1, base_seed=500)
+    _write_cfg(cfg_b, out_dir=out_b, runs=2, base_seed=500)
 
     batch_run(str(cfg_a))
     batch_run(str(cfg_b))
@@ -83,45 +81,14 @@ def test_runs_metamorphic_increasing_runs_adds_tail_run_with_expected_seed(tmp_p
     assert _run_seed(root_b / "run_1") == 501
 
 
-def test_processes_integration_logged_and_behaviorally_neutral_for_sequential_runner(tmp_path: Path) -> None:
-    """Current contract: batch_run is sequential; `processes` is config metadata only.
-
-    If true parallel execution is implemented later, this test should be updated.
-    """
-    cfg_1 = tmp_path / "cfg_p1.yaml"
-    cfg_4 = tmp_path / "cfg_p4.yaml"
-    out_1 = tmp_path / "out_p1"
-    out_4 = tmp_path / "out_p4"
-    _write_cfg(cfg_1, out_dir=out_1, runs=1, processes=1, base_seed=700)
-    _write_cfg(cfg_4, out_dir=out_4, runs=1, processes=4, base_seed=700)
-
-    batch_run(str(cfg_1))
-    batch_run(str(cfg_4))
-    root_1 = _latest_run_root(out_1)
-    root_4 = _latest_run_root(out_4)
-    run_1 = root_1 / "run_0"
-    run_4 = root_4 / "run_0"
-
-    # Integration: config_used captures the knob value for provenance.
-    used_1 = _read_cfg_used(root_1)
-    used_4 = _read_cfg_used(root_4)
-    assert int(used_1["simulation"]["processes"]) == 1
-    assert int(used_4["simulation"]["processes"]) == 4
-
-    # Current behavioral contract (sequential implementation): outputs stay identical.
-    for name, sort_cols in [
-        ("steps.parquet", ["step"]),
-        ("area_steps.parquet", ["step", "area_id"]),
-        ("agents.parquet", ["step", "agent_id"]),
-        ("votes.parquet", ["step", "area_id", "agent_id"]),
-    ]:
-        a = pd.read_parquet(run_1 / name)
-        b = pd.read_parquet(run_4 / name)
-        cols = [c for c in sort_cols if c in a.columns and c in b.columns]
-        if cols:
-            a = a.sort_values(cols).reset_index(drop=True)
-            b = b.sort_values(cols).reset_index(drop=True)
-        pd.testing.assert_frame_equal(a, b, check_dtype=False)
+def test_runs_config_used_contains_no_processes_key(tmp_path: Path) -> None:
+    cfg = tmp_path / "cfg.yaml"
+    out = tmp_path / "out"
+    _write_cfg(cfg, out_dir=out, runs=1, base_seed=700)
+    batch_run(str(cfg))
+    root = _latest_run_root(out)
+    used = _read_cfg_used(root)
+    assert "processes" not in used["simulation"]
 
 
 def test_h_knobs_interaction_runs_steps_and_grid_interval_in_batch_mode(tmp_path: Path) -> None:
@@ -131,7 +98,6 @@ def test_h_knobs_interaction_runs_steps_and_grid_interval_in_batch_mode(tmp_path
         cfg_path,
         out_dir=out_dir,
         runs=2,
-        processes=1,
         base_seed=8800,
         num_steps=5,
         store_grid=True,

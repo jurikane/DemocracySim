@@ -2,6 +2,7 @@ from pathlib import Path
 from src.config.schema import AppConfig
 import yaml
 import os
+from pydantic import ValidationError
 
 
 def check_schema(open_file):
@@ -10,7 +11,26 @@ def check_schema(open_file):
     and validate against AppConfig schema.
     """
     raw = yaml.safe_load(open_file)
-    return AppConfig.model_validate(raw)
+    try:
+        return AppConfig.model_validate(raw)
+    except ValidationError as exc:
+        missing = []
+        invalid = []
+        for err in exc.errors():
+            loc = ".".join(str(p) for p in err.get("loc", []))
+            msg = err.get("msg", "invalid value")
+            err_type = err.get("type", "")
+            if err_type == "missing":
+                missing.append(loc or "<root>")
+            else:
+                invalid.append(f"{loc}: {msg}")
+        parts = []
+        if missing:
+            parts.append("Missing required field(s): " + ", ".join(sorted(missing)))
+        if invalid:
+            parts.append("Invalid field(s): " + "; ".join(invalid))
+        detail = " | ".join(parts) if parts else str(exc)
+        raise ValueError(f"Config validation error: {detail}") from exc
 
 
 def get_project_root() -> Path:

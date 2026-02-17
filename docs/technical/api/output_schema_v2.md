@@ -81,9 +81,6 @@ All Parquet tables include:
 | turnout              | float32 | global population-based turnout (%) |
 | mean_altruism        | float32 | mean altruism_factor       |
 | mean_dissatisfaction    | float32 | mean dissatisfaction_value      |
-| dist_to_ref_utilitarian | float32 | distance(global_color, utilitarian reference) |
-| dist_to_ref_egalitarian | float32 | distance(global_color, egalitarian reference) |
-| dist_to_ref_rawlsian | float32 | distance(global_color, rawlsian reference) |
 | color_0..color_{C-1} | float32 | optional, pre-mutation     |
 
 ### `area_steps.parquet`
@@ -105,9 +102,6 @@ Merged area-state + election table.
 | winning_option_id                    |   int32 | option row index into `model.options`          |
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
 | dist_to_reality                      | float32 | distance(real_order, voted_order)              |
-| dist_to_ref_utilitarian              | float32 | distance(area_color, utilitarian reference)     |
-| dist_to_ref_egalitarian              | float32 | distance(area_color, egalitarian reference)     |
-| dist_to_ref_rawlsian                 | float32 | distance(area_color, rawlsian reference)        |
 | gini_index                           |   int16 | area gini 0–100         |
 | area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                  |
 
@@ -178,6 +172,8 @@ Vote signal table (participants only). This is the single source of
 ## Notes
 
 - Vector columns are **expanded**: `*_0..*_{C-1}` where `C=num_colors`.
+- `dist_to_ref_*` benchmark metrics are **not** runtime schema columns;
+  they are computed post-run in analysis artifacts.
 - Validators live in `src/logging/output_schema.py` and allow safe dtype upcasts.
 - Validators reject unknown columns (strict schema lock). Only documented fields and documented vector prefixes are accepted.
 - Missing required pre-mutation area snapshot fields fail loudly during logging (no silent fallback).

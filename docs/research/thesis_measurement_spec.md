@@ -92,63 +92,88 @@ Frozen operational metric:
 
 Purpose:
 
-- track how far realized collective outcomes are from fixed reference outcomes
+- track how far realized collective outcomes are from fixed benchmark references
   computed from static preference information.
+
+Computation layer freeze:
+
+- reference benchmarks and `dist_to_ref_*` are computed in the **analysis layer**
+  from logged artifacts (`steps/area_steps` color vectors + static preferences),
+  not in the simulation reward loop.
 
 Frozen reference families:
 
 - utilitarian reference
+- nash reference
 - egalitarian reference
 - rawlsian reference
 
-Frozen output columns (time-indexed by table `step`):
+Frozen analysis output columns (time-indexed by `step`):
 
 - `dist_to_ref_utilitarian`
+- `dist_to_ref_nash`
 - `dist_to_ref_egalitarian`
 - `dist_to_ref_rawlsian`
+- `dist_to_ref_egalitarian_lam025` (analysis-side sensitivity)
+- `dist_to_ref_egalitarian_lam400` (analysis-side sensitivity)
 
 Frozen operational definitions (exact):
 
 Let:
 
 - `d_i` = static `personal_opt_dist` of agent `i` (distribution over colors)
-- `delta(x, y) = 0.5 * ||x - y||_1` (normalized L1 distance in `[0,1]`)
-- `u_i(p) = 1 - delta(p, d_i)` (utility of reference distribution `p` for agent `i`)
+- `Delta_L1(x, y) = 0.5 * ||x - y||_1` (normalized L1 distance in `[0,1]`)
+- `Delta_L2sq(x, y) = ||x - y||_2^2`
+- `Gini(v)` = continuous Gini in `[0,1]` over vector `v`
+- simplex domain: `p in Delta^{C-1}` (`p_k >= 0`, `sum_k p_k = 1`)
+- `z_i(p) = Delta_L1(p, d_i)` (dissatisfaction under candidate reference `p`)
 
 For each area `a` with agent set `I_a`:
 
-- `p_utilitarian(a) = mean_{i in I_a} d_i`
-- Candidate set for optimization-based references:
-  - `P_a = unique({d_i | i in I_a} U {p_utilitarian(a)})`
-- `p_egalitarian(a)`:
-  - primary objective: minimize `Gini_0_100({delta(p, d_i)}_{i in I_a})` over `p in P_a`
-  - secondary objective: among primary minimizers, minimize `mean_{i in I_a} delta(p, d_i)`
-  - final tie rule: if still tied, use the arithmetic mean of tied candidates as reference
-- `p_rawlsian(a)`:
-  - primary objective: minimize `max_{i in I_a} delta(p, d_i)` over `p in P_a`
-  - secondary objective: among primary minimizers, minimize `mean_{i in I_a} delta(p, d_i)`
-  - final tie rule: if still tied, use the arithmetic mean of tied candidates as reference
+- Utilitarian (`L2^2`):
+  - `p_utilitarian(a) = argmin_{p in simplex} mean_{i in I_a} Delta_L2sq(p, d_i)`
+  - closed form: arithmetic mean of `d_i` (then simplex normalization for numerical safety)
+- Nash (`KL`):
+  - `p_nash(a) = argmin_{p in simplex} sum_{i in I_a} KL(p || d_i)`
+  - closed form: normalized geometric mean by coordinate
+  - with numerical floor `eps=1e-12` before logs
+- Rawlsian (minimax `L2^2`):
+  - `p_rawlsian(a) = argmin_{p in simplex} max_{i in I_a} Delta_L2sq(p, d_i)`
+  - deterministic projected subgradient solver
+- Egalitarian (`mean + lambda * Gini`):
+  - objective family: `F_lambda(p) = mean_i z_i(p) + lambda * Gini({z_i(p)}_{i in I_a})`
+  - frozen lambdas: `{0.25, 1.0, 4.0}`
+  - primary egalitarian reference uses `lambda=1.0`
+  - `lambda=0.25` and `lambda=4.0` are reported as sensitivity references
+  - optimizer: deterministic simplex grid + deterministic local refine
 
-Per-step area metrics (`area_steps`):
+Per-step area analysis metrics (`summary_area_series.csv`):
 
-- `dist_to_ref_utilitarian(a,t) = delta(area_color_distribution(a,t), p_utilitarian(a))`
-- `dist_to_ref_egalitarian(a,t) = delta(area_color_distribution(a,t), p_egalitarian(a))`
-- `dist_to_ref_rawlsian(a,t) = delta(area_color_distribution(a,t), p_rawlsian(a))`
+- `dist_to_ref_utilitarian(a,t) = Delta_L1(area_color_distribution(a,t), p_utilitarian(a))`
+- `dist_to_ref_nash(a,t) = Delta_L1(area_color_distribution(a,t), p_nash(a))`
+- `dist_to_ref_egalitarian(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda1(a))`
+- `dist_to_ref_rawlsian(a,t) = Delta_L1(area_color_distribution(a,t), p_rawlsian(a))`
+- sensitivity:
+  - `dist_to_ref_egalitarian_lam025(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda0.25(a))`
+  - `dist_to_ref_egalitarian_lam400(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda4(a))`
 
-Global counterparts use the global agent set `I` and global color distribution:
+Global analysis counterparts (`summary_global_series.csv`) use the global agent set `I`
+and global color distribution:
 
-- define `p_utilitarian(global)`, `p_egalitarian(global)`, `p_rawlsian(global)` analogously
-- `dist_to_ref_*(global,t) = delta(global_color_distribution(t), p_*(global))`
-- store as `steps` columns with the same names:
-  - `dist_to_ref_utilitarian`
-  - `dist_to_ref_egalitarian`
-  - `dist_to_ref_rawlsian`
+- define `p_utilitarian(global)`, `p_nash(global)`, `p_egalitarian(global)`, `p_rawlsian(global)` analogously
+- `dist_to_ref_*(global,t) = Delta_L1(global_color_distribution(t), p_*(global))`
 
 NaN policy:
 
-- if an area has `|I_a| == 0`, all three area-level `dist_to_ref_*` values are `NaN`
+- if an area has `|I_a| == 0`, all area-level `dist_to_ref_*` values are `NaN`
 - global `dist_to_ref_*` is `NaN` iff global agent set is empty
 - no-participant election steps are still defined (distance is based on color distributions, not vote rows)
+
+Determinism / tie policy:
+
+- no random tie-breaks in benchmark optimization
+- simplex grid traversal is deterministic
+- local refine step schedule is deterministic
 
 Interpretation rule:
 
