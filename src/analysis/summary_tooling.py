@@ -7,6 +7,7 @@ from typing import Any
 import json
 import hashlib
 import re
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.colors import to_rgba
 
 from src.utils.metrics import gini_index_0_100
 from src.viz.color_palette import COLORS as SIM_COLORS
@@ -35,6 +37,7 @@ class RunSummaryArtifacts:
     global_series_csv: Path
     area_series_csv: Path
     summary_stats_json: Path
+    area_group_series_csv: Path | None = None
     static_overview_pdf: Path | None = None
     global_summary_pdf: Path | None = None
 
@@ -48,19 +51,18 @@ def list_summary_pdfs_in_recommended_view_order(out_dir: Path) -> list[Path]:
     """Return summary PDFs in the order a user should read them.
 
     Current order contract:
-    1) static_overview.pdf
-    2) global_summary.pdf
-    3) areas_overview.pdf
-    4) area_<id>.pdf (ascending area id)
+    1) global_summary_<rule>_seed<seed>.pdf
+    2) areas_overview.pdf
+    3) area_<id>.pdf (ascending area id)
     """
     out = Path(out_dir)
     ordered: list[Path] = []
 
-    fixed = ("static_overview.pdf", "global_summary.pdf", "areas_overview.pdf")
-    for name in fixed:
-        p = out / name
-        if p.exists():
-            ordered.append(p)
+    global_summaries = sorted(out.glob("global_summary_*_seed*.pdf"))
+    ordered.extend(global_summaries)
+    p = out / "areas_overview.pdf"
+    if p.exists():
+        ordered.append(p)
 
     area_files: list[tuple[int, Path]] = []
     for p in out.glob("area_*.pdf"):
@@ -124,6 +126,8 @@ def generate_run_summary_batch1(
     area_series = _build_area_series(
         area_steps=area_steps,
         votes=votes,
+        agents=agents,
+        area_agent_ids=area_agent_ids,
         num_colors=num_colors,
         refs_by_area=refs["areas"],
     )
@@ -167,6 +171,9 @@ def generate_run_summary_batch2(
     _validate_summary_mode(mode)
 
     global_series = pd.read_csv(base.global_series_csv).sort_values("step").reset_index(drop=True)
+    area_series = pd.read_csv(base.area_series_csv).sort_values(["step", "area_id"]).reset_index(drop=True)
+    agents = pd.read_parquet(run_dir / "agents.parquet").sort_values(["step", "agent_id"]).reset_index(drop=True)
+    votes = pd.read_parquet(run_dir / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
     steps = pd.read_parquet(run_dir / "steps.parquet").sort_values("step").reset_index(drop=True)
     meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
     static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
@@ -179,15 +186,19 @@ def generate_run_summary_batch2(
         mode=mode,
         use_cache=use_cache,
     )["global"]
-
-    static_pdf = base.out_dir / "static_overview.pdf"
-    global_pdf = base.out_dir / "global_summary.pdf"
-    _render_static_overview_pdf(
-        out_pdf=static_pdf,
-        static=static,
-        meta=meta,
+    area_group_series = _build_area_group_series(
+        agents=agents,
+        votes=votes,
+        area_agent_ids=area_agent_ids,
     )
-    _render_global_summary_pdf(
+    area_group_path = base.out_dir / "summary_area_group_series.csv"
+    area_group_series.to_csv(area_group_path, index=False)
+
+    rule_name = str(meta["run"].get("rule_name", "rule")).strip().lower().replace(" ", "_")
+    safe_rule = re.sub(r"[^a-z0-9_\\-]+", "", rule_name) or "rule"
+    seed = int(meta["run"]["run_seed"])
+    global_pdf = base.out_dir / f"global_summary_{safe_rule}_seed{seed}.pdf"
+    _render_combined_global_summary_pdf(
         out_pdf=global_pdf,
         run_dir=run_dir,
         global_series=global_series,
@@ -196,13 +207,21 @@ def generate_run_summary_batch2(
         meta=meta,
         refs_global=refs_global,
     )
+    _render_area_detail_pdfs(
+        out_dir=base.out_dir,
+        area_series=area_series,
+        area_group_series=area_group_series,
+        static=static,
+        meta=meta,
+    )
 
     return RunSummaryArtifacts(
         out_dir=base.out_dir,
         global_series_csv=base.global_series_csv,
         area_series_csv=base.area_series_csv,
+        area_group_series_csv=area_group_path,
         summary_stats_json=base.summary_stats_json,
-        static_overview_pdf=static_pdf,
+        static_overview_pdf=None,
         global_summary_pdf=global_pdf,
     )
 
@@ -278,6 +297,8 @@ def _build_area_series(
     *,
     area_steps: pd.DataFrame,
     votes: pd.DataFrame,
+    agents: pd.DataFrame,
+    area_agent_ids: dict[int, list[int]],
     num_colors: int,
     refs_by_area: dict[int, dict[str, np.ndarray | None]],
 ) -> pd.DataFrame:
@@ -290,6 +311,7 @@ def _build_area_series(
         {
             "step": area_steps["step"].astype(np.int32),
             "area_id": area_steps["area_id"].astype(np.int32),
+            "winning_option_id": area_steps["winning_option_id"].astype(np.int32),
             "participants": area_steps["participants"].astype(np.int32),
             "eligible_voters": area_steps["eligible_voters"].astype(np.int32),
             "turnout": area_steps["turnout"].astype(np.float32),
@@ -299,6 +321,15 @@ def _build_area_series(
     )
     for c in area_color_cols:
         a[c] = area_steps[c].astype(np.float32)
+
+    area_gini_diss = _compute_area_gini_dissatisfaction(
+        agents=agents,
+        area_agent_ids=area_agent_ids,
+    )
+    if not area_gini_diss.empty:
+        a = a.merge(area_gini_diss, on=["step", "area_id"], how="left")
+    else:
+        a["gini_dissatisfaction"] = np.float32(np.nan)
 
     diversity_rows = _diversity_entropy_by_step_area(votes=votes, num_options=factorial(num_colors))
     if diversity_rows.empty:
@@ -327,6 +358,171 @@ def _build_area_series(
                 a.loc[mask, key] = np.asarray([l1_dist(row, ref) for row in colors], dtype=np.float32)
 
     return a.sort_values(["step", "area_id"]).reset_index(drop=True)
+
+
+def _compute_area_gini_dissatisfaction(*, agents: pd.DataFrame, area_agent_ids: dict[int, list[int]]) -> pd.DataFrame:
+    if not area_agent_ids:
+        return pd.DataFrame(columns=["step", "area_id", "gini_dissatisfaction"])
+    needed = {"step", "agent_id", "dissatisfaction_value"}
+    if not needed.issubset(agents.columns):
+        return pd.DataFrame(columns=["step", "area_id", "gini_dissatisfaction"])
+
+    base = agents[["step", "agent_id", "dissatisfaction_value"]].copy()
+    base["step"] = base["step"].astype("int32")
+    base["agent_id"] = base["agent_id"].astype("int32")
+    base["dissatisfaction_value"] = base["dissatisfaction_value"].astype("float32")
+    by_step: dict[int, pd.DataFrame] = {int(s): b for s, b in base.groupby("step", sort=True)}
+
+    rows: list[dict[str, float]] = []
+    for step, block in by_step.items():
+        vals_by_agent = dict(zip(block["agent_id"].tolist(), block["dissatisfaction_value"].tolist()))
+        for area_id, ids in area_agent_ids.items():
+            vals = [float(vals_by_agent[aid]) for aid in ids if aid in vals_by_agent]
+            if not vals:
+                g = float("nan")
+            else:
+                g = float(gini_index_0_100(vals))
+            rows.append({"step": int(step), "area_id": int(area_id), "gini_dissatisfaction": np.float32(g)})
+    return pd.DataFrame(rows)
+
+
+def _build_area_group_series(
+    *,
+    agents: pd.DataFrame,
+    votes: pd.DataFrame,
+    area_agent_ids: dict[int, list[int]],
+) -> pd.DataFrame:
+    cols = [
+        "step",
+        "area_id",
+        "group_idx",
+        "residents",
+        "eligible",
+        "participants",
+        "turnout",
+        "mean_assets",
+        "mean_dissatisfaction",
+        "resident_share",
+        "eligible_share",
+        "participant_share",
+    ]
+    if not area_agent_ids:
+        return pd.DataFrame(columns=cols)
+
+    needed_agents = {"step", "agent_id", "personality_group_idx", "assets", "dissatisfaction_value"}
+    if not needed_agents.issubset(agents.columns):
+        return pd.DataFrame(columns=cols)
+
+    # Static agent->group map (group is immutable by model design).
+    ag = (
+        agents[["agent_id", "personality_group_idx"]]
+        .drop_duplicates(subset=["agent_id"], keep="first")
+        .astype({"agent_id": "int32", "personality_group_idx": "int16"})
+    )
+
+    resident_rows: list[dict[str, int]] = []
+    for area_id, ids in sorted(area_agent_ids.items()):
+        for agent_id in ids:
+            resident_rows.append({"area_id": int(area_id), "agent_id": int(agent_id)})
+    if not resident_rows:
+        return pd.DataFrame(columns=cols)
+
+    residents = pd.DataFrame(resident_rows).astype({"area_id": "int32", "agent_id": "int32"})
+    residents = residents.merge(ag, on="agent_id", how="inner")
+    if residents.empty:
+        return pd.DataFrame(columns=cols)
+
+    step_df = pd.DataFrame({"step": sorted(int(v) for v in agents["step"].dropna().unique().tolist())}).astype({"step": "int32"})
+    residents = residents.assign(_k=1).merge(step_df.assign(_k=1), on="_k", how="inner").drop(columns="_k")
+
+    state = agents[["step", "agent_id", "assets", "dissatisfaction_value"]].copy()
+    state["step"] = state["step"].astype("int32")
+    state["agent_id"] = state["agent_id"].astype("int32")
+    state["assets"] = state["assets"].astype("float32")
+    state["dissatisfaction_value"] = state["dissatisfaction_value"].astype("float32")
+    residents = residents.merge(state, on=["step", "agent_id"], how="left")
+
+    grouped = (
+        residents.groupby(["step", "area_id", "personality_group_idx"], sort=True, as_index=False)
+        .agg(
+            residents=("agent_id", "size"),
+            eligible=("assets", lambda s: int(np.sum(np.asarray(s, dtype=float) > 0.0))),
+            mean_assets=("assets", "mean"),
+            mean_dissatisfaction=("dissatisfaction_value", "mean"),
+        )
+    )
+
+    if votes.empty:
+        participants = pd.DataFrame(columns=["step", "area_id", "personality_group_idx", "participants"])
+    else:
+        v = votes[["step", "area_id", "agent_id"]].drop_duplicates().copy()
+        v["step"] = v["step"].astype("int32")
+        v["area_id"] = v["area_id"].astype("int32")
+        v["agent_id"] = v["agent_id"].astype("int32")
+        v = v.merge(ag, on="agent_id", how="left")
+        v = v.dropna(subset=["personality_group_idx"])
+        participants = (
+            v.groupby(["step", "area_id", "personality_group_idx"], sort=True, as_index=False)
+            .agg(participants=("agent_id", "nunique"))
+        )
+
+    out = grouped.merge(
+        participants,
+        on=["step", "area_id", "personality_group_idx"],
+        how="left",
+    )
+    out["participants"] = out["participants"].fillna(0).astype("int32")
+    out["turnout"] = np.where(
+        out["residents"].to_numpy(dtype=float) > 0.0,
+        (out["participants"].to_numpy(dtype=float) / out["residents"].to_numpy(dtype=float)) * 100.0,
+        np.nan,
+    )
+    out["turnout"] = out["turnout"].astype("float32")
+
+    totals = (
+        out.groupby(["step", "area_id"], sort=False, as_index=False)
+        .agg(
+            residents_total=("residents", "sum"),
+            eligible_total=("eligible", "sum"),
+            participants_total=("participants", "sum"),
+        )
+    )
+    out = out.merge(totals, on=["step", "area_id"], how="left")
+    residents_total = out["residents_total"].to_numpy(dtype=float)
+    eligible_total = out["eligible_total"].to_numpy(dtype=float)
+    participants_total = out["participants_total"].to_numpy(dtype=float)
+
+    resident_share = np.full(len(out), np.nan, dtype=np.float32)
+    np.divide(
+        out["residents"].to_numpy(dtype=float),
+        residents_total,
+        out=resident_share,
+        where=residents_total > 0.0,
+    )
+    eligible_share = np.full(len(out), np.nan, dtype=np.float32)
+    np.divide(
+        out["eligible"].to_numpy(dtype=float),
+        eligible_total,
+        out=eligible_share,
+        where=eligible_total > 0.0,
+    )
+    participant_share = np.zeros(len(out), dtype=np.float32)
+    np.divide(
+        out["participants"].to_numpy(dtype=float),
+        participants_total,
+        out=participant_share,
+        where=participants_total > 0.0,
+    )
+
+    out["resident_share"] = resident_share
+    out["eligible_share"] = eligible_share
+    out["participant_share"] = participant_share
+
+    out = out.rename(columns={"personality_group_idx": "group_idx"})
+    out["group_idx"] = out["group_idx"].astype("int16")
+    out["mean_assets"] = out["mean_assets"].astype("float32")
+    out["mean_dissatisfaction"] = out["mean_dissatisfaction"].astype("float32")
+    return out[cols].sort_values(["area_id", "step", "group_idx"]).reset_index(drop=True)
 
 
 def _validate_summary_mode(mode: str) -> None:
@@ -603,6 +799,11 @@ def _build_summary_stats(
 
 
 def _render_static_overview_pdf(*, out_pdf: Path, static: dict[str, Any], meta: dict[str, Any]) -> None:
+    with PdfPages(out_pdf) as pdf:
+        _append_static_overview_pages(pdf=pdf, static=static, meta=meta)
+
+
+def _append_static_overview_pages(*, pdf: PdfPages, static: dict[str, Any], meta: dict[str, Any]) -> None:
     num_colors = int(static.get("num_colors", 0))
     num_areas = int(static.get("num_areas", 0))
     num_agents = int(static.get("num_agents", 0))
@@ -621,108 +822,173 @@ def _render_static_overview_pdf(*, out_pdf: Path, static: dict[str, Any], meta: 
         personality_groups = np.zeros((0, num_colors), dtype=int)
     n_groups = int(personality_groups.shape[0])
 
-    with PdfPages(out_pdf) as pdf:
-        # Single-page layout:
-        # left-top: personality order with color blocks
-        # left-bottom: global group distribution
-        # right: per-area group composition (full height)
-        fig = plt.figure(figsize=(11.69, 8.27))  # A4 landscape
-        outer = fig.add_gridspec(1, 2, width_ratios=[1.05, 1.6])
-        left = outer[0, 0].subgridspec(2, 1, height_ratios=[1.2, 0.8])
+    # Single-page layout:
+    # left-top: personality order with color blocks
+    # left-bottom: global group distribution
+    # right: per-area group composition (full height)
+    fig = plt.figure(figsize=(11.69, 8.27))  # A4 landscape
+    outer = fig.add_gridspec(1, 2, width_ratios=[1.05, 1.6])
+    left = outer[0, 0].subgridspec(2, 1, height_ratios=[1.2, 0.8])
 
-        ax_map = fig.add_subplot(left[0, 0])
-        ax_global = fig.add_subplot(left[1, 0])
-        ax_area = fig.add_subplot(outer[0, 1])
+    ax_map = fig.add_subplot(left[0, 0])
+    ax_global = fig.add_subplot(left[1, 0])
+    ax_area = fig.add_subplot(outer[0, 1])
 
-        fig.suptitle(
-            f"Static Overview | run_seed={run_seed} | rule={rule_name} | distance={distance_name} | "
-            f"grid={width}x{height} | agents={num_agents} | areas={num_areas} | colors={num_colors}",
-            fontsize=11,
+    fig.suptitle(
+        f"Static Overview | run_seed={run_seed} | rule={rule_name} | distance={distance_name} | "
+        f"grid={width}x{height} | agents={num_agents} | areas={num_areas} | colors={num_colors}",
+        fontsize=11,
+    )
+
+    _draw_personality_group_order_block(
+        ax=ax_map,
+        personality_groups=personality_groups,
+        num_colors=num_colors,
+    )
+
+    # Global group distribution
+    if n_groups > 0 and global_dist.size == n_groups:
+        x = np.arange(n_groups)
+        # Background: per-group preference-order stripes (same idea as ordering bands in area dist_to_reality plots).
+        if personality_groups.ndim == 2 and personality_groups.shape[0] >= n_groups:
+            n_slots = int(min(num_colors, personality_groups.shape[1]))
+            for gi in range(n_groups):
+                order = personality_groups[gi].astype(int).tolist()
+                for rank, color_id in enumerate(order[:n_slots]):
+                    y0 = 1.0 - float(rank + 1) / float(n_slots)
+                    ax_global.add_patch(
+                        plt.Rectangle(
+                            (float(gi) - 0.4, y0),
+                            0.8,
+                            1.0 / float(n_slots),
+                            facecolor=_sim_color(color_id),
+                            edgecolor="none",
+                            alpha=0.26,
+                            zorder=0,
+                        )
+                    )
+        # Foreground: transparent bars (black frames only).
+        ax_global.bar(
+            x,
+            global_dist,
+            width=0.8,
+            facecolor="none",
+            edgecolor="black",
+            linewidth=1.2,
+            zorder=2,
         )
-
-        _draw_personality_group_order_block(
-            ax=ax_map,
-            personality_groups=personality_groups,
-            num_colors=num_colors,
-        )
-
-        # Global group distribution
-        if n_groups > 0 and global_dist.size == n_groups:
-            x = np.arange(n_groups)
-            bar_colors = [get_group_color(gi) for gi in range(n_groups)]
-            ax_global.bar(x, global_dist, color=bar_colors, alpha=0.9)
-            ax_global.set_xticks(x)
-            ax_global.set_xticklabels([f"g{i}" for i in range(n_groups)])
-            ax_global.set_ylim(0.0, 1.0)
-            if n_groups > 0:
-                major = int(np.argmax(global_dist))
+        # Label shares at bar tops; if there is no space above, place just below.
+        for gi, val in enumerate(global_dist.tolist()):
+            y = float(val)
+            label = f"{100.0 * y:.1f}%"
+            if y <= 0.93:
                 ax_global.text(
-                    0.99,
-                    0.98,
-                    f"majority: g{major} ({100.0 * float(global_dist[major]):.1f}%)",
-                    transform=ax_global.transAxes,
-                    ha="right",
+                    float(gi),
+                    y + 0.02,
+                    label,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="black",
+                )
+            else:
+                ax_global.text(
+                    float(gi),
+                    y - 0.03,
+                    label,
+                    ha="center",
                     va="top",
                     fontsize=8,
+                    color="black",
                 )
+        ax_global.set_xticks(x)
+        ax_global.set_xticklabels([f"g{i}" for i in range(n_groups)])
+        # Encode group-color mapping directly in the x-axis labels.
+        for gi, tick in enumerate(ax_global.get_xticklabels()):
+            c = get_group_color(int(gi))
+            r, g, b, _ = to_rgba(c)
+            luminance = 0.299 * r + 0.587 * g + 0.114 * b
+            txt = "black" if luminance > 0.55 else "white"
+            tick.set_color(txt)
+            tick.set_bbox(
+                dict(
+                    facecolor=c,
+                    edgecolor="none",  # frameless colored square-ish tag
+                    boxstyle="round,pad=0.20,rounding_size=0.08",
+                    alpha=0.95,
+                )
+            )
+        ax_global.set_ylim(0.0, 1.0)
+        if n_groups > 0:
+            major = int(np.argmax(global_dist))
+            ax_global.text(
+                0.99,
+                0.98,
+                f"majority: g{major} ({100.0 * float(global_dist[major]):.1f}%)",
+                transform=ax_global.transAxes,
+                ha="right",
+                va="top",
+                fontsize=8,
+            )
+    else:
+        ax_global.text(0.5, 0.5, "No global group metadata", ha="center", va="center")
+    ax_global.set_title("Personality Groups with their Global Shares")
+    ax_global.set_yticks([])
+    ax_global.set_ylabel("")
+    ax_global.grid(True, axis="y", alpha=0.25)
+
+    # Per-area group composition
+    area_rows: list[tuple[str, int, np.ndarray]] = []
+    for area_key in sorted(areas_info.keys(), key=lambda x: int(x)):
+        payload = areas_info.get(area_key) or {}
+        area_n = int(payload.get("num_agents", 0))
+        dist = np.asarray(payload.get("personality_group_distribution", []), dtype=float)
+        area_rows.append((area_key, area_n, dist))
+
+    if area_rows and n_groups > 0:
+        n_area = len(area_rows)
+        if n_area < 16:
+            # Keep visual density comparable to larger-area runs:
+            # center rows inside a virtual 16-row frame.
+            y_offset = 0.5 * (16 - n_area)
+            y = np.arange(n_area, dtype=float) + y_offset
+            bar_h = 0.55
+            ax_area.set_ylim(-0.5, 15.5)
         else:
-            ax_global.text(0.5, 0.5, "No global group metadata", ha="center", va="center")
-        ax_global.set_title("Global Personality Group Distribution")
-        ax_global.set_ylabel("share")
-        ax_global.grid(True, axis="y", alpha=0.25)
+            y = np.arange(n_area, dtype=float)
+            bar_h = 0.8
+        left_vals = np.zeros(len(area_rows), dtype=float)
+        for gi in range(n_groups):
+            vals = np.array(
+                [float(r[2][gi]) if r[2].size > gi else 0.0 for r in area_rows],
+                dtype=float,
+            )
+            ax_area.barh(
+                y,
+                vals,
+                left=left_vals,
+                height=bar_h,
+                label=f"g{gi}",
+                color=get_group_color(gi),
+            )
+            left_vals += vals
+        labels = [f"a{a} (n={n})" for a, n, _ in area_rows]
+        ax_area.set_yticks(y)
+        ax_area.set_yticklabels(labels)
+        ax_area.set_xlim(0.0, 1.0)
+        ax_area.legend(loc="lower right", fontsize=8, ncol=2)
+    else:
+        ax_area.text(0.5, 0.5, "No area group metadata", ha="center", va="center")
+    ax_area.set_title("Per-Area Group Composition")
+    ax_area.set_xlabel("share")
+    ax_area.grid(True, axis="x", alpha=0.25)
 
-        # Per-area group composition
-        area_rows: list[tuple[str, int, np.ndarray]] = []
-        for area_key in sorted(areas_info.keys(), key=lambda x: int(x)):
-            payload = areas_info.get(area_key) or {}
-            area_n = int(payload.get("num_agents", 0))
-            dist = np.asarray(payload.get("personality_group_distribution", []), dtype=float)
-            area_rows.append((area_key, area_n, dist))
-
-        if area_rows and n_groups > 0:
-            n_area = len(area_rows)
-            if n_area < 16:
-                # Keep visual density comparable to larger-area runs:
-                # center rows inside a virtual 16-row frame.
-                y_offset = 0.5 * (16 - n_area)
-                y = np.arange(n_area, dtype=float) + y_offset
-                bar_h = 0.55
-                ax_area.set_ylim(-0.5, 15.5)
-            else:
-                y = np.arange(n_area, dtype=float)
-                bar_h = 0.8
-            left_vals = np.zeros(len(area_rows), dtype=float)
-            for gi in range(n_groups):
-                vals = np.array(
-                    [float(r[2][gi]) if r[2].size > gi else 0.0 for r in area_rows],
-                    dtype=float,
-                )
-                ax_area.barh(
-                    y,
-                    vals,
-                    left=left_vals,
-                    height=bar_h,
-                    label=f"g{gi}",
-                    color=get_group_color(gi),
-                )
-                left_vals += vals
-            labels = [f"a{a} (n={n})" for a, n, _ in area_rows]
-            ax_area.set_yticks(y)
-            ax_area.set_yticklabels(labels)
-            ax_area.set_xlim(0.0, 1.0)
-            ax_area.legend(loc="lower right", fontsize=8, ncol=2)
-        else:
-            ax_area.text(0.5, 0.5, "No area group metadata", ha="center", va="center")
-        ax_area.set_title("Per-Area Group Composition")
-        ax_area.set_xlabel("share")
-        ax_area.grid(True, axis="x", alpha=0.25)
-
-        fig.tight_layout()
-        pdf.savefig(fig, dpi=140)
-        plt.close(fig)
+    fig.tight_layout()
+    pdf.savefig(fig, dpi=140)
+    plt.close(fig)
 
 
-def _render_global_summary_pdf(
+def _render_combined_global_summary_pdf(
     *,
     out_pdf: Path,
     run_dir: Path,
@@ -733,8 +999,7 @@ def _render_global_summary_pdf(
     refs_global: dict[str, np.ndarray | None],
 ) -> None:
     with PdfPages(out_pdf) as pdf:
-        _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta)
-        _render_global_distance_page(pdf=pdf, global_series=global_series)
+        # Page 1 first: fixed reference optima + global color curves + grid snapshots
         _render_global_colors_and_grids_page(
             pdf=pdf,
             run_dir=run_dir,
@@ -743,7 +1008,565 @@ def _render_global_summary_pdf(
             static=static,
             refs_global=refs_global,
         )
+        # Then static overview page(s)
+        _append_static_overview_pages(pdf=pdf, static=static, meta=meta)
+        # Extra page(s): per-area "group with global-style distribution" panels.
+        _append_per_area_group_distribution_pages(pdf=pdf, static=static, meta=meta)
+        # Then remaining global pages
+        _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta)
+        _render_global_distance_page(pdf=pdf, global_series=global_series)
 
+
+def _append_per_area_group_distribution_pages(*, pdf: PdfPages, static: dict[str, Any], meta: dict[str, Any]) -> None:
+    """Append area-wise group-distribution pages using the same visual style as global."""
+    num_colors = int(static.get("num_colors", 0))
+    info = static.get("personality_group_info", {}) or {}
+    personality_groups = np.asarray(info.get("personality_groups", []), dtype=int)
+    areas_info = info.get("areas", {}) or {}
+    if personality_groups.ndim != 2:
+        return
+    n_groups = int(personality_groups.shape[0])
+    if n_groups <= 0 or not isinstance(areas_info, dict) or len(areas_info) == 0:
+        return
+
+    rows: list[tuple[int, int, np.ndarray]] = []
+    for area_key in sorted(areas_info.keys(), key=lambda x: int(x)):
+        payload = areas_info.get(area_key) or {}
+        dist = np.asarray(payload.get("personality_group_distribution", []), dtype=float)
+        if dist.size != n_groups:
+            continue
+        rows.append((int(area_key), int(payload.get("num_agents", 0)), dist))
+    if not rows:
+        return
+
+    run_seed = int(meta["run"]["run_seed"])
+    rule_name = meta["run"].get("rule_name")
+    per_page = 9
+    n_pages = int(np.ceil(len(rows) / per_page))
+
+    for p in range(n_pages):
+        chunk = rows[p * per_page:(p + 1) * per_page]
+        fig, axes = plt.subplots(3, 3, figsize=(11.69, 8.27))
+        ax_list = axes.ravel()
+        for idx, ax in enumerate(ax_list):
+            if idx >= len(chunk):
+                ax.axis("off")
+                continue
+            area_id, n_agents, dist = chunk[idx]
+            x = np.arange(n_groups)
+            # Background ordering stripes per group.
+            n_slots = int(min(num_colors, personality_groups.shape[1]))
+            for gi in range(n_groups):
+                order = personality_groups[gi].astype(int).tolist()
+                for rank, color_id in enumerate(order[:n_slots]):
+                    y0 = 1.0 - float(rank + 1) / float(n_slots)
+                    ax.add_patch(
+                        plt.Rectangle(
+                            (float(gi) - 0.4, y0),
+                            0.8,
+                            1.0 / float(n_slots),
+                            facecolor=_sim_color(color_id),
+                            edgecolor="none",
+                            alpha=0.26,
+                            zorder=0,
+                        )
+                    )
+            # Transparent bars with black frame.
+            ax.bar(x, dist, width=0.8, facecolor="none", edgecolor="black", linewidth=1.1, zorder=2)
+            # Percent labels.
+            for gi, v in enumerate(dist.tolist()):
+                y = float(v)
+                txt = f"{100.0 * y:.0f}%"
+                if y <= 0.92:
+                    ax.text(float(gi), y + 0.02, txt, ha="center", va="bottom", fontsize=7)
+                else:
+                    ax.text(float(gi), y - 0.03, txt, ha="center", va="top", fontsize=7)
+            ax.set_title(f"Area {area_id} (n={n_agents})", fontsize=9)
+            ax.set_ylim(0.0, 1.0)
+            ax.set_yticks([])
+            ax.set_xticks(x)
+            ax.set_xticklabels([f"g{i}" for i in range(n_groups)], fontsize=7)
+            for gi, tick in enumerate(ax.get_xticklabels()):
+                c = get_group_color(int(gi))
+                r, g, b, _ = to_rgba(c)
+                luminance = 0.299 * r + 0.587 * g + 0.114 * b
+                txt = "black" if luminance > 0.55 else "white"
+                tick.set_color(txt)
+                tick.set_bbox(
+                    dict(
+                        facecolor=c,
+                        edgecolor="none",
+                        boxstyle="round,pad=0.14,rounding_size=0.06",
+                        alpha=0.95,
+                    )
+                )
+            ax.grid(True, axis="y", alpha=0.25)
+
+        fig.suptitle(
+            f"Per-Area Personality Group Distributions | run_seed={run_seed} | rule={rule_name} | page {p + 1}/{n_pages}",
+            fontsize=11,
+        )
+        fig.tight_layout()
+        pdf.savefig(fig, dpi=140)
+        plt.close(fig)
+
+
+def _render_area_detail_pdfs(
+    *,
+    out_dir: Path,
+    area_series: pd.DataFrame,
+    area_group_series: pd.DataFrame,
+    static: dict[str, Any],
+    meta: dict[str, Any],
+) -> None:
+    area_ids = sorted(set(int(v) for v in area_series["area_id"].dropna().tolist()))
+    for area_id in area_ids:
+        block = area_series[area_series["area_id"].astype(int) == int(area_id)].sort_values("step").reset_index(drop=True)
+        group_block = area_group_series[area_group_series["area_id"].astype(int) == int(area_id)].sort_values(["step", "group_idx"]).reset_index(drop=True)
+        out_pdf = out_dir / f"area_{int(area_id)}.pdf"
+        _render_area_detail_pdf(
+            out_pdf=out_pdf,
+            area_id=int(area_id),
+            area_series=block,
+            area_group_series=group_block,
+            static=static,
+            meta=meta,
+        )
+
+
+def _render_area_detail_pdf(
+    *,
+    out_pdf: Path,
+    area_id: int,
+    area_series: pd.DataFrame,
+    area_group_series: pd.DataFrame,
+    static: dict[str, Any],
+    meta: dict[str, Any],
+) -> None:
+    with PdfPages(out_pdf) as pdf:
+        x = area_series["step"].to_numpy(dtype=float)
+        participants = area_series["participants"].to_numpy(dtype=float)
+        eligible = area_series["eligible_voters"].to_numpy(dtype=float)
+        turnout = area_series["turnout"].to_numpy(dtype=float)
+
+        # Compact static info block for area context.
+        areas_info = (((static.get("personality_group_info", {}) or {}).get("areas", {})) or {})
+        area_info = areas_info.get(str(int(area_id)), {}) if isinstance(areas_info, dict) else {}
+        area_n = int(area_info.get("num_agents", -1)) if isinstance(area_info, dict) else -1
+        pg_dist = np.asarray(area_info.get("personality_group_distribution", []), dtype=float) if isinstance(area_info, dict) else np.asarray([], dtype=float)
+        majority_txt = "n/a"
+        if pg_dist.size > 0 and np.isfinite(pg_dist).any():
+            gidx = int(np.nanargmax(pg_dist))
+            majority_txt = f"g{gidx} ({100.0 * float(pg_dist[gidx]):.1f}%)"
+        suptitle = (
+            f"Area {area_id} Detail | run_seed={meta['run']['run_seed']} | "
+            f"rule={meta['run'].get('rule_name')} | area_agents={area_n} | majority_group={majority_txt}"
+        )
+
+        # Page 1: color curves + dist_to_reality (full-width for better readability)
+        fig2, axes2 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        ax2 = np.asarray(axes2).ravel()
+        color_cols = sorted(
+            [c for c in area_series.columns if c.startswith("area_color_")],
+            key=lambda n: int(n.split("_")[-1]),
+        )
+        for i, c in enumerate(color_cols):
+            ax2[0].plot(x, area_series[c].to_numpy(dtype=float), color=_sim_color(i), label=f"color_{i}")
+        ax2[0].set_title("Area Color Distribution Curves")
+        ax2[0].set_ylabel("share")
+        ax2[0].set_ylim(0.0, 1.0)
+        if color_cols:
+            ax2[0].legend(loc="best", fontsize=8, ncol=min(4, len(color_cols)))
+
+        # Background encodes elected ordering per step as stacked color bands
+        # (top=rank 1 color ... bottom=last rank color).
+        if "winning_option_id" in area_series.columns:
+            ordering_bg = _build_elected_ordering_background_image(
+                winning_option_ids=area_series["winning_option_id"].to_numpy(dtype=int),
+                num_colors=int(static.get("num_colors", 0)),
+            )
+            if ordering_bg is not None:
+                x0 = float(np.min(x)) - 0.5 if x.size > 0 else -0.5
+                x1 = float(np.max(x)) + 0.5 if x.size > 0 else 0.5
+                ax2[1].imshow(
+                    ordering_bg,
+                    origin="upper",
+                    aspect="auto",
+                    extent=[x0, x1, 0.0, 1.0],
+                    interpolation="nearest",
+                    zorder=0,
+                )
+        ax2[1].plot(
+            x,
+            area_series["dist_to_reality"].to_numpy(dtype=float),
+            color="black",
+            linestyle="--",
+            linewidth=1.6,
+            zorder=3,
+        )
+        ax2[1].set_title("dist_to_reality")
+        ax2[1].set_ylabel("distance [0..1]")
+        ax2[1].set_ylim(0.0, 1.0)
+        for a in ax2:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig2.suptitle(suptitle, fontsize=11)
+        fig2.tight_layout()
+        pdf.savefig(fig2, dpi=140)
+        plt.close(fig2)
+
+        # Page 2: gini assets + assets share by group
+        fig1, axes1 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        ax1 = np.asarray(axes1).ravel()
+        ax1[0].plot(x, area_series["gini_assets"].to_numpy(dtype=float), color="tab:red")
+        ax1[0].set_title("Gini Assets [0..100]")
+        ax1[0].set_ylabel("gini")
+        ax1[0].set_ylim(0.0, 100.0)
+        assets_share_payload = _prepare_group_assets_share_series(area_group_series=area_group_series)
+        if assets_share_payload is not None:
+            steps_assets, groups_assets, p_assets_share = assets_share_payload
+            for g in groups_assets:
+                ax1[1].plot(
+                    steps_assets,
+                    p_assets_share[g].to_numpy(dtype=float),
+                    color=get_group_color(int(g)),
+                    linewidth=1.8,
+                    label=f"g{g}",
+                )
+            ax1[1].set_title("Assets share by Group")
+            ax1[1].set_ylabel("share")
+            ax1[1].set_ylim(0.0, 1.0)
+            if groups_assets:
+                ax1[1].legend(loc="best", fontsize=8, ncol=min(5, len(groups_assets)))
+        else:
+            ax1[1].text(0.5, 0.5, "Assets share by group unavailable", ha="center", va="center")
+            ax1[1].set_yticks([])
+
+        for a in ax1:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig1.suptitle(suptitle, fontsize=11)
+        fig1.tight_layout()
+        pdf.savefig(fig1, dpi=140)
+        plt.close(fig1)
+
+        if not area_group_series.empty:
+            _render_area_group_pages(
+                pdf=pdf,
+                area_group_series=area_group_series,
+                x=x,
+                turnout=turnout,
+                participants=participants,
+                eligible=eligible,
+                suptitle=suptitle,
+            )
+
+        # Then the rest: first group means page, then dist_to_ref + area means.
+        if not area_group_series.empty:
+            _render_area_group_means_page(
+                pdf=pdf,
+                area_group_series=area_group_series,
+                x=x,
+                gini_dissatisfaction=area_series["gini_dissatisfaction"].to_numpy(dtype=float),
+            )
+
+        fig3, axes3 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        ax3 = np.asarray(axes3).ravel()
+        for col, color, label in (
+            ("dist_to_ref_utilitarian", "tab:blue", "utilitarian"),
+            ("dist_to_ref_nash", "tab:purple", "nash"),
+            ("dist_to_ref_egalitarian", "tab:orange", "egalitarian"),
+            ("dist_to_ref_rawlsian", "tab:red", "rawlsian"),
+        ):
+            if col in area_series.columns:
+                vals = area_series[col].to_numpy(dtype=float)
+                if np.isfinite(vals).any():
+                    ax3[0].plot(x, vals, color=color, label=label)
+        ax3[0].set_title("dist_to_ref_*")
+        ax3[0].set_ylabel("distance [0..1] (lower better)")
+        ax3[0].set_ylim(0.0, 1.0)
+        if len(ax3[0].lines) > 0:
+            ax3[0].legend(loc="best", fontsize=8)
+
+        area_means = _compute_area_weighted_means_from_group_series(area_group_series=area_group_series)
+        if area_means is not None:
+            ax3[1].plot(
+                area_means["step"].to_numpy(dtype=float),
+                area_means["mean_assets"].to_numpy(dtype=float),
+                color="tab:blue",
+                linewidth=1.6,
+                label="mean_assets",
+            )
+            ax3b = ax3[1].twinx()
+            ax3b.plot(
+                area_means["step"].to_numpy(dtype=float),
+                area_means["mean_dissatisfaction"].to_numpy(dtype=float),
+                color="tab:orange",
+                linestyle="--",
+                linewidth=1.6,
+                label="mean_dissatisfaction",
+            )
+            ax3[1].set_ylabel("assets", color="tab:blue")
+            ax3b.set_ylabel("dissatisfaction [0..1]", color="tab:orange")
+            ax3b.set_ylim(0.0, 1.0)
+            ax3[1].tick_params(axis="y", colors="tab:blue")
+            ax3b.tick_params(axis="y", colors="tab:orange")
+            h1, l1 = ax3[1].get_legend_handles_labels()
+            h2, l2 = ax3b.get_legend_handles_labels()
+            if h1 or h2:
+                ax3[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
+        else:
+            ax3[1].text(0.5, 0.5, "Area mean assets/dissatisfaction unavailable", ha="center", va="center")
+            ax3[1].set_yticks([])
+        ax3[1].set_title("Area Mean Assets + Mean Dissatisfaction")
+        for a in ax3:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig3.suptitle(suptitle, fontsize=11)
+        fig3.tight_layout()
+        pdf.savefig(fig3, dpi=140)
+        plt.close(fig3)
+
+
+def _render_area_group_pages(
+    *,
+    pdf: PdfPages,
+    area_group_series: pd.DataFrame,
+    x: np.ndarray,
+    turnout: np.ndarray,
+    participants: np.ndarray,
+    eligible: np.ndarray,
+    suptitle: str,
+) -> None:
+    groups = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist())
+    steps = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
+    if len(groups) == 0 or steps.size == 0:
+        return
+
+    pivot = lambda col: (
+        area_group_series.pivot(index="step", columns="group_idx", values=col)
+        .reindex(index=steps.astype(int), columns=groups)
+        .astype(float)
+    )
+    p_res = pivot("residents")
+    p_elig = pivot("eligible")
+    p_part = pivot("participants")
+    p_turn = pivot("turnout")
+    p_assets = pivot("mean_assets")
+    p_dissat = pivot("mean_dissatisfaction")
+    p_res_share = pivot("resident_share")
+    p_part_share = pivot("participant_share")
+
+    # Page 3: Turnout + Participants (top), Turnout by Group (bottom)
+    fig3, ax3 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+    ax3[0].plot(x, turnout, color="tab:blue", label="turnout [%]")
+    ax3[0].set_title("Turnout + Participants")
+    ax3[0].set_ylabel("%")
+    ax3b = ax3[0].twinx()
+    ax3b.plot(x, participants, color="tab:gray", linestyle="-", alpha=0.8, label="participants")
+    ax3b.plot(x, eligible, color="tab:gray", linestyle="--", alpha=0.5, label="eligible")
+    ax3b.set_ylabel("count")
+    for g in groups:
+        ax3[1].plot(steps, p_turn[g].to_numpy(dtype=float), color=get_group_color(int(g)), linewidth=1.8, label=f"g{g}")
+    ax3[1].set_title("Turnout by Group [% of Residents]")
+    ax3[1].set_ylabel("%")
+    ax3[1].set_ylim(0.0, 100.0)
+    for a in ax3:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+    fig3.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
+    fig3.tight_layout()
+    pdf.savefig(fig3, dpi=140)
+    plt.close(fig3)
+
+    # Page 4: composition + static references for both top and bottom plots.
+    fig4 = plt.figure(figsize=(11.69, 8.27))
+    gs4 = fig4.add_gridspec(2, 1, height_ratios=[1.0, 1.0])
+    top = gs4[0].subgridspec(1, 2, width_ratios=[4.0, 0.15], wspace=0.01)
+    bottom = gs4[1].subgridspec(1, 2, width_ratios=[4.0, 0.15], wspace=0.01)
+    ax4_left = fig4.add_subplot(top[0, 0])
+    ax4_ref = fig4.add_subplot(top[0, 1])
+    ax4_bottom = fig4.add_subplot(bottom[0, 0])
+    ax4_bottom_ref = fig4.add_subplot(bottom[0, 1])
+    left_stack = [p_part_share[g].to_numpy(dtype=float) for g in groups]
+    if left_stack:
+        ax4_left.stackplot(
+            steps,
+            *left_stack,
+            labels=[f"g{g}" for g in groups],
+            colors=[get_group_color(int(g)) for g in groups],
+            alpha=0.9,
+        )
+    ax4_left.set_title("Participant Composition Share by Group")
+    ax4_left.set_ylabel("share")
+    ax4_left.set_ylim(0.0, 1.0)
+    ax4_left.grid(True, alpha=0.25)
+    ax4_left.set_xlabel("step")
+    ax4_left.set_ylim(bottom=0.0)
+    ax4_left.margins(x=0.0, y=0.0)
+    ax4_left.spines["bottom"].set_position(("data", 0.0))
+
+    resident_share_static_vals: list[float] = []
+    for g in groups:
+        vals = area_group_series[area_group_series["group_idx"] == g]["resident_share"].dropna()
+        resident_share_static_vals.append(float(vals.iloc[0]) if not vals.empty else 0.0)
+
+    resident_share_static = np.asarray(resident_share_static_vals, dtype=float)
+
+    bottom = 0.0
+    for g, s in zip(groups, resident_share_static):
+        ax4_ref.bar(0, s, bottom=bottom, width=0.2, color=get_group_color(int(g)), edgecolor="none")
+        y_mid = bottom + (float(s) / 2.0)
+        label = f"g{int(g)}"
+        if float(s) >= 0.10:
+            label = f"g{int(g)}\n{int(round(float(s) * 100.0))}%"
+        r, gg, b, _ = to_rgba(get_group_color(int(g)))
+        luminance = 0.299 * r + 0.587 * gg + 0.114 * b
+        txt_color = "black" if luminance > 0.55 else "white"
+        if float(s) >= 0.045:
+            ax4_ref.text(
+                0.0,
+                y_mid,
+                label,
+                ha="center",
+                va="center",
+                fontsize=7,
+                color=txt_color,
+                fontweight="bold",
+            )
+        bottom += s
+
+    ax4_ref.set_ylim(0.0, 1.0)
+    ax4_ref.set_title("Total\nShare")
+    ax4_ref.axis("off")
+
+    for g in groups:
+        color = get_group_color(int(g))
+        ax4_bottom.plot(steps, p_part[g].to_numpy(dtype=float), color=color, linewidth=1.8, label=f"g{g} participants")
+        ax4_bottom.plot(steps, p_elig[g].to_numpy(dtype=float), color=color, linestyle=":", alpha=0.85, linewidth=1.2)
+    ax4_bottom.set_title("Participants (solid) + Eligible (dotted) by Group")
+    ax4_bottom.set_ylabel("count")
+    ax4_bottom.grid(True, alpha=0.25)
+    ax4_bottom.set_xlabel("step")
+    if groups:
+        ax4_bottom.legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=8, ncol=min(5, len(groups)))
+    ax4_bottom.set_ylim(bottom=0.0)
+    ax4_bottom.margins(x=0.0, y=0.0)
+    ax4_bottom.spines["bottom"].set_position(("data", 0.0))
+
+    # Bottom reference: thin dashed residents-by-group traces (no axis).
+    for g in groups:
+        ax4_bottom_ref.plot(
+            steps,
+            p_res[g].to_numpy(dtype=float),
+            color=get_group_color(int(g)),
+            linestyle="--",
+            linewidth=1.1,
+            alpha=0.9,
+        )
+    max_res = 0.0
+    if groups:
+        max_res = float(np.nanmax([np.nanmax(p_res[g].to_numpy(dtype=float)) for g in groups]))
+    ax4_bottom_ref.set_xlim(float(np.min(steps)) if steps.size > 0 else 0.0, float(np.max(steps)) if steps.size > 0 else 1.0)
+    ax4_bottom_ref.set_ylim(0.0, max(1.0, max_res * 1.05))
+    ax4_bottom_ref.set_title("Total\nCount")
+    ax4_bottom_ref.axis("off")
+
+    fig4.tight_layout()
+    pdf.savefig(fig4, dpi=140)
+    plt.close(fig4)
+
+    # Group means page is rendered later from _render_area_detail_pdf after dist_to_ref.
+
+
+def _render_area_group_means_page(
+    *,
+    pdf: PdfPages,
+    area_group_series: pd.DataFrame,
+    x: np.ndarray,
+    gini_dissatisfaction: np.ndarray,
+) -> None:
+    groups = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist())
+    steps = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
+    if len(groups) == 0 or steps.size == 0:
+        return
+    pivot = lambda col: (
+        area_group_series.pivot(index="step", columns="group_idx", values=col)
+        .reindex(index=steps.astype(int), columns=groups)
+        .astype(float)
+    )
+    p_dissat = pivot("mean_dissatisfaction")
+
+    fig, ax = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+    ax[0].plot(x, gini_dissatisfaction, color="tab:purple", linewidth=1.8)
+    ax[0].set_title("Gini Dissatisfaction [0..100]")
+    ax[0].set_ylabel("gini")
+    ax[0].set_ylim(0.0, 100.0)
+    for g in groups:
+        color = get_group_color(int(g))
+        ax[1].plot(steps, p_dissat[g].to_numpy(dtype=float), color=color, linewidth=1.8, label=f"g{g}")
+    ax[1].set_title("Mean Dissatisfaction by Group")
+    ax[1].set_ylabel("dissatisfaction [0..1]")
+    ax[1].set_ylim(0.0, 1.0)
+    for a in ax:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+    if groups:
+        ax[1].legend(loc="best", fontsize=8, ncol=min(5, len(groups)))
+    fig.tight_layout()
+    pdf.savefig(fig, dpi=140)
+    plt.close(fig)
+
+
+def _prepare_group_assets_share_series(
+    *,
+    area_group_series: pd.DataFrame,
+) -> tuple[np.ndarray, list[int], pd.DataFrame] | None:
+    groups = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist())
+    steps = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
+    if len(groups) == 0 or steps.size == 0:
+        return None
+    pivot = lambda col: (
+        area_group_series.pivot(index="step", columns="group_idx", values=col)
+        .reindex(index=steps.astype(int), columns=groups)
+        .astype(float)
+    )
+    p_res = pivot("residents")
+    p_assets = pivot("mean_assets")
+    p_group_assets = p_assets * p_res
+    asset_totals = p_group_assets.sum(axis=1).to_numpy(dtype=float)
+    p_assets_share = p_group_assets.copy()
+    for g in groups:
+        vals = p_group_assets[g].to_numpy(dtype=float)
+        share = np.zeros_like(vals, dtype=float)
+        np.divide(vals, asset_totals, out=share, where=asset_totals > 0.0)
+        p_assets_share[g] = share
+    return steps, groups, p_assets_share
+
+
+def _compute_area_weighted_means_from_group_series(*, area_group_series: pd.DataFrame) -> pd.DataFrame | None:
+    if area_group_series.empty:
+        return None
+    required = {"step", "residents", "mean_assets", "mean_dissatisfaction"}
+    if not required.issubset(area_group_series.columns):
+        return None
+    rows: list[dict[str, float]] = []
+    for step, block in area_group_series.groupby("step", sort=True):
+        w = block["residents"].to_numpy(dtype=float)
+        if w.size == 0 or float(np.sum(w)) <= 0.0:
+            continue
+        assets = block["mean_assets"].to_numpy(dtype=float)
+        dissat = block["mean_dissatisfaction"].to_numpy(dtype=float)
+        rows.append(
+            {
+                "step": float(step),
+                "mean_assets": float(np.average(assets, weights=w)),
+                "mean_dissatisfaction": float(np.average(dissat, weights=w)),
+            }
+        )
+    if not rows:
+        return None
+    return pd.DataFrame(rows).sort_values("step").reset_index(drop=True)
 
 def _render_global_core_metrics_page(*, pdf: PdfPages, global_series: pd.DataFrame, meta: dict[str, Any]) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27), sharex=True)
@@ -1032,6 +1855,34 @@ def _sim_color(color_idx: int) -> str:
     return "black"
 
 
+def _build_elected_ordering_background_image(
+    *,
+    winning_option_ids: np.ndarray,
+    num_colors: int,
+    alpha: float = 0.28,
+) -> np.ndarray | None:
+    """Build RGBA image for elected ordering background in dist_to_reality plots."""
+    ids = np.asarray(winning_option_ids, dtype=int).reshape(-1)
+    n_steps = int(ids.size)
+    if n_steps <= 0 or num_colors <= 0:
+        return None
+
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=int)
+    rgba = np.zeros((int(num_colors), n_steps, 4), dtype=np.float32)
+
+    for t, oid in enumerate(ids.tolist()):
+        if oid < 0 or oid >= int(options.shape[0]):
+            # transparent for missing/invalid winner rows
+            rgba[:, t, :] = np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+            continue
+        ordering = options[int(oid)]
+        for rank in range(int(num_colors)):
+            c_idx = int(ordering[rank])
+            r, g, b, _ = to_rgba(_sim_color(c_idx))
+            rgba[rank, t, :] = np.array([r, g, b, float(alpha)], dtype=np.float32)
+    return rgba
+
+
 def _draw_personality_group_order_block(*, ax, personality_groups: np.ndarray, num_colors: int) -> None:
     ax.set_title("Personality Group -> Color Preference Order")
     if personality_groups.ndim != 2 or personality_groups.shape[0] == 0:
@@ -1046,6 +1897,20 @@ def _draw_personality_group_order_block(*, ax, personality_groups: np.ndarray, n
     ax.invert_yaxis()
     ax.set_yticks(np.arange(n_groups))
     ax.set_yticklabels([f"g{i}" for i in range(n_groups)])
+    for gi, tick in enumerate(ax.get_yticklabels()):
+        c = get_group_color(int(gi))
+        r, g, b, _ = to_rgba(c)
+        luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        txt = "black" if luminance > 0.55 else "white"
+        tick.set_color(txt)
+        tick.set_bbox(
+            dict(
+                facecolor=c,
+                edgecolor="none",
+                boxstyle="round,pad=0.20,rounding_size=0.08",
+                alpha=0.95,
+            )
+        )
     ax.set_xticks([])
     ax.grid(False)
 

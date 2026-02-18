@@ -151,6 +151,12 @@ Participation learning knobs (ModelConfig):
 - `bias_toward_participation` (in `[-1,1]`): additive probability bias after sigmoid, then clipped to `[0,1]`
 - `participation_baseline_alpha` (in `[0,1]`): EMA step size for the baseline used in the signal
 
+Scale note (relative signals):
+
+- Since learning uses `delta_rel` (small, typically ~1e-3 to 1e-2), q updates are small.
+- Practical ranges are correspondingly smaller: `participation_q_max` in ~`[1, 3]` and `participation_init_q` in ~`[-3, 3]`.
+- `participation_beta` is the main amplifier if learning feels too slow under small signals.
+
 Practical intuition:
 
 - `alpha` mostly sets “how fast behavior changes”

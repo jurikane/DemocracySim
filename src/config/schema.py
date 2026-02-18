@@ -29,7 +29,7 @@ class ModelConfig(StrictBaseModel):
     participation_alpha: float = 0.05
     participation_beta: float = 1.0
     participation_init_q: float = 0.0
-    participation_q_max: float = 50.0
+    participation_q_max: float = 2.0
     bias_toward_participation: float = 0.0
     # EMA alpha for participation baseline (1.0 => baseline becomes last step's value).
     participation_baseline_alpha: float = 0.1

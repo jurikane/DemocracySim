@@ -21,12 +21,12 @@ def test_batch2_writes_static_and_global_pdf_artifacts(tmp_path: Path) -> None:
     run_dir = _make_run(tmp_path, store_grid=True)
     artifacts = generate_run_summary_batch2(run_dir=run_dir)
 
-    assert artifacts.static_overview_pdf is not None
     assert artifacts.global_summary_pdf is not None
-    assert artifacts.static_overview_pdf.exists()
+    assert artifacts.static_overview_pdf is None
     assert artifacts.global_summary_pdf.exists()
-    assert artifacts.static_overview_pdf.stat().st_size > 0
     assert artifacts.global_summary_pdf.stat().st_size > 0
+    assert artifacts.global_summary_pdf.name.startswith("global_summary_")
+    assert "_seed" in artifacts.global_summary_pdf.name
 
     # Batch-1 sidecars are still present and generated in the same run.
     assert artifacts.global_series_csv.exists()
@@ -41,4 +41,3 @@ def test_batch2_global_pdf_generation_is_stable_without_grids(tmp_path: Path) ->
     assert artifacts.global_summary_pdf is not None
     assert artifacts.global_summary_pdf.exists()
     assert artifacts.global_summary_pdf.stat().st_size > 0
-

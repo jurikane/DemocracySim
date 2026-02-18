@@ -123,22 +123,31 @@ Current outputs:
 
 - `analysis/summary_global_series.csv`
 - `analysis/summary_area_series.csv`
+- `analysis/summary_area_group_series.csv`
 - `analysis/summary_stats.json`
-- `analysis/static_overview.pdf`
-- `analysis/global_summary.pdf`
+- `analysis/global_summary_<rule>_seed<seed>.pdf` (combined document)
+- `analysis/area_<id>.pdf` (one detail report per area)
 
 Planned next G4 outputs:
 
 - `analysis/areas_overview.pdf`
-- `analysis/area_<id>.pdf`
 
-`global_summary.pdf` currently includes:
+`global_summary_<rule>_seed<seed>.pdf` currently includes, in this order:
+
+1. fixed reference optima + global color curves + grid snapshots
+2. static overview page(s)
+3. remaining global metric/diagnostic pages
 
 - core global thesis metrics
 - `dist_to_reality`, `dist_to_ref_*`, diversity diagnostics
-- global color curves over time
-- a fixed-reference-optima panel (utilitarian/egalitarian/rawlsian distributions)
-- grid snapshots for step 1 and final step
+
+`area_<id>.pdf` currently includes:
+
+1. turnout + participants + gini assets
+2. area color curves + `dist_to_reality` (+ elected-ordering background) + `dist_to_ref_*`
+3. group diagnostics (participants/eligible/residents + turnout by group)
+4. group means (assets, dissatisfaction)
+5. group composition diagnostics
 
 Benchmark-reference note:
 

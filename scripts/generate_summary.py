@@ -66,6 +66,8 @@ def main() -> None:
     )
     print(f"Wrote: {artifacts.global_series_csv}")
     print(f"Wrote: {artifacts.area_series_csv}")
+    if artifacts.area_group_series_csv is not None:
+        print(f"Wrote: {artifacts.area_group_series_csv}")
     print(f"Wrote: {artifacts.summary_stats_json}")
     if artifacts.static_overview_pdf is not None:
         print(f"Wrote: {artifacts.static_overview_pdf}")

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from mesa.visualization import TextElement
 import matplotlib.patches as patches
 from src.viz.factory import COLORS, get_vis_cfg
+from src.viz.group_palette import get_group_color
 import base64
 import math
 import io
@@ -138,13 +139,12 @@ class AreaDiagnosticsPanel(TextElement):
                 group_fee = [h.get("group_mean_fee", []) for h in hist]
 
                 num_groups = len(group_common[0]) if group_common and group_common[0] is not None else 0
-                cmap = plt.get_cmap("tab10")
 
                 for g in range(num_groups):
                     c_series = _series_at(g, group_common)
                     p_series = _series_at(g, group_personal)
                     f_series = _series_at(g, group_fee)
-                    color = cmap(g % 10)
+                    color = get_group_color(g)
 
                     ax2.plot(step_axis, c_series, color=color, label=f"g{g} com")
                     ax2.plot(step_axis, p_series, color=color, linestyle="--", label=f"g{g} pers")
@@ -173,14 +173,13 @@ class AreaDiagnosticsPanel(TextElement):
                 group_delta_a = [h.get("group_mean_delta_rel_abstainers", []) for h in hist]
 
                 num_groups = len(group_turnout[0]) if group_turnout and group_turnout[0] is not None else 0
-                cmap = plt.get_cmap("tab10")
 
                 for g in range(num_groups):
                     t_series = _series_at(g, group_turnout)
                     a_series = _series_at(g, group_assets)
                     dp_series = _series_at(g, group_delta_p)
                     da_series = _series_at(g, group_delta_a)
-                    color = cmap(g % 10)
+                    color = get_group_color(g)
 
                     ax3.plot(step_axis, t_series, color=color, label=f"g{g}")
                     ax4.plot(step_axis, a_series, color=color, label=f"g{g}")
@@ -215,18 +214,17 @@ class AreaDiagnosticsPanel(TextElement):
                 group_dissatisfaction = [h.get("group_mean_dissatisfaction", []) for h in hist]
 
                 num_groups = len(group_altruism[0]) if group_altruism and group_altruism[0] is not None else 0
-                cmap = plt.get_cmap("tab10")
 
                 for g in range(num_groups):
                     a_series = _series_at(g, group_altruism)
                     qp_series = _series_at(g, group_q_p)
                     qa_series = _series_at(g, group_q_a)
                     s_series = _series_at(g, group_dissatisfaction)
-                    color = cmap(g % 10)
+                    color = get_group_color(g)
 
                     ax6.plot(step_axis, a_series, color=color, label=f"g{g}")
                     ax7.plot(step_axis, qp_series, color=color, linestyle=":", label=f"g{g} p")
-                    ax7.plot(step_axis, qa_series, color=color, label=f"g{g} a")
+                    ax7.plot(step_axis, qa_series, color=color, linestyle=":", label=f"g{g} a")
                     ax8.plot(step_axis, s_series, color=color, label=f"g{g}")
 
                 if num_groups <= 10:
@@ -423,7 +421,8 @@ class AreaPersonalityGroupDists(TextElement):
             p_dist = area.personality_group_distribution
             num_agents = area.num_agents
             heights = [int(val * num_agents) for val in p_dist] if p_dist else []
-            bars = ax.bar(range(num_personality_groups), heights, color='skyblue')
+            bar_colors = [get_group_color(i) for i in range(num_personality_groups)]
+            bars = ax.bar(range(num_personality_groups), heights, color=bar_colors)
             max_height = max(heights) if heights else 1
             p_top_height = max_height * 0.02
 
@@ -614,12 +613,17 @@ class CohortElectionLearningDiagnostics(TextElement):
         if show_other:
             labels.append("other")
 
+        group_ids = [int(g) for g in show_groups]
+        if show_other:
+            group_ids.append(-1)
+
         def _mask_for_group(gval):
             return gid == gval
 
         # Aggregate per shown group
         out = {
             "labels": labels,
+            "group_ids": group_ids,
             "eligible": [],
             "participants": [],
             "abstainers": [],
@@ -685,15 +689,17 @@ class CohortElectionLearningDiagnostics(TextElement):
             return ""
 
         labels = stats["labels"]
+        group_ids = stats.get("group_ids", list(range(len(labels))))
         n = len(labels)
         x = np.arange(n)
+        group_colors = [get_group_color(int(g)) for g in group_ids]
 
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12, 7))
 
         # Panel A: participation rate
         ax = axes[0][0]
         rate = stats["rate"]
-        ax.bar(x, np.nan_to_num(rate, nan=0.0), color="gray", alpha=0.85)
+        ax.bar(x, np.nan_to_num(rate, nan=0.0), color=group_colors, alpha=0.85)
         ax.set_ylim(0.0, 1.0)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
@@ -705,8 +711,8 @@ class CohortElectionLearningDiagnostics(TextElement):
         w = 0.4
         dp = stats["delta_p_mean"]
         da = stats["delta_a_mean"]
-        ax.bar(x - w / 2, np.nan_to_num(dp, nan=0.0), width=w, label="participants", color="black", alpha=0.8)
-        ax.bar(x + w / 2, np.nan_to_num(da, nan=0.0), width=w, label="abstainers", color="red", alpha=0.6)
+        ax.bar(x - w / 2, np.nan_to_num(dp, nan=0.0), width=w, label="participants", color=group_colors, alpha=0.8)
+        ax.bar(x + w / 2, np.nan_to_num(da, nan=0.0), width=w, label="abstainers", color=group_colors, alpha=0.4)
         ax.axhline(0.0, color="k", linewidth=0.8)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
@@ -719,9 +725,9 @@ class CohortElectionLearningDiagnostics(TextElement):
         fee_m = stats["fee_mean"]
         common_m = stats["common_mean"]
         pers_m = stats["personal_mean"]
-        ax.bar(x - w, np.nan_to_num(fee_m, nan=0.0), width=w, label="fee (participants)", color="orange", alpha=0.8)
-        ax.bar(x, np.nan_to_num(common_m, nan=0.0), width=w, label="common reward", color="blue", alpha=0.6)
-        ax.bar(x + w, np.nan_to_num(pers_m, nan=0.0), width=w, label="personal reward", color="green", alpha=0.6)
+        ax.bar(x - w, np.nan_to_num(fee_m, nan=0.0), width=w, label="fee (participants)", color=group_colors, alpha=0.8)
+        ax.bar(x, np.nan_to_num(common_m, nan=0.0), width=w, label="common reward", color=group_colors, alpha=0.6)
+        ax.bar(x + w, np.nan_to_num(pers_m, nan=0.0), width=w, label="personal reward", color=group_colors, alpha=0.6)
         ax.axhline(0.0, color="k", linewidth=0.8)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")

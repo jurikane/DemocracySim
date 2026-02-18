@@ -156,16 +156,16 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "participation_init_q": mesa.visualization.Slider(
             name="Participation init q",
             value=model_cfg.participation_init_q,
-            min_value=-50.0,
-            max_value=50.0,
-            step=1.0,
+            min_value=-5.0,
+            max_value=5.0,
+            step=0.1,
         ),
         "participation_q_max": mesa.visualization.Slider(
             name="Participation q clip max",
             value=model_cfg.participation_q_max,
             min_value=0.0,
-            max_value=500.0,
-            step=1.0,
+            max_value=5.0,
+            step=0.1,
         ),
         "bias_toward_participation": mesa.visualization.Slider(
             name="Bias toward participation",
@@ -263,7 +263,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             name="Mutation rate",
             value=model_cfg.mu,
             min_value=0.001,
-            max_value=0.5,
+            max_value=1.0,
             step=0.001,
         ),
         "election_impact_on_mutation": mesa.visualization.Slider(
