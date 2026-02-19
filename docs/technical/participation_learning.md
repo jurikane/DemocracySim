@@ -29,7 +29,7 @@ Participation learning uses the following per-agent state:
 
 - `q_participation` (float): internal propensity value (unbounded, but typically clipped)
 - `participation_baseline` (float): EMA baseline of experienced outcomes (`delta_rel`), initialized as `NaN`
-- `participation_signal` (float): baseline-corrected surprise signal used for the update
+- `participation_signal` (float): **learning signal used for the update** (equals realized `delta_rel`)
 - `participating` (bool): last action in the current election step (set during `_tally_votes`)
 
 And the following per-election outcome signals:
@@ -69,35 +69,31 @@ Design note: additive bias is a simple “civic duty / default norm” knob that
 separable from learning. It can be restricted in the UI (e.g. `[0, 0.5]`) even if the model
 allows a broader conceptual range (e.g. `[-1, 1]`) for controlled baselines.
 
-## Learning Signal: Baseline-Corrected Surprise
+## Learning Signal: Realized Level Outcome
 
 After the election is executed and the agent’s per-election `delta_rel` is computed,
-the model forms a baseline-corrected signal:
-
-If the baseline is uninitialized (first eligible election for the agent):
+the learning signal is:
 
 ```text
-baseline <- delta_rel
-signal   <- 0
+signal <- delta_rel
 ```
-
-Otherwise:
-
-```text
-signal   <- delta_rel - baseline
-baseline <- (1 - participation_baseline_alpha) * baseline
-           + participation_baseline_alpha * delta_rel
-```
-
-Interpretation:
-
-- `signal > 0`: “better than I recently expected”
-- `signal < 0`: “worse than I recently expected”
 
 `participation_baseline_alpha` is an EMA step size:
 
-- `0.0` means baseline never changes (max persistence of surprise)
-- `1.0` means baseline becomes the last observed `delta_rel` immediately (min persistence)
+- `0.0` means baseline never changes
+- `1.0` means baseline becomes the last observed `delta_rel` immediately
+
+Baseline maintenance is still tracked for diagnostics/logging:
+
+```text
+if baseline is NaN:
+    baseline <- delta_rel
+else:
+    baseline <- (1 - participation_baseline_alpha) * baseline
+               + participation_baseline_alpha * delta_rel
+```
+
+`participation_baseline` no longer changes learning behavior; it is an explanatory trace.
 
 ## Participation Update Rule (Reinforce Last Action)
 
@@ -149,7 +145,7 @@ Participation learning knobs (ModelConfig):
 - `participation_init_q` (finite): initial q for all agents
 - `participation_q_max` (>= 0): symmetric clipping bound for q; `0` disables clipping
 - `bias_toward_participation` (in `[-1,1]`): additive probability bias after sigmoid, then clipped to `[0,1]`
-- `participation_baseline_alpha` (in `[0,1]`): EMA step size for the baseline used in the signal
+- `participation_baseline_alpha` (in `[0,1]`): EMA step size for the logged participation baseline trace
 
 Scale note (relative signals):
 
@@ -161,7 +157,7 @@ Practical intuition:
 
 - `alpha` mostly sets “how fast behavior changes”
 - `beta` mostly sets “how decisive q becomes” (low beta ≈ always ~0.5, high beta ≈ near-deterministic)
-- baseline alpha sets “how quickly expectations adapt”; low values can create strong cycles
+- baseline alpha only affects the diagnostic baseline trace, not participation updates
 
 ## Why This Design (Thesis Rationale)
 
@@ -207,8 +203,7 @@ The following tests lock the contract:
   - `tests/test_no_participation_debug_snapshot.py` (no-participation step keeps participation debug semantics consistent)
 - Interaction tests exercising multi-knob behavior under controlled RNG:
   - `tests/test_participation_learning_interactions.py`:
-    - Baseline persistence: shows how `participation_baseline_alpha` changes how long a “surprise” signal persists,
-      and therefore how many subsequent q-updates occur when the learner keeps abstaining.
+    - Level-signal contract: `participation_signal == election_delta_rel` and q-updates are baseline-alpha invariant.
     - Clipping interaction: demonstrates repeated updates drive `q_participation` until it hits `±participation_q_max`.
-    - Beta sensitivity: holds the same learned q change and the same RNG draw fixed, and shows that higher
+    - Beta sensitivity: holds the same q and the same RNG draw fixed, and shows that higher
       `participation_beta` can flip the next participation decision (more sensitivity to q).

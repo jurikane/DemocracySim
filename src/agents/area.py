@@ -267,7 +267,7 @@ class Area(Agent):
         # Check for the case that no agent participated
         if preference_profile.ndim != 2 or preference_profile.shape[0] == 0:
             # Set to previous outcome but don't distribute rewards as usual
-            print("Area", self.unique_id, "no one participated in the election")
+            # print("Area", self.unique_id, "no one participated in the election")
             # If no previous outcome, use the real distribution ordering
             real_color_ord = self._ordering_from_distribution_tie_aware(
                 self.color_distribution,
@@ -300,18 +300,19 @@ class Area(Agent):
         self._distribute_rewards()
 
         # Adaptive participation learning update (eligible agents only)
+        # V1 contract: learning consumes realized level signal (delta_rel),
+        # while EMA baseline is maintained as a diagnostic trace.
         for a in self.agents:
             # Eligible agents are exactly those evaluated in _tally_votes()
             if a.eligible_for_election:
                 delta = float(a.election_delta_rel)
                 if not np.isfinite(a.participation_baseline):
                     a.participation_baseline = delta
-                    a.participation_signal = 0.0  # No surprise on the first experience
                 else:
                     baseline = a.participation_baseline
-                    a.participation_signal = delta - baseline
                     alpha = float(self.model.participation_baseline_alpha)
                     a.participation_baseline = (1.0 - alpha) * baseline + alpha * delta
+                a.participation_signal = delta
                 a.apply_participation_update(a.participation_signal)
         # TODO put those two loops together
         # Adaptive altruism learning update (participant-only, optional)

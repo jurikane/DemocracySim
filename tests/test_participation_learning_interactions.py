@@ -15,6 +15,16 @@ class _AlwaysParticipate:
         return True
 
 
+class _SequenceParticipate:
+    """Deterministic participation sequence for one agent."""
+
+    def __init__(self, seq: list[bool]):
+        self._it = iter([bool(x) for x in seq])
+
+    def decide_participation(self, agent, area) -> bool:  # type: ignore[no-untyped-def]
+        return bool(next(self._it))
+
+
 class _ZeroBallot:
     def score_options(self, agent, area, options) -> np.ndarray:  # type: ignore[no-untyped-def]
         return np.zeros(int(options.shape[0]), dtype=np.float32)
@@ -83,18 +93,9 @@ def _make_two_agent_model_for_participation_learning(**overrides):
 
 
 def test_participation_learning_interaction_baseline_alpha_controls_persistence() -> None:
-    """Interaction: participation_baseline_alpha controls how long a surprise persists.
+    """V1 contract: learning uses level signal (signal == delta_rel).
 
-    Scenario:
-    - Step 1: learner participates => delta_rel = -election_cost_rate
-      baseline initializes to delta1, signal=0 => no q update.
-    - Steps 2-3: learner abstains => delta_rel = 0 each step
-      signal stays positive while baseline remains negative.
-
-    With baseline_alpha=1:
-      baseline jumps to 0 after step2 => step3 signal=0 => only 1 q update total.
-    With baseline_alpha=0:
-      baseline stays at -rate => step2 and step3 signal=+rate => 2 q updates total.
+    Consequence: participation_baseline_alpha must not affect q-updates.
     """
     rate = 0.4
     alpha_q = 1.0
@@ -151,35 +152,37 @@ def test_participation_learning_interaction_baseline_alpha_controls_persistence(
             a.voting_strategy = _ZeroBallot()
         m.voting_agents[1].participation_strategy = _AlwaysParticipate()  # type: ignore[union-attr]
 
-    # Learner uses DefaultParticipationStrategy; drive its actions via fixed draws:
-    # step1: participate, step2-3: abstain.
-    draws = [0.0, 0.999, 0.999]
-    m_fast.np_random = _SeqNpRandom(m_fast.np_random, draws)
-    m_slow.np_random = _SeqNpRandom(m_slow.np_random, draws)
-
     learner_fast = m_fast.voting_agents[0]
     learner_slow = m_slow.voting_agents[0]
     assert learner_fast is not None and learner_slow is not None
-    learner_fast.participation_strategy = DefaultParticipationStrategy()
-    learner_slow.participation_strategy = DefaultParticipationStrategy()
+    # Fixed action path for learner:
+    # step1 participate (delta_rel=-rate), then abstain twice (delta_rel=0).
+    learner_fast.participation_strategy = _SequenceParticipate([True, False, False])
+    learner_slow.participation_strategy = _SequenceParticipate([True, False, False])
 
-    # Run 3 steps.
+    # Run 3 steps and capture level-signal contract.
+    traces_fast: list[tuple[float, float]] = []
+    traces_slow: list[tuple[float, float]] = []
     for _ in range(3):
         m_fast.step()
         m_slow.step()
+        traces_fast.append((float(learner_fast.participation_signal), float(learner_fast.election_delta_rel)))
+        traces_slow.append((float(learner_slow.participation_signal), float(learner_slow.election_delta_rel)))
 
-    # Expected q drift:
-    # step2 update: q -= alpha_q * rate
-    q2 = init_q - alpha_q * rate
-    # step3 update magnitude depends on baseline alpha:
-    # - baseline_alpha=1 => no update on step3
-    # - baseline_alpha=0 => another -alpha_q*rate update
-    assert float(learner_fast.q_participation) == pytest.approx(q2, abs=1e-12)
-    assert float(learner_slow.q_participation) == pytest.approx(q2 - alpha_q * rate, abs=1e-12)
+    # Learning signal must equal realized delta_rel step-wise.
+    for sig, drel in traces_fast + traces_slow:
+        assert sig == pytest.approx(drel, abs=1e-12)
+
+    # q update path is baseline-alpha invariant under V1:
+    # step1: q += alpha_q * (+1) * (-rate) = -rate
+    # step2/3: delta_rel=0 => no further change
+    q_expected = init_q - alpha_q * rate
+    assert float(learner_fast.q_participation) == pytest.approx(q_expected, abs=1e-12)
+    assert float(learner_slow.q_participation) == pytest.approx(q_expected, abs=1e-12)
 
 
 def test_participation_learning_interaction_q_max_clips_under_repeated_surprise() -> None:
-    """Interaction: with persistent positive surprises, q drifts until clipped by q_max."""
+    """Interaction: repeated negative level outcomes are clipped by q_max."""
     rate = 0.2
     alpha_q = 1.0
     q_max = 0.3
@@ -192,17 +195,16 @@ def test_participation_learning_interaction_q_max_clips_under_repeated_surprise(
         participation_alpha=alpha_q,
         participation_init_q=init_q,
         participation_q_max=q_max,
-        participation_baseline_alpha=0.0,  # keep baseline fixed at delta1
+        participation_baseline_alpha=0.0,
     )
 
     learner = model.voting_agents[0]
     assert learner is not None
-    learner.participation_strategy = DefaultParticipationStrategy()
+    learner.participation_strategy = _AlwaysParticipate()
 
-    # step1 participate => baseline=-rate, no update
-    # steps2..6 abstain => signal=+rate every time => q decreases by alpha*rate each step until clipped.
-    draws = [0.0] + [0.999] * 5
-    model.np_random = _SeqNpRandom(model.np_random, draws)
+    # With level signal and always-participate:
+    # each step contributes q += alpha_q * (+1) * (-rate) = -rate.
+    # Over 6 steps this would be -1.2, so clipping at -q_max must activate.
 
     for _ in range(6):
         model.step()
@@ -211,61 +213,35 @@ def test_participation_learning_interaction_q_max_clips_under_repeated_surprise(
 
 
 def test_participation_learning_interaction_beta_amplifies_effect_of_q_change_on_decision() -> None:
-    """Interaction: for the same learned q increase, higher beta can flip the action.
-
-    We create a 2-step sequence where the learner participates twice, and we reduce
-    election_cost_rate to make step2 "better" than step1, yielding a positive signal
-    and a positive q update for a participating agent.
-    """
-    cost1 = 0.4
-    cost2 = 0.0
-    alpha_q = 1.0
-    init_q = 0.0
+    """Interaction: same learned q, different beta -> different participation decision."""
+    q_fixed = 0.4
     b_lo = 0.5
     b_hi = 5.0
-    u3 = 0.7  # between sigmoid(b_lo*q) and sigmoid(b_hi*q) for q ~= 0.4
+    u = 0.7  # between sigmoid(0.5*0.4) and sigmoid(5.0*0.4)
 
     def _mk(beta: float):
         m = _make_two_agent_model_for_participation_learning(
             seed=703,
-            max_steps=3,
-            election_cost_rate=cost1,
-            participation_alpha=alpha_q,
-            participation_init_q=init_q,
+            max_steps=1,
             participation_q_max=1_000.0,
             participation_beta=beta,
             participation_baseline_alpha=1.0,
         )
-        # Force learner to participate on steps 1-2 regardless of p by using u=0.
-        m.np_random = _SeqNpRandom(m.np_random, [0.0, 0.0, u3])
+        m.participation_rng = _SeqNpRandom(m.participation_rng, [u])
         learner = m.voting_agents[0]
         assert learner is not None
         learner.participation_strategy = DefaultParticipationStrategy()
+        learner.q_participation = q_fixed
         return m, learner
 
     m_lo, a_lo = _mk(b_lo)
     m_hi, a_hi = _mk(b_hi)
 
-    # Step 1: high cost => delta_rel = -0.4 (baseline init, signal 0).
+    # Decision differs by beta given same q and same RNG draw.
     m_lo.step()
     m_hi.step()
 
-    # Step 2: reduce cost => delta_rel becomes 0 (better than baseline by +0.4),
-    # participating + positive signal => q increases by +0.4.
-    m_lo.election_cost_rate = cost2
-    m_hi.election_cost_rate = cost2
-    m_lo.step()
-    m_hi.step()
-
-    assert float(a_lo.q_participation) == pytest.approx(0.4, abs=1e-12)
-    assert float(a_hi.q_participation) == pytest.approx(0.4, abs=1e-12)
-
-    # Step 3 decision differs by beta given the same q and the same RNG draw u3.
-    m_lo.step()
-    m_hi.step()
-
-    # With low beta: p ~= sigmoid(0.2) ~ 0.55 => u3=0.7 => abstain.
+    # With low beta: p ~= sigmoid(0.2) ~ 0.55 => u=0.7 => abstain.
     assert bool(a_lo.participating) is False
-    # With high beta: p ~= sigmoid(2.0) ~ 0.88 => u3=0.7 => participate.
+    # With high beta: p ~= sigmoid(2.0) ~ 0.88 => u=0.7 => participate.
     assert bool(a_hi.participating) is True
-

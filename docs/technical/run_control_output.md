@@ -158,3 +158,101 @@ Benchmark-reference note:
   - nash (`KL` geometric-mean reference)
   - egalitarian (`mean + lambda * Gini`, with `lambda` sensitivity)
   - rawlsian (minimax `L2^2`)
+
+## DOE Screening Runner (Phase 1)
+
+Run phase-1 design-of-experiments screening (approval primary + utilitarian robustness):
+
+```bash
+python -m scripts.run_doe --points 48 --seeds 101,202,303
+```
+
+Stratified seed mode (spread-out initial conditions from a candidate pool):
+
+```bash
+python -m scripts.run_doe --points 48 --seed-mode stratified --seed-target 3 --seed-candidate-count 40
+```
+
+Dry-run safety check (writes manifests only, no simulation execution):
+
+```bash
+python -m scripts.run_doe --points 3 --seeds 101,202 --no-robustness --dry-run
+```
+
+Notes:
+
+- Applies the confirmed phase-1 DOE profile (frozen structure + tunable ranges).
+- Default config is `configs/doe.yaml` (override with `--config` if needed).
+- Default output root: `data/simulation_output/doe_<timestamp>/`.
+- Robustness cadence can be reduced with `--robust-every N` or disabled with `--no-robustness`.
+- Batch safety: pass `--continue-on-error` to keep running after per-run failures.
+- Seed selection metadata is written to `doe_seed_selection.json`.
+- Planned run rows are written to `doe_run_manifest.csv` (design/seed/rule/output/params-hash).
+
+## DOE Scoring Pipeline
+
+Score DOE outputs with hard gates + weighted ranking:
+
+```bash
+python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp>
+```
+
+Output artifacts (written to DOE root by default):
+
+- `doe_run_features.csv` (per-run extracted metrics + gate flags)
+- `doe_design_scores.csv` (aggregated per-design ranking table)
+- `doe_scoring_spec.json` (burn-in, thresholds, weights, score formula)
+- `doe_top_designs.json` (top-5 shortlist)
+
+Current hard gates:
+
+- no-pathological collapse (`max_all_abstain_stretch <= 10`)
+- no-early-lock-in (`winner_changes_post_burnin >= 3`)
+- not-too-chaotic (`winner_changes_post_burnin <= 120`)
+- at least one strong windowed separation (`roll20_group_turnout_range_max >= 0.3`)
+- winner-order diversity (`winner_entropy_norm >= 0.25`)
+- reality-distance activity (`dist_nonzero_share >= 0.05`)
+- competitive group dynamics present (`competitive_step_share >= 0.05`)
+- turnout in usable band (`20 <= mean_turnout <= 90`)
+- signal present (`turnout_std >= 0.5` OR `gini_std >= 1.0` OR `dist_std >= 0.02`)
+
+Soft (scored) calibration pressures:
+
+- cross-group divergence pressure is tracked in score via:
+  - `group_turnout_range_mean`
+  - `roll20_group_turnout_range_mean`
+  - `roll20_group_turnout_range_max`
+  - `group_turnout_residual_abs_mean`
+  - `group_participant_abstainer_delta_rel_gap_abs`
+- winner/reality diversity pressure is tracked in score via:
+  - `winner_entropy_norm`
+  - `dist_nonzero_share`
+  - `competitive_step_share`
+- lock-in pressure is still scored via `winner_changes_post_burnin` (in addition to hard minimum + hard maximum gates).
+
+Current aggregate score:
+
+- `score_total = pass_rate * (0.45*quality_mean + 0.35*discriminability + 0.20*seed_robustness)`
+- `quality_mean` currently includes participant-vs-abstainer separation via `participant_abstainer_delta_rel_gap_abs`
+- `quality_mean` also includes group divergence components (`group_turnout_range_mean`, `group_turnout_residual_abs_mean`, `group_participant_abstainer_delta_rel_gap_abs`)
+- `quality_mean` also includes rolling-window divergence (`roll20_group_turnout_range_mean`)
+- if no robustness rule data is present, discriminability is auto-disabled and effective quality/robustness weights are renormalized (recorded in `doe_scoring_spec.json`)
+
+Important semantic note:
+
+- `burn_in_steps` in DOE scoring is only an **analysis warm-up exclusion window** for lock-in/chaos metrics.
+  It does **not** change simulation dynamics, does not reset state, and does not implement burn-in logic in the model.
+- default is `0` (no exclusion); pass `--burn-in-steps N` only if you explicitly want a warm-up window.
+
+## DOE Refinement Report
+
+Build knob-importance + narrowed-range suggestions from DOE outputs:
+
+```bash
+python -m scripts.doe_refine_report --doe-root data/simulation_output/doe_<timestamp>
+```
+
+Outputs:
+
+- `doe_knob_importance.csv` (correlation/effect-size ranking of knobs)
+- `doe_suggested_ranges.json` (next-generation suggested ranges)
