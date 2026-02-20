@@ -35,7 +35,6 @@ def _model_one_area(**overrides):
         max_steps=3,
         # isolate from reward dynamics
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         mu=0.25,
     )

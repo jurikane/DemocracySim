@@ -27,7 +27,6 @@ def _model_one_area(**overrides):
         max_steps=2,
         # isolate altruism from rewards/costs
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         altruism_learning=False,
         altruism_static=0.25,

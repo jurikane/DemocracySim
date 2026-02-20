@@ -10,39 +10,43 @@ distance coupling, fee/reward algebra, and break-even semantics.
   - `src/utils/distance_functions.py`
 - election cost and vote tally:
   - `src/agents/area.py::Area._tally_votes`
-- reward decomposition:
+- reward distribution:
   - `src/agents/area.py::Area._distribute_rewards`
 - per-agent delta application:
   - `src/agents/vote_agent.py::VoteAgent.reward_agent`
 
-## Authoritative Algebra
+## Authoritative Algebra (Binary Quality-Sign Reward)
 
-Per participating agent:
+Per eligible agent:
 
-- `fee = election_cost_rate * assets_pre`
+- `fee = election_cost_rate * assets_pre` (participants only, applied in `reward_agent`)
 
-Common reward component:
+Quality gate:
 
-- `common_coeff = break_even_distance_common - dist_to_reality`
-- `common_component = reward_rate_common * assets * common_coeff`
-- if abstaining: `common_component *= abstention_share`
+- `good_decision = (dist_to_reality <= break_even_distance_common)`
+- `sign = +1 if good_decision else -1`
 
-`dist_to_reality` contract:
+Group distance to election outcome:
 
-- uses tie-aware conversion of real color distributions
-- ties are resolved by:
-  - reference to `voted_ordering` when available (deterministic, no reward-path RNG)
-  - unbiased RNG tie-break only when no reference ordering exists
-- avoids option-id bias in tie handling
+- `group_dst_to_outcome = dist(personality_group, voted_ordering)` in `[0,1]`
 
-Personal reward component:
+Reward factor:
 
-- `pers_coeff = break_even_distance_personal - personality_distance`
-- `personal_component = reward_rate_personal * assets * pers_coeff`
+- if `good_decision`: `factor = 1 - group_dst_to_outcome`
+- else: `factor = group_dst_to_outcome`
+
+Unified reward amount:
+
+- `reward_amount = sign * reward_rate_personal * factor * assets_pre`
+
+Internal component mapping (schema compatibility):
+
+- `reward_personal_component = reward_amount`
+- `reward_common_component = 0.0`
 
 Per-election raw absolute delta:
 
-- `raw_delta_abs = common_component + personal_component - fee`
+- `raw_delta_abs = reward_amount - fee`
 
 Relative learning signal input:
 
@@ -52,7 +56,7 @@ Relative learning signal input:
 
 Asset update order (as implemented):
 
-1. compute `raw_delta_abs` from reward components and fee
+1. compute `raw_delta_abs` from reward amount and fee
 2. compute `assets_post = max(0.0, assets_pre + raw_delta_abs)`
 3. compute realized `delta_abs = assets_post - assets_pre`
 4. compute `delta_rel` from realized `delta_abs` and `assets_pre`
@@ -62,20 +66,20 @@ Learning consumption contract:
 
 - participation learning consumes realized `delta_rel`
 
+`dist_to_reality` contract:
+
+- uses tie-aware conversion of real color distributions
+- ties are resolved by:
+  - reference to `voted_ordering` when available (deterministic, no reward-path RNG)
+  - unbiased RNG tie-break only when no reference ordering exists
+- avoids option-id bias in tie handling
+
 ## Knob Semantics
 
 - `distance_idx`: distance function used in election/reward paths
 - `election_cost_rate`: participation fee rate (fraction of current assets)
-- `reward_rate_common`: scaling rate for common component
-- `reward_rate_personal`: scaling rate for personal component
-- `break_even_distance_common`: sign pivot for common component
-- `break_even_distance_personal`: sign pivot for personal component
-- `abstention_share`: fraction of common component paid to abstainers
-
-Interpretation of break-even distances:
-
-- distance `< break_even` => positive coefficient (reward)
-- distance `> break_even` => negative coefficient (penalty)
+- `reward_rate_personal`: unified reward/punishment rate
+- `break_even_distance_common`: quality threshold for sign switch
 
 ## No-Participation Semantics
 
@@ -86,7 +90,7 @@ Interpretation of break-even distances:
 ## Risk Addressed by Contracts
 
 - Guardrails protect turnout/inequality dynamics from arithmetic drift in the fee/reward path.
-- Break-even semantics are locked so adaptation does not silently flip from reward- to penalty-dominated behavior.
+- Quality-sign semantics are explicit and test-locked.
 - Logging consistency checks prevent analysis from using plausible-looking but semantically wrong fee/reward traces.
 
 ## Test Coverage (What Is Locked By Pytests)
@@ -96,19 +100,13 @@ Distance and normalization:
 - `tests/test_distance_idx_contract.py`
 - `tests/test_distance_function_semantics_contract.py`
 
-Fee and reward knobs:
+Fee/reward pipeline:
 
 - `tests/test_election_cost_rate_contract.py`
-- `tests/test_reward_rate_common_contract.py`
-- `tests/test_reward_rate_personal_contract.py`
-- `tests/test_break_even_distance_common_contract.py`
-- `tests/test_break_even_distance_personal_strong_contract.py`
-- `tests/test_abstention_share_contract.py`
-
-Pipeline visibility / fail-loud checks:
-
-- `tests/test_output_pipeline_contract.py`
+- `tests/test_reward_binary_quality_contract.py`
+- `tests/test_removed_reward_knobs_contract.py`
 - `tests/test_relative_delta_signal_computed_pre_asset_update.py`
+- `tests/test_cp17_agent_causal_logging.py`
 
 ## Risk-Flag Rule (Development Policy)
 

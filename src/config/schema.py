@@ -18,12 +18,9 @@ class ModelConfig(StrictBaseModel):
     rule_idx: int          # Index of the voting rule to use
     distance_idx: int      # Index of the distance function to use
 
-    # --- Reward magnitude scaling (v2 economics) ---
-    reward_rate_common: float = 0.0  # Common reward magnitude as a fraction of agent assets (0..1)
-    reward_rate_personal: float = 0.0  # Personal reward magnitude as a fraction of agent assets (0..1)
-    break_even_distance_common: float = 0.5  # Common coeff = break_even - dist_to_reality
-    break_even_distance_personal: float = 0.5  # Personal coeff = break_even - dist(personality, elected)
-    abstention_share: float = 1.0  # Share of common reward given to abstainers (0..1)
+    # --- Reward knobs (binary quality-sign economics) ---
+    reward_rate_personal: float = 0.0  # Reward/punishment magnitude as a fraction of agent assets (0..1)
+    break_even_distance_common: float = 0.5  # Quality threshold against dist_to_reality
 
     # --- Adaptive participation learning (schema v2 thesis) ---
     participation_alpha: float = 0.05

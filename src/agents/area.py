@@ -467,12 +467,19 @@ class Area(Agent):
 
     def _distribute_rewards(self) -> None:
         """
-        Calculates and distributes rewards (or penalties) to agents based on outcomes.
+        Calculates and distributes per-election rewards/punishments.
 
-        Contract (economics v2):
-        - Signs are determined by distances in [0,1] mapped via (break-even - d)
-        - Magnitudes are scaled by agent wealth via model.reward_rate_* (0..1)
-        - Fee pool is tracked as a statistic but no longer sets reward magnitude
+        Binary quality-sign contract:
+        - Decision quality gate:
+            good if dist_to_reality <= break_even_distance_common, else bad
+        - Unified reward rate:
+            reward_rate_personal (fraction of current assets)
+        - Group distance factor:
+            group_dst_to_outcome = dist(personality_group, voted_ordering) in [0,1]
+        - Reward rule:
+            if good: reward = +(1 - group_dst_to_outcome) * reward_rate * assets_pre
+            if bad:  reward = -(group_dst_to_outcome)     * reward_rate * assets_pre
+        - Election fee remains separate and participant-only in _tally_votes()/reward_agent().
         """
         dist_func = self.model.distance_func
         # Calculate the distance to the real distribution using distance_func in [0,1]
@@ -485,27 +492,25 @@ class Area(Agent):
         self._dist_to_reality = dist_func(
             real_color_ord, self.voted_ordering, search_pairs
         )
-        # Common component coefficient shared across agents
-        common_coeff = (self.model.break_even_distance_common - float(self.dist_to_reality))
-        # Model-wide reward rates for scaling rewards/penalties by agent wealth
-        reward_rate_common = self.model.reward_rate_common
-        reward_rate_personal = self.model.reward_rate_personal
-        abstention_share = self.model.abstention_share
-        for a in self.agents:
-            # Personal reward uses the canonical agent preference ordering.
-            p = dist_func(a.personality_group, self.voted_ordering, search_pairs)
-            pers_coeff = (self.model.break_even_distance_personal - p)
+        quality_threshold = float(self.model.break_even_distance_common)
+        decision_good = float(self.dist_to_reality) <= quality_threshold + 1e-12
+        sign = 1.0 if decision_good else -1.0
+        reward_rate = float(self.model.reward_rate_personal)
 
-            # Absolute rewards/penalties in asset units
-            scale_common = reward_rate_common * a.assets  # Scale by current wealth
-            scale_personal = reward_rate_personal * a.assets
-            pers_component = pers_coeff * scale_personal
-            common_component = common_coeff * scale_common
-            if not a.participating:
-                common_component *= abstention_share
-            # Save and apply rewards/penalties to the agent.
-            a.add_personal_reward(pers_component)
-            a.add_common_reward(common_component)
+        for a in self.agents:
+            # group_dst_to_outcome: canonical personality-group distance to elected ordering
+            group_dst_to_outcome = float(dist_func(a.personality_group, self.voted_ordering, search_pairs))
+            group_dst_to_outcome = float(np.clip(group_dst_to_outcome, 0.0, 1.0))
+            if decision_good:
+                reward_factor = 1.0 - group_dst_to_outcome
+            else:
+                reward_factor = group_dst_to_outcome
+            reward_amount = sign * reward_rate * reward_factor * float(a.assets)
+
+            # Keep component fields stable in schema-v2:
+            # unified reward is carried in personal component, common component is zero.
+            a.add_personal_reward(reward_amount)
+            a.add_common_reward(0.0)
             a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
 
     @staticmethod
@@ -754,11 +759,8 @@ class Area(Agent):
             "winning_option": int(
                 aggregated[0]) if aggregated is not None and len(
                 aggregated) > 0 else None,
-            "break_even_distance_common": float(self.model.break_even_distance_common),
-            "break_even_distance_personal": float(self.model.break_even_distance_personal),
-            "reward_rate_common": float(self.model.reward_rate_common),
-            "reward_rate_personal": float(self.model.reward_rate_personal),
-            "abstention_share": float(self.model.abstention_share),
+            "quality_threshold_common": float(self.model.break_even_distance_common),
+            "reward_rate": float(self.model.reward_rate_personal),
             "agents": [self._snapshot_agent(a) for a in agents],
         }
 

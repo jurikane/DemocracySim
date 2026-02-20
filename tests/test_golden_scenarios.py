@@ -14,7 +14,6 @@ def _run_scenario(
     label: str,
     bias: float,
     election_cost_rate: float,
-    reward_rate_common: float,
     reward_rate_personal: float,
     num_steps: int = 12,
     run_seed_base: int = 7300,
@@ -34,7 +33,6 @@ def _run_scenario(
     cfg.model.altruism_learning = False
 
     cfg.model.election_cost_rate = float(election_cost_rate)
-    cfg.model.reward_rate_common = float(reward_rate_common)
     cfg.model.reward_rate_personal = float(reward_rate_personal)
 
     out_dir = tmp_path / label
@@ -57,7 +55,6 @@ def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
             label="low_bias",
             bias=-0.35,
             election_cost_rate=0.0,
-            reward_rate_common=0.0,
             reward_rate_personal=0.0,
         )
         neutral = _run_scenario(
@@ -65,7 +62,6 @@ def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
             label="neutral_bias",
             bias=0.0,
             election_cost_rate=0.0,
-            reward_rate_common=0.0,
             reward_rate_personal=0.0,
         )
         high = _run_scenario(
@@ -73,7 +69,6 @@ def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
             label="high_bias",
             bias=0.35,
             election_cost_rate=0.0,
-            reward_rate_common=0.0,
             reward_rate_personal=0.0,
         )
         economy = _run_scenario(
@@ -81,7 +76,6 @@ def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
             label="economy_cost_only",
             bias=0.0,
             election_cost_rate=0.05,
-            reward_rate_common=0.0,
             reward_rate_personal=0.0,
         )
 

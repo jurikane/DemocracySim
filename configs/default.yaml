@@ -1,11 +1,8 @@
 model:
   # Elections
   election_cost_rate: 0.01  # As fraction of common assets
-  reward_rate_common: 0.02
   reward_rate_personal: 0.02
   break_even_distance_common: 0.25 # Default should be below 0.5 (because collective guessing is good)
-  break_even_distance_personal: 0.5  # Default should be 0.5
-  abstention_share: 1.0
   election_impact_on_mutation: 1.8
   mu: 0.05
   rule_idx: 0

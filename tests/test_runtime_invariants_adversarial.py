@@ -110,11 +110,8 @@ def _assert_runtime_invariants(model) -> None:
             av_area_width=5,
             area_size_variance=0.0,
             election_cost_rate=0.3,
-            reward_rate_common=0.35,
             reward_rate_personal=0.35,
             break_even_distance_common=0.25,
-            break_even_distance_personal=0.5,
-            abstention_share=0.0,
         ),
         # Strong learning dynamics.
         dict(
@@ -186,11 +183,8 @@ def test_runtime_invariants_hold_under_adversarial_seed_sweep(overrides: dict) -
                 av_area_width=8,
                 area_size_variance=0.35,
                 election_cost_rate=0.25,
-                reward_rate_common=0.3,
                 reward_rate_personal=0.3,
                 break_even_distance_common=0.2,
-                break_even_distance_personal=0.5,
-                abstention_share=0.5,
                 mu=0.8,
             ),
         ),

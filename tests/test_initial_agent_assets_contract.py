@@ -72,7 +72,6 @@ def test_initial_agent_assets_integration_logged_assets_scale_with_per_agent_val
         area_size_variance=0.0,
         max_steps=1,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
     m1, _ = create_test_model(**base_kwargs, initial_agent_assets=100.0)

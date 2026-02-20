@@ -46,7 +46,6 @@ def _make_model_one_area_for_altruism(**overrides):
         known_cells=0,  # avoid RNG usage in knowledge sampling
         mu=0.0,  # avoid mutation effects
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         max_steps=10,
         altruism_learning=True,
@@ -155,7 +154,6 @@ def test_altruism_learning_interaction_satisfaction_mode_changes_update_when_glo
         mu=0.0,
         max_steps=2,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         altruism_learning=True,
         altruism_init=0.5,

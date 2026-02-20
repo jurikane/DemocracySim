@@ -61,7 +61,6 @@ def test_population_preference_knobs_interaction_end_to_end(tmp_path):
         num_colors=4,
         max_steps=1,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         initial_agent_assets=100.0,
     )

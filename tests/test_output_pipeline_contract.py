@@ -90,7 +90,6 @@ def test_votes_logger_does_not_mask_missing_estimate_with_zeros(tmp_path: Path) 
         num_agents=5,
         num_colors=3,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
 
@@ -135,7 +134,6 @@ def test_area_snapshot_missing_required_fields_fails_loudly(tmp_path: Path) -> N
         num_agents=5,
         num_colors=3,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
     area = model.areas[0]

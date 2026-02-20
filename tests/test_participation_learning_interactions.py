@@ -73,11 +73,8 @@ def _make_two_agent_model_for_participation_learning(**overrides):
         mu=0.0,  # avoid mutation effects
         max_steps=10,
         # isolate participation learning by default
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         break_even_distance_common=0.5,
-        break_even_distance_personal=0.5,
-        abstention_share=0.0,
     )
     base.update(overrides)
     model, _ = create_test_model(**base)
@@ -115,7 +112,6 @@ def test_participation_learning_interaction_baseline_alpha_controls_persistence(
         mu=0.0,
         max_steps=3,
         election_cost_rate=rate,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         participation_alpha=alpha_q,
         participation_init_q=init_q,
@@ -136,7 +132,6 @@ def test_participation_learning_interaction_baseline_alpha_controls_persistence(
         mu=0.0,
         max_steps=3,
         election_cost_rate=rate,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         participation_alpha=alpha_q,
         participation_init_q=init_q,

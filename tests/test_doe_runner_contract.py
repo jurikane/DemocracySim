@@ -24,15 +24,15 @@ def test_sample_design_points_respects_rate_sum_constraint() -> None:
     assert len(points) == 40
     for p in points:
         assert "participation_baseline_alpha" not in p
-        s = float(p["election_cost_rate"] + p["reward_rate_common"] + p["reward_rate_personal"])
+        s = float(p["election_cost_rate"] + p["reward_rate_personal"])
         assert s <= 0.9 + 1e-12
 
 
 def test_build_run_plan_primary_plus_robust_every_2(tmp_path: Path) -> None:
     points = [
-        {"election_cost_rate": 0.01, "reward_rate_common": 0.02, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "break_even_distance_personal": 0.6, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
-        {"election_cost_rate": 0.01, "reward_rate_common": 0.02, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "break_even_distance_personal": 0.6, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
-        {"election_cost_rate": 0.01, "reward_rate_common": 0.02, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "break_even_distance_personal": 0.6, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
+        {"election_cost_rate": 0.01, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
+        {"election_cost_rate": 0.01, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
+        {"election_cost_rate": 0.01, "reward_rate_personal": 0.03, "break_even_distance_common": 0.2, "election_impact_on_mutation": 1.0, "mu": 0.3, "participation_alpha": 0.05, "participation_beta": 1.0, "participation_init_q": 0.0, "altruism_static": 0.5},
     ]
     seeds = [101, 202]
     plan = build_run_plan(
@@ -54,10 +54,8 @@ def test_apply_doe_overrides_sets_frozen_and_run_controls() -> None:
     cfg = load_config("test_small.yaml")
     params = {
         "election_cost_rate": 0.07,
-        "reward_rate_common": 0.05,
         "reward_rate_personal": 0.04,
         "break_even_distance_common": 0.25,
-        "break_even_distance_personal": 0.7,
         "election_impact_on_mutation": 2.5,
         "mu": 0.8,
         "participation_alpha": 0.1,
@@ -82,10 +80,8 @@ def test_write_design_manifest_writes_spec_and_csv(tmp_path: Path) -> None:
     points = [
         {
             "election_cost_rate": 0.01,
-            "reward_rate_common": 0.02,
             "reward_rate_personal": 0.03,
             "break_even_distance_common": 0.2,
-            "break_even_distance_personal": 0.6,
             "election_impact_on_mutation": 1.0,
             "mu": 0.3,
             "participation_alpha": 0.05,
@@ -168,10 +164,8 @@ def test_write_run_manifest(tmp_path: Path) -> None:
         design_points=[
             {
                 "election_cost_rate": 0.01,
-                "reward_rate_common": 0.02,
                 "reward_rate_personal": 0.03,
                 "break_even_distance_common": 0.2,
-                "break_even_distance_personal": 0.6,
                 "election_impact_on_mutation": 1.0,
                 "mu": 0.3,
                 "participation_alpha": 0.05,

@@ -20,10 +20,8 @@ RULE_LABELS = {
 # Phase-1 DOE ranges (confirmed)
 DEFAULT_DOE_RANGES: dict[str, tuple[float, float]] = {
     "election_cost_rate": (0.001, 0.10),
-    "reward_rate_common": (0.00, 0.12),
     "reward_rate_personal": (0.00, 0.30),
     "break_even_distance_common": (0.15, 0.45),
-    "break_even_distance_personal": (0.45, 0.85),
     "election_impact_on_mutation": (1.0, 3.0),
     "mu": (0.15, 1.00),
     "participation_alpha": (0.01, 0.20),
@@ -36,7 +34,6 @@ DEFAULT_DOE_RANGES: dict[str, tuple[float, float]] = {
 # Frozen model settings for DOE phase-1
 DEFAULT_FROZEN_MODEL: dict[str, Any] = {
     "distance_idx": 0,
-    "abstention_share": 1.0,
     "participation_q_max": 2.0,
     "bias_toward_participation": 0.0,
     "altruism_learning": False,
@@ -51,8 +48,8 @@ DEFAULT_FROZEN_MODEL: dict[str, Any] = {
     "heterogeneity": 0.3,
     "known_cells": 10,
     "personal_preference_peakedness": 1.0,
-    "num_agents": 120,
-    "num_colors": 5,
+    "num_agents": 100,
+    "num_colors": 4,
     "num_personality_groups": 4,
     "height": 30,
     "width": 50,
@@ -111,7 +108,6 @@ def sample_design_points(
 def _passes_rate_sum_constraint(p: dict[str, float]) -> bool:
     return (
         float(p["election_cost_rate"])
-        + float(p["reward_rate_common"])
         + float(p["reward_rate_personal"])
         <= 0.9
     )
@@ -303,7 +299,7 @@ def write_design_manifest(
         "ranges": {k: [float(v[0]), float(v[1])] for k, v in DEFAULT_DOE_RANGES.items()},
         "frozen_model": dict(DEFAULT_FROZEN_MODEL),
         "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
-        "constraint": "election_cost_rate + reward_rate_common + reward_rate_personal <= 0.9",
+        "constraint": "election_cost_rate + reward_rate_personal <= 0.9",
     }
     (out_root / "doe_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
 

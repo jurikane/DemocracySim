@@ -129,11 +129,8 @@ class AreaAgentDebugPanel(TextElement):
             lines.append(f"Actual color distribution: {self._fmt_value(rec.get('real_color_distribution'))}")
         lines.append(
             "Rewards: "
-            f"rate_common={self._fmt_value(rec.get('reward_rate_common'))} "
-            f"rate_personal={self._fmt_value(rec.get('reward_rate_personal'))} "
-            f"thr_common={self._fmt_value(rec.get('break_even_distance_common'))} "
-            f"thr_personal={self._fmt_value(rec.get('break_even_distance_personal'))} "
-            f"abstention_share={self._fmt_value(rec.get('abstention_share'))}"
+            f"quality_threshold={self._fmt_value(rec.get('quality_threshold_common'))} "
+            f"reward_rate={self._fmt_value(rec.get('reward_rate'))}"
         )
 
         #pref = rec.get("preference_profile") or []

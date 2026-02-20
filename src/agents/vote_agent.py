@@ -394,8 +394,8 @@ class VoteAgent(Agent):
         - participating + negative signal => q down
         - abstained     + negative signal => q up
 
-        Note: participation_signal is baseline-corrected (delta_rel - EMA baseline).
-        With baseline alpha = 1.0, the signal equals last-step delta.
+        Note: participation_signal is the realized level signal (delta_rel).
+        The EMA baseline is tracked for diagnostics only.
         """
         alpha = self.model.participation_alpha
         sign = 1.0 if self._participating else -1.0

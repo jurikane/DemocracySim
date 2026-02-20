@@ -102,7 +102,6 @@ def test_known_cells_integration_logged_vote_confidence_scales(tmp_path):
         area_size_variance=0.0,
         max_steps=1,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
     m0, _ = create_test_model(**base_kwargs, known_cells=0)

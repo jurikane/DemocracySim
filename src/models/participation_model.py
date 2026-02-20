@@ -299,11 +299,8 @@ class ParticipationModel(mesa.Model):
         rule_idx,
         distance_idx,
         election_cost_rate,
-        reward_rate_common,
         reward_rate_personal,
         break_even_distance_common,
-        break_even_distance_personal,
-        abstention_share,
         num_colors: int,
     ) -> None:
         """Validate and assign voting-rule, distance, and reward knobs."""
@@ -318,11 +315,8 @@ class ParticipationModel(mesa.Model):
         self.voting_rule_implementation_name = vr_i_name
 
         self.election_cost_rate = is_rate_btw_0_and_1(election_cost_rate)
-        self.reward_rate_common = is_rate_btw_0_and_1(reward_rate_common)
         self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
         self.break_even_distance_common = is_rate_btw_0_and_1(break_even_distance_common)
-        self.break_even_distance_personal = is_rate_btw_0_and_1(break_even_distance_personal)
-        self.abstention_share = is_rate_btw_0_and_1(abstention_share)
 
         self.distance_idx = distance_idx
         dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
@@ -385,11 +379,8 @@ class ParticipationModel(mesa.Model):
         rule_idx,
         distance_idx,
         election_cost_rate,
-        reward_rate_common: float = 0.0,
         reward_rate_personal: float = 0.0,
         break_even_distance_common: float = 0.5,
-        break_even_distance_personal: float = 0.5,
-        abstention_share: float = 1.0,
         seed=None,
         max_steps: Optional[int] = None,
         participation_alpha: float = 0.05,
@@ -498,11 +489,8 @@ class ParticipationModel(mesa.Model):
             rule_idx=rule_idx,
             distance_idx=distance_idx,
             election_cost_rate=election_cost_rate,
-            reward_rate_common=reward_rate_common,
             reward_rate_personal=reward_rate_personal,
             break_even_distance_common=break_even_distance_common,
-            break_even_distance_personal=break_even_distance_personal,
-            abstention_share=abstention_share,
             num_colors=num_colors,
         )
         # Create search pairs once for faster iterations when comparing orderings

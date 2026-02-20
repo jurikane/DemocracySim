@@ -45,7 +45,6 @@ def test_election_cost_rate_charges_only_participants_and_updates_fee_pool() -> 
     model = _model_all_agents_in_one_area(
         seed=123,
         election_cost_rate=rate,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
 
@@ -82,7 +81,6 @@ def test_election_cost_rate_zero_means_no_fee_pool_and_no_asset_change_from_fee(
     model = _model_all_agents_in_one_area(
         seed=321,
         election_cost_rate=0.0,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
     )
     for a in model.voting_agents:
@@ -108,7 +106,6 @@ def test_election_cost_rate_allows_fractional_fees_no_minimum_fee_regression() -
         seed=999,
         num_agents=1,
         election_cost_rate=rate,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         max_steps=1,
     )
@@ -137,7 +134,6 @@ def test_area_steps_logs_fee_pool(tmp_path: Path) -> None:
     model = _model_all_agents_in_one_area(
         seed=777,
         election_cost_rate=rate,
-        reward_rate_common=0.0,
         reward_rate_personal=0.0,
         max_steps=1,
     )
