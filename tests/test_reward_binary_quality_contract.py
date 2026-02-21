@@ -93,8 +93,7 @@ def test_binary_quality_good_decision_reward_formula_oracle() -> None:
     for a in area.agents:
         group_dst_to_outcome = float(dist_func(a.personality_group, elected, pairs))
         expected_reward = (1.0 - group_dst_to_outcome) * rate * assets_pre[a.unique_id]
-        assert float(a.reward_common_component) == pytest.approx(0.0, abs=1e-12)
-        assert float(a.reward_personal_component) == pytest.approx(expected_reward, abs=1e-9)
+        assert float(a.reward_personal) == pytest.approx(expected_reward, abs=1e-9)
         assert float(a.election_delta_abs) == pytest.approx(expected_reward, abs=1e-9)
 
 
@@ -121,8 +120,7 @@ def test_binary_quality_bad_decision_reward_formula_oracle() -> None:
     for a in area.agents:
         group_dst_to_outcome = float(dist_func(a.personality_group, elected, pairs))
         expected_reward = -(group_dst_to_outcome * rate * assets_pre[a.unique_id])
-        assert float(a.reward_common_component) == pytest.approx(0.0, abs=1e-12)
-        assert float(a.reward_personal_component) == pytest.approx(expected_reward, abs=1e-9)
+        assert float(a.reward_personal) == pytest.approx(expected_reward, abs=1e-9)
         assert float(a.election_delta_abs) == pytest.approx(expected_reward, abs=1e-9)
 
 
@@ -180,8 +178,7 @@ def test_binary_quality_reward_rate_linear_metamorphic() -> None:
     # Compare one agent with non-zero reward under good-decision branch.
     g1 = a1.agents[0]
     g2 = a2.agents[0]
-    rwd1 = float(g1.reward_personal_component)
-    rwd2 = float(g2.reward_personal_component)
+    rwd1 = float(g1.reward_personal)
+    rwd2 = float(g2.reward_personal)
     assert rwd1 > 0.0
     assert (rwd2 / rwd1) == pytest.approx(ratio, rel=1e-10, abs=1e-12)
-

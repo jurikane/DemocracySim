@@ -5,24 +5,20 @@ what is updated, when it is updated, and why the model is designed this way.
 
 ## What “Altruism” Means in This Model
 
-Each agent has an `altruism_factor` in (typically) `[0,1]` which controls how the agent forms the
-ballot target for voting:
+Each agent has an `altruism_factor` in `[0,1]` that controls **vote mode switching**:
 
-- low altruism ⇒ the agent votes mainly according to personal preference (`personal_opt_dist`)
-- high altruism ⇒ the agent votes mainly according to perceived societal reality (`est_real_dist`)
+- with probability `altruism_factor`: vote **altruistically** (reality-tracking)
+- with probability `1 - altruism_factor`: vote **self-regardingly** (personality-ordering)
 
-In the default voting strategy, altruism is used to mix distributions:
+Default voting strategy:
 
-```text
-target_dist = mix(altruism_factor, est_real_dist, personal_opt_dist)
-```
-
-Then `target_dist` is converted to a target ordering, and options are scored by ordering-distance.
+- self-regarding mode: returns precomputed static oppose-scores from the agent’s `personality_group` ordering
+- altruistic mode: estimates area distribution, converts to ordering, then scores options by ordering-distance
 
 Code references:
 
-- Distribution mixing: `src/utils/ballots.py::mix_distributions`
 - Default voting: `src/agents/strategies.py::DefaultVotingStrategy.score_options`
+- Agent-held self-regarding scores: `src/agents/vote_agent.py::VoteAgent.self_regarding_oppose_scores`
 
 ## Where It Happens (Runtime Path)
 
@@ -108,12 +104,12 @@ Design choices:
 
 - **Participant-only**: only those who “acted” (voted) adapt their reality-weight this step.
 - **Linear update**: intentionally simple and auditable (fits thesis scope).
-- **Clipping**: prevents runaway values and keeps the mixing interpretation well-defined.
+- **Clipping**: prevents runaway values and keeps the mode-probability interpretation well-defined.
 
 Practical intuition:
 
-- If dissatisfaction is higher than expected (`signal > 0`), altruism increases (agents shift weight toward reality-tracking).
-- If dissatisfaction is lower than expected (`signal < 0`), altruism decreases (agents shift weight toward self-interest).
+- If dissatisfaction is higher than expected (`signal > 0`), altruism increases (higher probability of altruistic votes).
+- If dissatisfaction is lower than expected (`signal < 0`), altruism decreases (higher probability of self-regarding votes).
 
 Whether this produces stable dynamics depends on the dissatisfaction signal statistics and `altruism_alpha`.
 

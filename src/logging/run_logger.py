@@ -292,6 +292,9 @@ class RunLoggerV2:
         votes_df = pd.DataFrame(self._votes_rows)
         if votes_df.empty:
             votes_df = self._empty_votes_df()
+        elif "voted_altruistically" in votes_df.columns:
+            # Keep explicit tri-state boolean semantics (True/False/<NA>).
+            votes_df["voted_altruistically"] = votes_df["voted_altruistically"].astype("boolean")
 
         # Validate before writing (helps fail fast during development)
         validate_steps_df(steps_df)
@@ -318,6 +321,7 @@ class RunLoggerV2:
             "agent_id": pd.Series(dtype="int32"),
             "participating": pd.Series(dtype="boolean"),
             "confidence": pd.Series(dtype="float32"),
+            "voted_altruistically": pd.Series(dtype="boolean"),
             "rank_1_option_id": pd.Series(dtype="Int32"),
             "rank_1_oppose_score": pd.Series(dtype="float32"),
             "rank_2_option_id": pd.Series(dtype="Int32"),
@@ -500,8 +504,7 @@ class RunLoggerV2:
                     "eligible_for_election": bool(a.eligible_for_election),
                     "participating": bool(a.participating),
                     "election_fee": np.float32(float(a.election_fee)),
-                    "reward_common_component": np.float32(float(a.reward_common_component)),
-                    "reward_personal_component": np.float32(float(a.reward_personal_component)),
+                    "reward_personal": np.float32(float(a.reward_personal)),
                     "election_delta_abs": np.float32(float(a.election_delta_abs)),
                     "election_delta_rel": np.float32(float(a.election_delta_rel)),
                     "participation_baseline": np.float32(float(a.participation_baseline)),
@@ -514,8 +517,16 @@ class RunLoggerV2:
             )
         return rows
 
-    def _on_vote(self, *, area: Area, agent: VoteAgent, oppose_scores: np.ndarray,
-        est_dist: np.ndarray, confidence: float) -> None:
+    def _on_vote(
+        self,
+        *,
+        area: Area,
+        agent: VoteAgent,
+        oppose_scores: np.ndarray,
+        est_dist: np.ndarray,
+        confidence: float,
+        voted_altruistically: bool | None = None,
+    ) -> None:
         """Receive one participant vote and append a schema v2 vote row."""
         if self._current_step is None:
             return
@@ -542,6 +553,9 @@ class RunLoggerV2:
             "agent_id": np.int32(agent_id),
             "participating": bool(participating),
             "confidence": np.float32(0.0 if confidence is None else float(confidence)),
+            "voted_altruistically": (
+                bool(voted_altruistically) if isinstance(voted_altruistically, bool) else pd.NA
+            ),
             "rank_1_option_id": pd.NA,
             "rank_1_oppose_score": np.float32(np.nan),
             "rank_2_option_id": pd.NA,

@@ -134,19 +134,16 @@ class AreaDiagnosticsPanel(TextElement):
             if hist:
                 hist_len = len(hist)
                 step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
-                group_common = [h.get("group_mean_common_reward", []) for h in hist]
                 group_personal = [h.get("group_mean_personal_reward", []) for h in hist]
                 group_fee = [h.get("group_mean_fee", []) for h in hist]
 
-                num_groups = len(group_common[0]) if group_common and group_common[0] is not None else 0
+                num_groups = len(group_personal[0]) if group_personal and group_personal[0] is not None else 0
 
                 for g in range(num_groups):
-                    c_series = _series_at(g, group_common)
                     p_series = _series_at(g, group_personal)
                     f_series = _series_at(g, group_fee)
                     color = get_group_color(g)
 
-                    ax2.plot(step_axis, c_series, color=color, label=f"g{g} com")
                     ax2.plot(step_axis, p_series, color=color, linestyle="--", label=f"g{g} pers")
                     ax2.plot(step_axis, f_series, color=color, linestyle=":", label=f"g{g} fee")
 
@@ -527,7 +524,7 @@ class CohortElectionLearningDiagnostics(TextElement):
     Per personality_group (cohort), we compute (eligible agents only):
       - counts + participation_rate
       - mean/median delta for participants vs abstainers
-      - mean fee (participants), mean common reward, mean personal reward
+      - mean fee (participants), mean personal reward
       - optional: mean altruism_factor, mean participation_probability
 
     Plot layout:
@@ -569,8 +566,7 @@ class CohortElectionLearningDiagnostics(TextElement):
             participated = a.participating
             delta = a.election_delta_abs
             fee = getattr(a, "_fee")
-            common = getattr(a, "_reward_common_comp")
-            personal = getattr(a, "_reward_pers_comp")
+            personal = float(getattr(a, "reward_personal", 0.0))
             altruism = float(a.altruism_factor)
             try:
                 p_part = float(a.participation_probability())
@@ -578,7 +574,7 @@ class CohortElectionLearningDiagnostics(TextElement):
                 p_part = float("nan")
 
             rows.append(
-                (gid_i, participated, delta, fee, common, personal, altruism, p_part)
+                (gid_i, participated, delta, fee, personal, altruism, p_part)
             )
 
         if not rows:
@@ -589,10 +585,9 @@ class CohortElectionLearningDiagnostics(TextElement):
         participated = arr[:, 1].astype(bool)
         delta = arr[:, 2]
         fee = arr[:, 3]
-        common = arr[:, 4]
-        personal = arr[:, 5]
-        altruism = arr[:, 6]
-        p_part = arr[:, 7]
+        personal = arr[:, 4]
+        altruism = arr[:, 5]
+        p_part = arr[:, 6]
 
         # Determine groups to show
         unique_g, counts = np.unique(gid, return_counts=True)
@@ -633,7 +628,6 @@ class CohortElectionLearningDiagnostics(TextElement):
             "delta_a_mean": [],
             "delta_a_median": [],
             "fee_mean": [],
-            "common_mean": [],
             "personal_mean": [],
             "altruism_mean": [],
             "p_part_mean": [],
@@ -659,7 +653,6 @@ class CohortElectionLearningDiagnostics(TextElement):
 
             # Fee meaningful only for participants
             out["fee_mean"].append(self._safe_mean(fee[part_mask]))  # type: ignore[arg-type]
-            out["common_mean"].append(self._safe_mean(common[mask]))  # type: ignore[arg-type]
             out["personal_mean"].append(self._safe_mean(personal[mask]))  # type: ignore[arg-type]
             out["altruism_mean"].append(self._safe_mean(altruism[mask]))  # type: ignore[arg-type]
             out["p_part_mean"].append(self._safe_mean(p_part[mask]))  # type: ignore[arg-type]
@@ -723,15 +716,13 @@ class CohortElectionLearningDiagnostics(TextElement):
         # Panel C: decomposition
         ax = axes[1][0]
         fee_m = stats["fee_mean"]
-        common_m = stats["common_mean"]
         pers_m = stats["personal_mean"]
         ax.bar(x - w, np.nan_to_num(fee_m, nan=0.0), width=w, label="fee (participants)", color=group_colors, alpha=0.8)
-        ax.bar(x, np.nan_to_num(common_m, nan=0.0), width=w, label="common reward", color=group_colors, alpha=0.6)
-        ax.bar(x + w, np.nan_to_num(pers_m, nan=0.0), width=w, label="personal reward", color=group_colors, alpha=0.6)
+        ax.bar(x, np.nan_to_num(pers_m, nan=0.0), width=w, label="personal reward", color=group_colors, alpha=0.6)
         ax.axhline(0.0, color="k", linewidth=0.8)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
-        ax.set_title("Reward decomposition means")
+        ax.set_title("Reward/Fee means")
         ax.set_ylabel("mean component")
         ax.legend(fontsize=6)
 

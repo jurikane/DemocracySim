@@ -182,6 +182,10 @@ python -m scripts.run_doe --points 3 --seeds 101,202 --no-robustness --dry-run
 Notes:
 
 - Applies the confirmed phase-1 DOE profile (frozen structure + tunable ranges).
+- Profile can be switched with `--doe-profile`:
+  - `phase1` (default, tunes `altruism_static`, keeps `altruism_learning=false`)
+  - `phase2_altruism_learning` (enables `altruism_learning=true`, tunes `altruism_alpha` + `altruism_init`)
+  - `phase2_altruism_probe` (small side-DOE: fixes non-altruism knobs and tunes `altruism_alpha`, `altruism_init`, `satisfaction_baseline_alpha`, `known_cells`)
 - Default config is `configs/doe.yaml` (override with `--config` if needed).
 - Default output root: `data/simulation_output/doe_<timestamp>/`.
 - Robustness cadence can be reduced with `--robust-every N` or disabled with `--no-robustness`.
@@ -189,27 +193,80 @@ Notes:
 - Seed selection metadata is written to `doe_seed_selection.json`.
 - Planned run rows are written to `doe_run_manifest.csv` (design/seed/rule/output/params-hash).
 
+Example phase-2 run:
+
+```bash
+python -m scripts.run_doe --doe-profile phase2_altruism_learning --points 48 --seeds 101,202,303
+```
+
+Example phase-2 probe run:
+
+```bash
+python -m scripts.run_doe --doe-profile phase2_altruism_probe --points 36 --seeds 101,202,303 --no-robustness
+```
+
 ## DOE Scoring Pipeline
 
 Score DOE outputs with hard gates + weighted ranking:
 
 ```bash
-python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp>
+python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp> --objective-config configs/doe_selection_objective_v1.json
+```
+
+`scripts.score_doe` defaults to `configs/doe_selection_objective_v1.json`; pass `--objective-config` only to switch objective contract explicitly.
+
+Default behavior is **strict completeness filtering**:
+
+- only designs with full expected primary seed coverage are ranked
+- if robustness is enabled with `robust_every=1`, only designs with full matched robust pairs are ranked
+
+Disable this (exploratory only):
+
+```bash
+python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp> --allow-incomplete-designs
 ```
 
 Output artifacts (written to DOE root by default):
 
 - `doe_run_features.csv` (per-run extracted metrics + gate flags)
 - `doe_design_scores.csv` (aggregated per-design ranking table)
-- `doe_scoring_spec.json` (burn-in, thresholds, weights, score formula)
+- `doe_selection_spec.json` (authoritative selection stage spec: objective path, thresholds, weights, score formula)
 - `doe_top_designs.json` (top-5 shortlist)
+
+## DOE HIL Review Helper
+
+Use queued representative runs for top/mid/bottom visual validation:
+
+```bash
+python -m scripts.doe_hil_review --print-commands
+```
+
+Populate AI interpretation text for selected queue rows:
+
+```bash
+python -m scripts.doe_hil_review --populate-ai
+```
+
+Execute fast summary generation for selected queue rows:
+
+```bash
+python -m scripts.doe_hil_review --bucket top --limit 5 --run-fast
+```
+
+Recommended HIL queue columns:
+
+- `ai_interpretation` (auto-filled from gates + score components via `--populate-ai`)
+- `human_feedback` (free-text assessment after reading the summary PDF)
+- `human_verdict` (`top_like|mid_like|bottom_like`)
+- `adjustment_hint` (optional metric/gate update hint)
 
 Current hard gates:
 
 - no-pathological collapse (`max_all_abstain_stretch <= 10`)
 - no-early-lock-in (`winner_changes_post_burnin >= 3`)
-- not-too-chaotic (`winner_changes_post_burnin <= 120`)
-- at least one strong windowed separation (`roll20_group_turnout_range_max >= 0.3`)
+- not-too-chaotic (`winner_changes_post_burnin <= 80`)
+- short-window divergence present (`roll3_group_turnout_range_max >= 0.3`)
+- medium-window divergence present (`roll20_group_turnout_range_max >= 0.1`)
 - winner-order diversity (`winner_entropy_norm >= 0.25`)
 - reality-distance activity (`dist_nonzero_share >= 0.05`)
 - competitive group dynamics present (`competitive_step_share >= 0.05`)
@@ -220,6 +277,8 @@ Soft (scored) calibration pressures:
 
 - cross-group divergence pressure is tracked in score via:
   - `group_turnout_range_mean`
+  - `roll3_group_turnout_range_mean`
+  - `roll3_group_turnout_range_max`
   - `roll20_group_turnout_range_mean`
   - `roll20_group_turnout_range_max`
   - `group_turnout_residual_abs_mean`
@@ -230,13 +289,22 @@ Soft (scored) calibration pressures:
   - `competitive_step_share`
 - lock-in pressure is still scored via `winner_changes_post_burnin` (in addition to hard minimum + hard maximum gates).
 
-Current aggregate score:
+Current aggregate score (refactored, non-multiplicative):
 
-- `score_total = pass_rate * (0.45*quality_mean + 0.35*discriminability + 0.20*seed_robustness)`
+- `quality_bundle = 0.45*quality_mean + 0.35*discriminability + 0.20*seed_robustness`
+- `score_total = 0.60*pass_rate + 0.40*quality_bundle`
 - `quality_mean` currently includes participant-vs-abstainer separation via `participant_abstainer_delta_rel_gap_abs`
 - `quality_mean` also includes group divergence components (`group_turnout_range_mean`, `group_turnout_residual_abs_mean`, `group_participant_abstainer_delta_rel_gap_abs`)
-- `quality_mean` also includes rolling-window divergence (`roll20_group_turnout_range_mean`)
-- if no robustness rule data is present, discriminability is auto-disabled and effective quality/robustness weights are renormalized (recorded in `doe_scoring_spec.json`)
+- `quality_mean` also includes rolling-window divergence (`roll3_group_turnout_range_mean`, `roll3_group_turnout_range_max`, `roll20_group_turnout_range_mean`, `roll20_group_turnout_range_max`)
+- if no robustness rule data is present, discriminability is auto-disabled and effective quality/robustness weights are renormalized (recorded in `doe_selection_spec.json`)
+
+Additional extracted (window-based) diagnostics now available in `doe_run_features.csv`:
+
+- `roll10_dist_std_mean` (average 10-step rolling std of `dist_to_reality`)
+- `roll10_winner_change_rate` (average within-window winner-change rate over 10-step windows)
+- `roll10_turnout_slope_abs_mean` (average absolute linear slope of turnout over 10-step windows)
+- `roll10_group_sync_index` (average pairwise group-turnout correlation over 10-step windows)
+- `lag1_group_signal_turnout_response_corr` (correlation of group mean signal at `t` with group turnout change `t -> t+1`)
 
 Important semantic note:
 
@@ -244,15 +312,25 @@ Important semantic note:
   It does **not** change simulation dynamics, does not reset state, and does not implement burn-in logic in the model.
 - default is `0` (no exclusion); pass `--burn-in-steps N` only if you explicitly want a warm-up window.
 
-## DOE Refinement Report
+## DOE Inference Stage
 
-Build knob-importance + narrowed-range suggestions from DOE outputs:
+Build DOE inference artifacts from existing DOE outputs:
 
 ```bash
-python -m scripts.doe_refine_report --doe-root data/simulation_output/doe_<timestamp>
+python -m scripts.doe_inference --doe-root data/simulation_output/doe_<timestamp> --bootstrap-reps 500 --random-seed 11
 ```
 
 Outputs:
 
-- `doe_knob_importance.csv` (correlation/effect-size ranking of knobs)
-- `doe_suggested_ranges.json` (next-generation suggested ranges)
+- `doe_inference_spec.json` (authoritative inference stage spec + artifact pointers)
+- `doe_seed_fixed_effects.csv` (seed-adjusted fixed-effects coefficients + bootstrap CIs)
+- `doe_nonlinear_importance.csv` (quantile-bin eta-squared nonlinear importance)
+- `doe_interaction_maps.csv` (2D interaction cell means for top knobs)
+- `doe_bootstrap_design_ci.csv` (design-level bootstrap confidence intervals)
+- `doe_pareto_designs.csv` (Pareto non-dominated designs on core objectives)
+
+Notes:
+
+- the seed-adjusted model uses **seed fixed effects OLS** (with bootstrap CIs)
+  as the runtime-safe replacement for mixed-effects when `statsmodels` is unavailable.
+- this is the dedicated inference stage; no legacy correlation/elite-range artifacts are emitted.

@@ -40,3 +40,5 @@ protobuf<6,>=3.20
 pyarrow>=7.0
 pydeck<1,>=0.8.0b4
 tenacity<9,>=8.1.0
+statsmodels==0.14.2
+scikit-learn==1.5.2

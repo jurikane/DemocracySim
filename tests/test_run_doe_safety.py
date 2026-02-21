@@ -75,3 +75,59 @@ def test_run_doe_dry_run_uses_default_doe_config(tmp_path: Path) -> None:
     assert (out_root / "doe_spec.json").exists()
     assert (out_root / "doe_seed_selection.json").exists()
     assert (out_root / "doe_run_manifest.csv").exists()
+
+
+def test_run_doe_dry_run_phase2_profile_writes_profile_in_spec(tmp_path: Path) -> None:
+    out_root = tmp_path / "doe_dry_phase2"
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.run_doe",
+        "--points",
+        "1",
+        "--seed-mode",
+        "fixed",
+        "--seeds",
+        "101",
+        "--no-robustness",
+        "--dry-run",
+        "--doe-profile",
+        "phase2_altruism_learning",
+        "--out-root",
+        str(out_root),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    spec = out_root / "doe_spec.json"
+    assert spec.exists()
+    text = spec.read_text(encoding="utf-8")
+    assert "\"profile\": \"phase2_altruism_learning\"" in text
+    assert "\"altruism_alpha\"" in text
+
+
+def test_run_doe_dry_run_phase2_probe_profile_writes_known_cells_range(tmp_path: Path) -> None:
+    out_root = tmp_path / "doe_dry_phase2_probe"
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.run_doe",
+        "--points",
+        "1",
+        "--seed-mode",
+        "fixed",
+        "--seeds",
+        "101",
+        "--no-robustness",
+        "--dry-run",
+        "--doe-profile",
+        "phase2_altruism_probe",
+        "--out-root",
+        str(out_root),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    spec = out_root / "doe_spec.json"
+    assert spec.exists()
+    text = spec.read_text(encoding="utf-8")
+    assert "\"profile\": \"phase2_altruism_probe\"" in text
+    assert "\"known_cells\"" in text

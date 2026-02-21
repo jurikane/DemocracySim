@@ -72,7 +72,8 @@ def test_schema_coverage_thesis_fields_exist_in_logged_tables(tmp_path: Path) ->
         assert col in area_steps.columns
     for col in ("step", "agent_id", "assets", "altruism_factor", "dissatisfaction_value", "participation_signal"):
         assert col in agents.columns
-    for col in ("step", "area_id", "agent_id", "confidence", "rank_1_option_id", "rank_1_oppose_score"):
+    assert "reward_common_component" not in agents.columns
+    for col in ("step", "area_id", "agent_id", "confidence", "voted_altruistically", "rank_1_option_id", "rank_1_oppose_score"):
         assert col in votes.columns
 
 

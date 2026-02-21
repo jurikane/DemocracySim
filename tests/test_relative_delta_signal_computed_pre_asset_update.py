@@ -19,8 +19,7 @@ def test_relative_delta_signal_is_computed_pre_asset_update() -> None:
     # Ensure deterministic known starting state
     a.assets = 10
     a.reset_reward_variables()
-    a.add_common_reward(3)
-    a.add_personal_reward(1)
+    a.add_personal_reward(4)
     a.set_election_fee(2)
 
     delta_abs_expected = 3 + 1 - 2
@@ -43,10 +42,9 @@ def test_relative_delta_signal_scale_invariant_for_multiplicative_payoffs() -> N
     for assets_pre in (0.4, 1.0, 10.0):
         a.assets = assets_pre
         a.reset_reward_variables()
-        a.add_common_reward(assets_pre * 0.30)
-        a.add_personal_reward(assets_pre * 0.10)
+        a.add_personal_reward(assets_pre * 0.40)
         a.set_election_fee(assets_pre * 0.20)
-        # delta_abs = assets_pre * (0.30 + 0.10 - 0.20) = assets_pre * 0.20
+        # delta_abs = assets_pre * (0.40 - 0.20) = assets_pre * 0.20
         a.reward_agent()
         assert np.isclose(a.election_delta_rel, k, atol=1e-12)
 
@@ -62,8 +60,7 @@ def test_relative_delta_signal_has_no_artificial_kink_at_assets_1() -> None:
         a.assets = assets_pre
         a.reset_reward_variables()
         # Choose components to realize delta_abs = assets_pre * k
-        a.add_common_reward(assets_pre * 0.05)
-        a.add_personal_reward(assets_pre * 0.00)
+        a.add_personal_reward(assets_pre * 0.05)
         a.set_election_fee(assets_pre * 0.20)
         a.reward_agent()
         vals.append(float(a.election_delta_rel))
@@ -78,8 +75,7 @@ def test_relative_delta_signal_zero_when_assets_pre_zero() -> None:
     a = model.voting_agents[0]
     a.assets = 0.0
     a.reset_reward_variables()
-    a.add_common_reward(1.0)
-    a.add_personal_reward(0.0)
+    a.add_personal_reward(1.0)
     a.set_election_fee(0.0)
 
     a.reward_agent()
@@ -93,7 +89,6 @@ def test_relative_delta_signal_uses_realized_delta_when_asset_floor_hits() -> No
 
     a.assets = 1.0
     a.reset_reward_variables()
-    a.add_common_reward(0.0)
     a.add_personal_reward(0.0)
     a.set_election_fee(3.0)  # raw delta_abs = -3.0, realized delta_abs = -1.0 due floor
 

@@ -7,6 +7,7 @@ import numpy as np
 from src.analysis.doe_runner import (
     apply_doe_overrides,
     build_run_plan,
+    get_doe_profile,
     midpoint_params_from_ranges,
     sample_design_points,
     select_farthest_seeds_from_descriptors,
@@ -102,8 +103,39 @@ def test_write_design_manifest_writes_spec_and_csv(tmp_path: Path) -> None:
     assert (tmp_path / "doe_spec.json").exists()
     assert (tmp_path / "doe_design_points.csv").exists()
     spec = json.loads((tmp_path / "doe_spec.json").read_text(encoding="utf-8"))
+    assert spec["profile"] == "phase1"
     assert spec["primary_rule_name"] == "approval"
     assert spec["robust_rule_name"] == "utilitarian"
+
+
+def test_get_doe_profile_phase2_has_altruism_learning_and_ranges() -> None:
+    p = get_doe_profile("phase2_altruism_learning")
+    assert p["frozen_model"]["altruism_learning"] is True
+    assert "altruism_alpha" in p["ranges"]
+    assert "altruism_init" in p["ranges"]
+    assert "altruism_static" not in p["ranges"]
+
+
+def test_get_doe_profile_phase2_probe_includes_known_cells_and_focuses_altruism() -> None:
+    p = get_doe_profile("phase2_altruism_probe")
+    assert p["frozen_model"]["altruism_learning"] is True
+    assert {
+        "altruism_alpha",
+        "altruism_init",
+        "satisfaction_baseline_alpha",
+        "known_cells",
+    }.issubset(set(p["ranges"].keys()))
+    assert p["ranges"]["known_cells"] == (4.0, 30.0)
+
+
+def test_sample_design_points_known_cells_is_integer_valued() -> None:
+    p = get_doe_profile("phase2_altruism_probe")
+    rng = np.random.default_rng(7)
+    points = sample_design_points(num_points=30, rng=rng, ranges=p["ranges"])
+    known_values = [pt["known_cells"] for pt in points]
+    assert all(float(v).is_integer() for v in known_values)
+    assert min(known_values) >= 4.0
+    assert max(known_values) <= 30.0
 
 
 def test_midpoint_params_from_ranges() -> None:

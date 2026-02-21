@@ -21,6 +21,17 @@ def main() -> None:
     parser.add_argument("--burn-in-steps", type=int, default=0, help="Warm-up exclusion window for lock-in/chaos metrics (analysis-only).")
     parser.add_argument("--primary-rule", type=str, default="approval", help="Primary rule folder name (without 'rule_').")
     parser.add_argument("--robust-rule", type=str, default="utilitarian", help="Robustness rule folder name (without 'rule_').")
+    parser.add_argument(
+        "--objective-config",
+        type=Path,
+        default=Path("configs") / "doe_selection_objective_v1.json",
+        help="Selection objective JSON (thresholds/weights/stage-weights/strict-completeness).",
+    )
+    parser.add_argument(
+        "--allow-incomplete-designs",
+        action="store_true",
+        help="Disable strict completeness filter (default is strict filtering by expected seed coverage).",
+    )
     args = parser.parse_args()
 
     root = _resolve_default_doe_root() if args.doe_root is None else Path(args.doe_root)
@@ -30,11 +41,15 @@ def main() -> None:
         burn_in_steps=int(args.burn_in_steps),
         primary_rule_name=str(args.primary_rule),
         robust_rule_name=str(args.robust_rule),
+        objective_config_path=Path(args.objective_config) if args.objective_config else None,
+        strict_completeness=(
+            False if bool(args.allow_incomplete_designs) else None
+        ),
     )
     print(f"DOE root: {root}")
     print(f"Wrote: {out['run_features_csv']}")
     print(f"Wrote: {out['design_scores_csv']}")
-    print(f"Wrote: {out['scoring_spec_json']}")
+    print(f"Wrote: {out['selection_spec_json']}")
     print(f"Wrote: {out['top_designs_json']}")
 
 

@@ -7,6 +7,7 @@ import csv
 import json
 import numpy as np
 import hashlib
+import copy
 
 
 RULE_LABELS = {
@@ -15,6 +16,15 @@ RULE_LABELS = {
     2: "utilitarian",
     3: "borda",
 }
+
+INTEGER_DOE_KEYS: set[str] = {"known_cells"}
+
+
+def _known_cells_probe_bounds(model_cfg: dict[str, Any]) -> tuple[float, float]:
+    num_colors = int(model_cfg["num_colors"])
+    grid_fields = int(model_cfg["height"]) * int(model_cfg["width"])
+    max_known = max(num_colors, int(np.floor(0.02 * float(grid_fields))))
+    return float(num_colors), float(max_known)
 
 
 # Phase-1 DOE ranges (confirmed)
@@ -49,8 +59,8 @@ DEFAULT_FROZEN_MODEL: dict[str, Any] = {
     "known_cells": 10,
     "personal_preference_peakedness": 1.0,
     "num_agents": 100,
-    "num_colors": 4,
-    "num_personality_groups": 4,
+    "num_colors": 5,
+    "num_personality_groups": 5,
     "height": 30,
     "width": 50,
     "num_areas": 1,
@@ -64,10 +74,71 @@ DEFAULT_FROZEN_MODEL: dict[str, Any] = {
 
 DEFAULT_FROZEN_SIM: dict[str, Any] = {
     "runs": 1,
-    "num_steps": 150,
+    "num_steps": 80,
     "store_grid": False,
     "grid_interval": 1,
 }
+
+
+DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
+    "phase1": {
+        "name": "phase1",
+        "ranges": dict(DEFAULT_DOE_RANGES),
+        "frozen_model": dict(DEFAULT_FROZEN_MODEL),
+        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
+    },
+    "phase2_altruism_learning": {
+        "name": "phase2_altruism_learning",
+        "ranges": {
+            "election_cost_rate": (0.001, 0.10),
+            "reward_rate_personal": (0.00, 0.30),
+            "break_even_distance_common": (0.15, 0.45),
+            "election_impact_on_mutation": (1.0, 3.0),
+            "mu": (0.15, 1.00),
+            "participation_alpha": (0.01, 0.20),
+            "participation_beta": (2.5, 9.5),
+            "participation_init_q": (0.15, 1.2),
+            "altruism_alpha": (0.01, 0.08),
+            "altruism_init": (0.20, 0.80),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_learning": True,
+        },
+        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
+    },
+    "phase2_altruism_probe": {
+        "name": "phase2_altruism_probe",
+        "ranges": {
+            "altruism_alpha": (0.01, 0.08),
+            "altruism_init": (0.20, 0.80),
+            "satisfaction_baseline_alpha": (0.01, 0.30),
+            "known_cells": _known_cells_probe_bounds(DEFAULT_FROZEN_MODEL),
+            "mu": (0.4, 0.9),
+            "election_impact_on_mutation": (1.0, 2.0),
+            "participation_alpha": (0.09, 0.19),
+            "participation_beta": (6.0, 7.5),
+            "participation_init_q": (0.25, 0.6),
+            "reward_rate_personal": (0.08, 0.5),
+            "break_even_distance_common": (0.3, 0.6),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_learning": True,
+            "election_cost_rate": 0.08,
+        },
+        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
+    },
+}
+
+
+def get_doe_profile(name: str) -> dict[str, Any]:
+    key = str(name).strip()
+    if key not in DEFAULT_DOE_PROFILES:
+        raise ValueError(
+            f"Unknown DOE profile: {name!r}. Available: {sorted(DEFAULT_DOE_PROFILES.keys())}"
+        )
+    return copy.deepcopy(DEFAULT_DOE_PROFILES[key])
 
 
 @dataclass(frozen=True)
@@ -95,7 +166,14 @@ def sample_design_points(
     for _ in range(num_points):
         accepted = False
         for _try in range(max_tries_per_point):
-            p = {k: float(rng.uniform(r[k][0], r[k][1])) for k in keys}
+            p: dict[str, float] = {}
+            for k in keys:
+                lo = float(r[k][0])
+                hi = float(r[k][1])
+                if k in INTEGER_DOE_KEYS:
+                    p[k] = float(int(rng.integers(int(lo), int(hi) + 1)))
+                else:
+                    p[k] = float(rng.uniform(lo, hi))
             if _passes_rate_sum_constraint(p):
                 points.append(p)
                 accepted = True
@@ -106,6 +184,8 @@ def sample_design_points(
 
 
 def _passes_rate_sum_constraint(p: dict[str, float]) -> bool:
+    if "election_cost_rate" not in p or "reward_rate_personal" not in p:
+        return True
     return (
         float(p["election_cost_rate"])
         + float(p["reward_rate_personal"])
@@ -176,19 +256,30 @@ def select_stratified_seeds(
     candidate_seeds: list[int],
     probe_rule_idx: int = 1,
     probe_params: dict[str, float] | None = None,
+    ranges: dict[str, tuple[float, float]] | None = None,
+    frozen_model: dict[str, Any] | None = None,
+    frozen_simulation: dict[str, Any] | None = None,
 ) -> list[int]:
     """Select spread-out seeds based on initial-state descriptors from model instantiation."""
     uniq = sorted(set(int(s) for s in candidate_seeds))
     if target_count > len(uniq):
         raise ValueError(f"target_count={target_count} exceeds candidate seeds={len(uniq)}")
-    params = midpoint_params_from_ranges(DEFAULT_DOE_RANGES) if probe_params is None else probe_params
+    r = DEFAULT_DOE_RANGES if ranges is None else ranges
+    params = midpoint_params_from_ranges(r) if probe_params is None else probe_params
 
     # Local import to keep DOE utility module lightweight for non-selection paths.
     from src.model_setup import make_model
 
     descriptors: dict[int, np.ndarray] = {}
     for seed in uniq:
-        cfg_probe = apply_doe_overrides(cfg, params=params, rule_idx=int(probe_rule_idx), base_seed=int(seed))
+        cfg_probe = apply_doe_overrides(
+            cfg,
+            params=params,
+            rule_idx=int(probe_rule_idx),
+            base_seed=int(seed),
+            frozen_model=frozen_model,
+            frozen_simulation=frozen_simulation,
+        )
         cfg_probe.model.seed = int(seed)
         model = make_model(cfg_probe.model, enable_datacollector=False)
         g = np.asarray(model.global_color_dst, dtype=float).reshape(-1)
@@ -258,15 +349,28 @@ def build_run_plan(
     return tasks
 
 
-def apply_doe_overrides(cfg, *, params: dict[str, float], rule_idx: int, base_seed: int):
+def apply_doe_overrides(
+    cfg,
+    *,
+    params: dict[str, float],
+    rule_idx: int,
+    base_seed: int,
+    frozen_model: dict[str, Any] | None = None,
+    frozen_simulation: dict[str, Any] | None = None,
+):
     """Return a deep-copied AppConfig with DOE overrides applied."""
     c = cfg.model_copy(deep=True)
-    for k, v in DEFAULT_FROZEN_MODEL.items():
+    fm = DEFAULT_FROZEN_MODEL if frozen_model is None else frozen_model
+    fs = DEFAULT_FROZEN_SIM if frozen_simulation is None else frozen_simulation
+    for k, v in fm.items():
         setattr(c.model, k, v)
     for k, v in params.items():
-        setattr(c.model, k, float(v))
+        if k in INTEGER_DOE_KEYS:
+            setattr(c.model, k, int(round(float(v))))
+        else:
+            setattr(c.model, k, float(v))
     c.model.rule_idx = int(rule_idx)
-    for k, v in DEFAULT_FROZEN_SIM.items():
+    for k, v in fs.items():
         setattr(c.simulation, k, v)
     c.simulation.base_seed = int(base_seed)
     return c
@@ -285,9 +389,17 @@ def write_design_manifest(
     robust_rule_idx: int,
     include_robustness: bool,
     robust_every: int,
+    ranges: dict[str, tuple[float, float]] | None = None,
+    frozen_model: dict[str, Any] | None = None,
+    frozen_simulation: dict[str, Any] | None = None,
+    profile_name: str = "phase1",
 ) -> None:
     out_root.mkdir(parents=True, exist_ok=True)
+    r = DEFAULT_DOE_RANGES if ranges is None else ranges
+    fm = DEFAULT_FROZEN_MODEL if frozen_model is None else frozen_model
+    fs = DEFAULT_FROZEN_SIM if frozen_simulation is None else frozen_simulation
     spec = {
+        "profile": str(profile_name),
         "design_points": len(design_points),
         "seeds": [int(s) for s in seeds],
         "primary_rule_idx": int(primary_rule_idx),
@@ -296,15 +408,15 @@ def write_design_manifest(
         "robust_rule_name": rule_label(robust_rule_idx),
         "include_robustness": bool(include_robustness),
         "robust_every": int(robust_every),
-        "ranges": {k: [float(v[0]), float(v[1])] for k, v in DEFAULT_DOE_RANGES.items()},
-        "frozen_model": dict(DEFAULT_FROZEN_MODEL),
-        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
+        "ranges": {k: [float(v[0]), float(v[1])] for k, v in r.items()},
+        "frozen_model": dict(fm),
+        "frozen_simulation": dict(fs),
         "constraint": "election_cost_rate + reward_rate_personal <= 0.9",
     }
     (out_root / "doe_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
 
     points_path = out_root / "doe_design_points.csv"
-    keys = sorted(DEFAULT_DOE_RANGES.keys())
+    keys = sorted(r.keys())
     with points_path.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["design_id", *keys])
         w.writeheader()

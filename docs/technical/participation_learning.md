@@ -35,8 +35,8 @@ Participation learning uses the following per-agent state:
 And the following per-election outcome signals:
 
 - `fee` (float): participation cost for participants, `fee = election_cost_rate * assets_pre`
-- `reward_common`, `reward_personal` (floats): outcome-dependent components, computed in asset units
-- `raw_delta_abs` (float): pre-clamp asset delta, `reward_common + reward_personal - fee`
+- `reward_personal` (float): outcome-dependent reward/penalty amount, computed in asset units
+- `raw_delta_abs` (float): pre-clamp asset delta, `reward_personal - fee`
 - `delta_abs` (float): realized absolute asset change after floor-clamp at zero assets
 - `delta_rel` (float): realized relative change, `delta_abs / assets_pre` (if `assets_pre > 0`, else `0.0`)
 

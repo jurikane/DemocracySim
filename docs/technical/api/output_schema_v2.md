@@ -123,8 +123,7 @@ Agent snapshot table (**agent state only**).
 | eligible_for_election      | boolean | eligibility flag in this area/step election  |
 | participating              | boolean | participation decision in this area/step     |
 | election_fee               | float32 | charged fee in this area/step                |
-| reward_common_component    | float32 | common reward/penalty component              |
-| reward_personal_component  | float32 | personal reward/penalty component            |
+| reward_personal            | float32 | reward/penalty amount                        |
 | election_delta_abs         | float32 | realized absolute asset delta                |
 | election_delta_rel         | float32 | realized relative asset delta                |
 | participation_baseline     | float32 | EMA baseline for participation learning      |
@@ -153,6 +152,7 @@ Vote signal table (participants only). This is the single source of
 | agent_id                                 |   int32 |                                                |
 | participating                            | boolean | always true (rows only for participants)       |
 | confidence                               | float32 | agent confidence at vote time **in this area** |
+| voted_altruistically                     | boolean | `True`/`False`/`null` at vote time             |
 | estim_dst_color_0..estim_dst_color_{C-1} | float32 | estimated area color distribution at vote time |
 | rank_1_option_id                         |   Int32 | option row index into `model.options`          |
 | rank_1_oppose_score                      | float32 | lower = better                                 |

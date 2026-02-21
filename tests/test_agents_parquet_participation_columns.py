@@ -47,6 +47,7 @@ def test_agents_parquet_includes_participation_baseline_columns(tmp_path: Path) 
             "agent_id": np.int32(agent0.unique_id),
             "participating": True,
             "confidence": np.float32(1.0),
+            "voted_altruistically": False,
             "rank_1_option_id": np.int32(0),
             "rank_1_oppose_score": np.float32(0.0),
             "rank_2_option_id": np.int32(1),

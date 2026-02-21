@@ -60,7 +60,6 @@ class AreaAgentDebugPanel(TextElement):
             "participation_signal",
             "fee",
             "num_elections_participated",
-            "reward_common",
             "reward_personal",
             "delta_abs",
             "delta_rel",

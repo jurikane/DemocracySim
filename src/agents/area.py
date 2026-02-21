@@ -371,8 +371,7 @@ class Area(Agent):
             "participating": bool(agent.participating),
             "num_elections_participated": agent.num_elections_participated,
             "fee": float(agent.election_fee),
-            "reward_common": float(agent.reward_common_component),
-            "reward_personal": float(agent.reward_personal_component),
+            "reward_personal": float(agent.reward_personal),
             "delta_abs": delta_abs,
             "delta_rel": float(agent.election_delta_rel),
             "q_participation": float(agent.q_participation),
@@ -446,6 +445,7 @@ class Area(Agent):
                         oppose_scores=scores,
                         est_dist=agent.est_real_dist,
                         confidence=agent.confidence,
+                        voted_altruistically=getattr(agent, "voted_altruistically", None),
                     )
                 if debug_enabled:
                     scores = np.asarray(scores, dtype=np.float64)
@@ -507,10 +507,7 @@ class Area(Agent):
                 reward_factor = group_dst_to_outcome
             reward_amount = sign * reward_rate * reward_factor * float(a.assets)
 
-            # Keep component fields stable in schema-v2:
-            # unified reward is carried in personal component, common component is zero.
             a.add_personal_reward(reward_amount)
-            a.add_common_reward(0.0)
             a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
 
     @staticmethod
@@ -610,9 +607,8 @@ class Area(Agent):
         mean_delta_rel_participants = _mean_attr(participants, "election_delta_rel")
         mean_delta_rel_abstainers = _mean_attr(abstainers, "election_delta_rel")
 
-        # Reward components (absolute)
-        mean_common_reward = _mean_attr(eligible, "reward_common_component")
-        mean_personal_reward = _mean_attr(eligible, "reward_personal_component")
+        # Reward component (absolute)
+        mean_personal_reward = _mean_attr(eligible, "reward_personal")
 
         # Learning signals
         mean_q_participation = _mean_attr(eligible, "q_participation")
@@ -632,7 +628,6 @@ class Area(Agent):
         group_mean_delta_rel = [float("nan")] * num_groups
         group_mean_delta_rel_participants = [float("nan")] * num_groups
         group_mean_delta_rel_abstainers = [float("nan")] * num_groups
-        group_mean_common_reward = [float("nan")] * num_groups
         group_mean_personal_reward = [float("nan")] * num_groups
         group_mean_fee = [float("nan")] * num_groups
         group_mean_altruism = [float("nan")] * num_groups
@@ -656,8 +651,7 @@ class Area(Agent):
                     group_mean_q_participation_abstainers[g] = _mean_attr(g_abstainers, "q_participation")
                 if g_agents:
                     group_mean_assets[g] = _mean_attr(g_agents, "assets")
-                    group_mean_common_reward[g] = _mean_attr(g_agents, "reward_common_component")
-                    group_mean_personal_reward[g] = _mean_attr(g_agents, "reward_personal_component")
+                    group_mean_personal_reward[g] = _mean_attr(g_agents, "reward_personal")
                     group_mean_fee[g] = _mean_attr(g_agents, "election_fee")
                     group_mean_altruism[g] = _mean_attr(g_agents, "altruism_factor")
                     group_mean_dissatisfaction[g] = _mean_attr(g_agents, "dissatisfaction_value")
@@ -668,7 +662,6 @@ class Area(Agent):
                 "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
                 "mean_delta_rel_participants": mean_delta_rel_participants,
                 "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
-                "mean_common_reward": mean_common_reward,
                 "mean_personal_reward": mean_personal_reward,
                 "mean_q_participation": mean_q_participation,
                 "mean_p_participation": mean_p_participation,
@@ -679,7 +672,6 @@ class Area(Agent):
                 "group_mean_delta_rel": group_mean_delta_rel,
                 "group_mean_delta_rel_participants": group_mean_delta_rel_participants,
                 "group_mean_delta_rel_abstainers": group_mean_delta_rel_abstainers,
-                "group_mean_common_reward": group_mean_common_reward,
                 "group_mean_personal_reward": group_mean_personal_reward,
                 "group_mean_fee": group_mean_fee,
                 "group_mean_altruism": group_mean_altruism,

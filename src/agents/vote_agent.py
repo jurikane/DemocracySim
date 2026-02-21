@@ -109,8 +109,7 @@ class VoteAgent(Agent):
         # Election relevant variables
         self._eligible_for_election = True
         self._fee = 0.0
-        self._reward_pers_comp = 0.0
-        self._reward_common_comp = 0.0
+        self._reward_personal = 0.0
         self._participating = False
         # Per-election signals (computed right before applying to assets)
         self._delta_abs = 0.0
@@ -122,6 +121,11 @@ class VoteAgent(Agent):
 
         # Per-agent personality color-distribution (static), consistent with personality_group.
         self.personal_opt_dist: np.ndarray = self._init_personal_opt_dist()
+        # Precomputed self-regarding option-oppose scores (static per agent/model setup).
+        self.self_regarding_oppose_scores: np.ndarray = self._compute_self_regarding_oppose_scores()
+        # Per-vote mode marker used for diagnostics/logging.
+        # True=altruistic, False=self-regarding, None=unknown.
+        self.voted_altruistically: bool | None = None
         # Preferred naming: expose distribution as `.personality`
 
         # --- Adaptive participation learning (global per agent) ---
@@ -221,14 +225,9 @@ class VoteAgent(Agent):
         return float(self._fee)
 
     @property
-    def reward_common_component(self) -> float:
-        """Common reward component for current step."""
-        return float(self._reward_common_comp)
-
-    @property
-    def reward_personal_component(self) -> float:
-        """Personal reward component for current step."""
-        return float(self._reward_pers_comp)
+    def reward_personal(self) -> float:
+        """Per-election reward amount for current step."""
+        return float(self._reward_personal)
 
     def mark_ineligible_for_election(self) -> None:
         self._eligible_for_election = False
@@ -236,21 +235,18 @@ class VoteAgent(Agent):
     def set_election_fee(self, fee: float) -> None:
         self._fee = float(fee)
 
-    def add_common_reward(self, amount: float) -> None:
-        self._reward_common_comp += float(amount)
-
     def add_personal_reward(self, amount: float) -> None:
-        self._reward_pers_comp += float(amount)
+        self._reward_personal += float(amount)
 
     def reset_reward_variables(self) -> None:
         """Reset per-election variables before the next election."""
         self._eligible_for_election = True
         self._fee = 0.0
-        self._reward_pers_comp = 0.0
-        self._reward_common_comp = 0.0
+        self._reward_personal = 0.0
         self._participating = False
         self._delta_abs = 0.0
         self._delta_rel = 0.0
+        self.voted_altruistically = None
 
     def mark_participating(self) -> None:
         self._participating = True
@@ -287,7 +283,7 @@ class VoteAgent(Agent):
         And saves delta_abs into award_history.
         """
         assets_pre = float(self.assets)
-        raw_delta_abs = float(self._reward_pers_comp + self._reward_common_comp - self._fee)
+        raw_delta_abs = float(self._reward_personal - self._fee)
         assets_post = max(0.0, assets_pre + raw_delta_abs)
         self._delta_abs = float(assets_post - assets_pre)
         self._delta_rel = float(self._delta_abs / assets_pre) if assets_pre > 0.0 else 0.0
@@ -315,7 +311,10 @@ class VoteAgent(Agent):
         if TYPE_CHECKING:
             self.model = cast(ParticipationModel, self.model)
         options = self.model.options
-        return self.voting_strategy.score_options(self, area, options)
+        scores = self.voting_strategy.score_options(self, area, options)
+        if not isinstance(getattr(self, "voted_altruistically", None), bool):
+            self.voted_altruistically = None
+        return scores
 
     def _knowledge_distribution(self, area: Area) -> np.ndarray:
         """Return the agent's knowledge-based distribution."""
@@ -467,3 +466,19 @@ class VoteAgent(Agent):
             dist /= s
 
         return dist.astype(np.float32)
+
+    def _compute_self_regarding_oppose_scores(self) -> np.ndarray:
+        """Compute static self-regarding oppose scores against all options.
+
+        Self-regarding mode uses personality_group ordering directly (no knowledge estimate).
+        """
+        options = np.asarray(self.model.options)
+        target_ordering = np.asarray(self.personality_group, dtype=np.int64)
+        dist_func = self.model.distance_func
+        search_pairs = self.model.color_search_pairs
+        scores = np.zeros(int(options.shape[0]), dtype=np.float32)
+        for i, opt in enumerate(options):
+            scores[i] = np.float32(
+                float(dist_func(target_ordering, np.asarray(opt, dtype=np.int64), search_pairs))
+            )
+        return scores

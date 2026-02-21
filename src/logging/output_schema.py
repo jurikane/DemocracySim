@@ -164,8 +164,7 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "eligible_for_election",
     "participating",
     "election_fee",
-    "reward_common_component",
-    "reward_personal_component",
+    "reward_personal",
     "election_delta_abs",
     "election_delta_rel",
     "participation_baseline",
@@ -188,8 +187,7 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "eligible_for_election": "boolean",
     "participating": "boolean",
     "election_fee": "float32",
-    "reward_common_component": "float32",
-    "reward_personal_component": "float32",
+    "reward_personal": "float32",
     "election_delta_abs": "float32",
     "election_delta_rel": "float32",
     "participation_baseline": "float32",
@@ -220,6 +218,7 @@ VOTES_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "agent_id",
     "participating",
     "confidence",
+    "voted_altruistically",
     # Vector (expanded): estim_dst_color_0..estim_dst_color_{C-1}
     "rank_1_option_id",
     "rank_1_oppose_score",
@@ -237,6 +236,7 @@ VOTES_BASE_DTYPES: Final[dict[str, str]] = {
     "agent_id": "int32",
     "participating": "boolean",
     "confidence": "float32",
+    "voted_altruistically": "boolean",
     # estim_dst_color_* float32 validated dynamically
     # Use nullable ints for option ids (so missing ranks can be NA).
     "rank_1_option_id": "Int32",
@@ -512,3 +512,12 @@ def validate_votes_df(df: pd.DataFrame) -> None:
         except (TypeError, ValueError):
             # dtype validator should catch wild types; keep runtime robust
             pass
+
+    if "voted_altruistically" in df.columns and len(df) > 0:
+        mode = df["voted_altruistically"]
+        invalid = ~mode.isin([True, False]) & mode.notna()
+        if bool(invalid.any()):
+            bad = sorted(set(mode[invalid].tolist()))
+            raise SchemaValidationError(
+                f"{table.name}: voted_altruistically contains invalid values: {bad} (allowed: [True, False, <NA>])"
+            )

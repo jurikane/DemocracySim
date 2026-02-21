@@ -39,11 +39,6 @@ Unified reward amount:
 
 - `reward_amount = sign * reward_rate_personal * factor * assets_pre`
 
-Internal component mapping (schema compatibility):
-
-- `reward_personal_component = reward_amount`
-- `reward_common_component = 0.0`
-
 Per-election raw absolute delta:
 
 - `raw_delta_abs = reward_amount - fee`

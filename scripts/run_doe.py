@@ -11,6 +11,7 @@ from scripts.run_headless import run_once
 from src.analysis.doe_runner import (
     apply_doe_overrides,
     build_run_plan,
+    get_doe_profile,
     sample_design_points,
     select_stratified_seeds,
     write_design_manifest,
@@ -36,6 +37,8 @@ def execute_run_plan(
     plan,
     run_once_fn=run_once,
     continue_on_error: bool = False,
+    frozen_model: dict | None = None,
+    frozen_simulation: dict | None = None,
 ) -> dict[str, int]:
     succeeded = 0
     failed = 0
@@ -45,6 +48,8 @@ def execute_run_plan(
             params=task.params,
             rule_idx=task.rule_idx,
             base_seed=task.seed,
+            frozen_model=frozen_model,
+            frozen_simulation=frozen_simulation,
         )
         task.out_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -112,6 +117,13 @@ def main() -> None:
         help="Rule idx used for stratified seed probing (default: primary-rule-idx).",
     )
     parser.add_argument("--doe-seed", type=int, default=7, help="RNG seed used for sampling DOE points.")
+    parser.add_argument(
+        "--doe-profile",
+        type=str,
+        default="phase1",
+        choices=["phase1", "phase2_altruism_learning", "phase2_altruism_probe"],
+        help="DOE profile defining ranges + frozen settings.",
+    )
     parser.add_argument("--primary-rule-idx", type=int, default=1, help="Primary screening rule (default=1 approval).")
     parser.add_argument("--robust-rule-idx", type=int, default=2, help="Robustness rule (default=2 utilitarian).")
     parser.add_argument("--no-robustness", action="store_true", help="Disable robustness runs.")
@@ -126,6 +138,10 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    profile = get_doe_profile(str(args.doe_profile))
+    ranges = dict(profile["ranges"])
+    frozen_model = dict(profile["frozen_model"])
+    frozen_simulation = dict(profile["frozen_simulation"])
     if args.seed_mode == "fixed":
         seeds = _parse_seed_list(args.seeds)
     else:
@@ -143,6 +159,9 @@ def main() -> None:
             target_count=int(args.seed_target),
             candidate_seeds=candidate_seeds,
             probe_rule_idx=probe_rule_idx,
+            ranges=ranges,
+            frozen_model=frozen_model,
+            frozen_simulation=frozen_simulation,
         )
 
     if args.out_root is None:
@@ -171,7 +190,7 @@ def main() -> None:
         )
 
     rng = np.random.default_rng(int(args.doe_seed))
-    design_points = sample_design_points(num_points=int(args.points), rng=rng)
+    design_points = sample_design_points(num_points=int(args.points), rng=rng, ranges=ranges)
     write_design_manifest(
         out_root=out_root,
         design_points=design_points,
@@ -180,6 +199,10 @@ def main() -> None:
         robust_rule_idx=int(args.robust_rule_idx),
         include_robustness=not bool(args.no_robustness),
         robust_every=int(args.robust_every),
+        ranges=ranges,
+        frozen_model=frozen_model,
+        frozen_simulation=frozen_simulation,
+        profile_name=str(args.doe_profile),
     )
 
     plan = build_run_plan(
@@ -205,6 +228,8 @@ def main() -> None:
         plan=plan,
         run_once_fn=run_once,
         continue_on_error=bool(args.continue_on_error),
+        frozen_model=frozen_model,
+        frozen_simulation=frozen_simulation,
     )
     print(f"DOE summary: succeeded={summary['succeeded']} failed={summary['failed']}")
     if summary["failed"] > 0 and bool(args.continue_on_error):

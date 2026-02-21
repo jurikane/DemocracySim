@@ -133,6 +133,7 @@ def test_votes_has_fixed_rank_columns(v2_run_dir: Path) -> None:
     votes = pd.read_parquet(v2_run_dir / "votes.parquet")
 
     expected = {
+        "voted_altruistically",
         "rank_1_option_id",
         "rank_1_oppose_score",
         "rank_2_option_id",

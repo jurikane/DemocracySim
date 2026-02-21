@@ -7,7 +7,7 @@ import json
 
 import pandas as pd
 
-from src.analysis.doe_refine import build_refine_report
+from src.analysis.doe_refine import build_inference_report
 
 
 def _write_mock_doe_tables(root: Path) -> None:
@@ -31,38 +31,60 @@ def _write_mock_doe_tables(root: Path) -> None:
     scores.to_csv(root / "doe_design_scores.csv", index=False)
 
 
-def test_build_refine_report_outputs_files(tmp_path: Path) -> None:
+def test_build_inference_report_outputs_files(tmp_path: Path) -> None:
     root = tmp_path / "doe_mock"
     root.mkdir(parents=True, exist_ok=True)
     _write_mock_doe_tables(root)
 
-    out = build_refine_report(root, elite_fraction=0.5, bad_fraction=0.5, shrink_quantile=0.8)
-    assert out["knob_importance_csv"].exists()
-    assert out["suggested_ranges_json"].exists()
+    out = build_inference_report(root, bootstrap_reps=50, random_seed=13)
+    assert out["inference_spec_json"].exists()
+    assert out["seed_fixed_effects_csv"].exists()
+    assert out["nonlinear_importance_csv"].exists()
+    assert out["interaction_maps_csv"].exists()
+    assert out["bootstrap_design_ci_csv"].exists()
+    assert out["pareto_designs_csv"].exists()
+    assert (root / "doe_knob_importance.csv").exists() is False
+    assert (root / "doe_suggested_ranges.json").exists() is False
+    assert (root / "doe_inference_summary.json").exists() is False
 
-    imp = pd.read_csv(out["knob_importance_csv"])
-    assert {"knob", "corr_score", "elite_bad_std_effect"}.issubset(set(imp.columns))
-    sug = json.loads(out["suggested_ranges_json"].read_text(encoding="utf-8"))
-    assert "suggested_ranges" in sug
-    assert "mu" in sug["suggested_ranges"]
+    spec = json.loads(out["inference_spec_json"].read_text(encoding="utf-8"))
+    assert "methods" in spec
+    se = pd.read_csv(out["seed_fixed_effects_csv"])
+    assert {"target", "knob", "coef", "ci_low", "ci_high"}.issubset(set(se.columns))
+    nl = pd.read_csv(out["nonlinear_importance_csv"])
+    assert {"target", "knob", "eta_squared"}.issubset(set(nl.columns))
+    inter = pd.read_csv(out["interaction_maps_csv"])
+    assert {"target", "knob_x", "knob_y", "x_bin", "y_bin", "cell_mean"}.issubset(set(inter.columns))
+    boot = pd.read_csv(out["bootstrap_design_ci_csv"])
+    assert {"design_id", "score_proxy_mean", "ci_low", "ci_high"}.issubset(set(boot.columns))
+    pareto = pd.read_csv(out["pareto_designs_csv"])
+    assert {"design_id", "is_pareto"}.issubset(set(pareto.columns))
+    assert "seed_fixed_effects" in spec["methods"]
 
 
-def test_doe_refine_report_cli(tmp_path: Path) -> None:
+def test_doe_inference_cli(tmp_path: Path) -> None:
     root = tmp_path / "doe_mock_cli"
     root.mkdir(parents=True, exist_ok=True)
     _write_mock_doe_tables(root)
     cmd = [
         sys.executable,
         "-m",
-        "scripts.doe_refine_report",
+        "scripts.doe_inference",
         "--doe-root",
         str(root),
-        "--elite-fraction",
-        "0.5",
-        "--bad-fraction",
-        "0.5",
+        "--bootstrap-reps",
+        "50",
+        "--random-seed",
+        "13",
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
-    assert (root / "doe_knob_importance.csv").exists()
-    assert (root / "doe_suggested_ranges.json").exists()
+    assert (root / "doe_knob_importance.csv").exists() is False
+    assert (root / "doe_suggested_ranges.json").exists() is False
+    assert (root / "doe_inference_spec.json").exists()
+    assert (root / "doe_seed_fixed_effects.csv").exists()
+    assert (root / "doe_nonlinear_importance.csv").exists()
+    assert (root / "doe_interaction_maps.csv").exists()
+    assert (root / "doe_bootstrap_design_ci.csv").exists()
+    assert (root / "doe_pareto_designs.csv").exists()
+    assert (root / "doe_inference_summary.json").exists() is False
