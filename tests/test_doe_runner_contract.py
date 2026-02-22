@@ -125,7 +125,21 @@ def test_get_doe_profile_phase2_probe_includes_known_cells_and_focuses_altruism(
         "satisfaction_baseline_alpha",
         "known_cells",
     }.issubset(set(p["ranges"].keys()))
-    assert p["ranges"]["known_cells"] == (4.0, 30.0)
+    assert p["ranges"]["known_cells"] == (float(p["frozen_model"]["num_colors"]), 30.0)
+
+
+def test_get_doe_profile_phase3_puzzle_main_includes_known_cells_and_altruism_learning() -> None:
+    p = get_doe_profile("phase3_puzzle_main")
+    assert p["frozen_model"]["quality_target_mode"] == "puzzle"
+    assert p["frozen_model"]["altruism_mode"] == "satisfaction"
+    assert p["frozen_model"]["altruism_response_gamma"] == 1.0
+    assert {
+        "known_cells",
+        "altruism_response_gamma",
+        "puzzle_local_kappa",
+        "puzzle_shock_prob",
+    }.issubset(set(p["ranges"].keys()))
+    assert p["ranges"]["known_cells"] == (float(p["frozen_model"]["num_colors"]), 30.0)
 
 
 def test_sample_design_points_known_cells_is_integer_valued() -> None:

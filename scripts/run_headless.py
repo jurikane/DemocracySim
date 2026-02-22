@@ -32,6 +32,9 @@ def run_once(run_id: int, cfg, out_dir: Path):
             print(f"No base_seed in config; using random seed {base_seed}")
         run_seed = base_seed + int(run_id)
         store_grid = bool(getattr(sim_cfg, "store_grid", True))
+        # Even in headless DOE runs (store_grid=false), keep minimal grid snapshots
+        # (step 1 + last step) so summary PDFs can show first/last grids.
+        store_summary_grids = True
         model_cfg_for_run = cfg_for_run.model
         model_cfg_for_run.seed = run_seed
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -42,7 +45,13 @@ def run_once(run_id: int, cfg, out_dir: Path):
 
         # Schema v2 logger (v2-only)
         rule_idx = int(getattr(model_cfg_for_run, "rule_idx", 0) or 0)
-        v2 = RunLoggerV2(out_dir=out_dir, run_seed=run_seed, rule_idx=rule_idx, num_steps=n_steps, store_grid=store_grid)
+        v2 = RunLoggerV2(
+            out_dir=out_dir,
+            run_seed=run_seed,
+            rule_idx=rule_idx,
+            num_steps=n_steps,
+            store_grid=(store_grid or store_summary_grids),
+        )
         v2.write_static(model)
         cfg_ref = Path("..") / "config_used.yaml"
         cfg_ref_path = (out_dir / cfg_ref).resolve()
@@ -80,7 +89,11 @@ def run_once(run_id: int, cfg, out_dir: Path):
         v2.begin_step(v2_step)
         model.step()
         grid_snapshot = None
-        if store_grid and (step % grid_interval == 0):
+        should_write_grid = store_grid and (step % grid_interval == 0)
+        # Always provide first/last election-time snapshots for summary pages.
+        if (not should_write_grid) and store_summary_grids and (step == 0 or step == n_steps - 1):
+            should_write_grid = True
+        if should_write_grid:
             grid_snapshot = get_grid_colors(model)
         # Schema v2 tables + grids (1-based)
         v2.log_step(step=v2_step, model=model, grid_snapshot=grid_snapshot)

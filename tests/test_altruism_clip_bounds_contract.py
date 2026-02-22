@@ -32,20 +32,20 @@ def test_altruism_clip_oracle_clips_at_bounds() -> None:
     assert a is not None
     a._participating = True
 
-    # Push above max.
-    a.altruism_factor = 0.7
-    a.apply_altruism_update(dissatisfaction_signal=+1.0)  # would go to 1.7
-    assert float(a.altruism_factor) == pytest.approx(0.8, abs=0.0)
-
-    # Push below min.
+    # Push below min (positive dissatisfaction now reduces altruism).
     a.altruism_factor = 0.3
-    a.apply_altruism_update(dissatisfaction_signal=-1.0)  # would go to -0.7
+    a.apply_altruism_update(dissatisfaction_signal=+1.0)  # would go to -0.7
     assert float(a.altruism_factor) == pytest.approx(0.2, abs=0.0)
+
+    # Push above max (negative dissatisfaction now increases altruism).
+    a.altruism_factor = 0.7
+    a.apply_altruism_update(dissatisfaction_signal=-1.0)  # would go to 1.7
+    assert float(a.altruism_factor) == pytest.approx(0.8, abs=0.0)
 
 
 def test_altruism_clip_metamorphic_tightening_bounds_restricts_outcome() -> None:
     """Metamorphic: narrowing [min,max] cannot produce altruism outside the narrower interval."""
-    sig = +1.0
+    sig = -1.0
     alpha = 1.0
     init = 0.5
 

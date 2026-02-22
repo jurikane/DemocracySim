@@ -126,8 +126,8 @@ def test_altruism_learning_interaction_baseline_alpha_controls_persistence() -> 
         m_fast.step()
         m_slow.step()
 
-    assert float(a_fast.altruism_factor) == pytest.approx(init_a + alpha * 1.0, abs=1e-12)
-    assert float(a_slow.altruism_factor) == pytest.approx(init_a + alpha * 2.0, abs=1e-12)
+    assert float(a_fast.altruism_factor) == pytest.approx(init_a - alpha * 1.0, abs=1e-12)
+    assert float(a_slow.altruism_factor) == pytest.approx(init_a - alpha * 2.0, abs=1e-12)
 
 
 def test_altruism_learning_interaction_satisfaction_mode_changes_update_when_global_constant() -> None:
@@ -207,12 +207,12 @@ def test_altruism_learning_interaction_satisfaction_mode_changes_update_when_glo
 
     # Global-mode agent should see constant sv => signal 0 => no altruism change.
     assert float(agent_g.altruism_factor) == pytest.approx(0.5, abs=1e-12)
-    # Area-mode agent sees sv increase from 0 to 1 => signal +1 => altruism increases by alpha.
-    assert float(agent_a.altruism_factor) == pytest.approx(0.5 + 0.25 * 1.0, abs=1e-12)
+    # Area-mode agent sees sv increase from 0 to 1 => signal +1 => altruism decreases by alpha.
+    assert float(agent_a.altruism_factor) == pytest.approx(0.5 - 0.25 * 1.0, abs=1e-12)
 
 
 def test_altruism_learning_interaction_clip_applies_in_pipeline() -> None:
-    """Interaction: a large positive signal updates altruism but is clipped by clip_max."""
+    """Interaction: a large negative signal increases altruism but is clipped by clip_max."""
     alpha = 1.0
     init_a = 0.5
     clip_max = 0.6
@@ -227,8 +227,8 @@ def test_altruism_learning_interaction_clip_applies_in_pipeline() -> None:
     )
 
     def _sv(_self, *, area, model) -> float:  # type: ignore[no-untyped-def]
-        # step1: 0, step2: 1 => signal +1 on step2
-        return 0.0 if int(model.scheduler.steps) <= 1 else 1.0
+        # step1: 1, step2: 0 => signal -1 on step2 (baseline alpha=0 keeps baseline at 1)
+        return 1.0 if int(model.scheduler.steps) <= 1 else 0.0
 
     for a in model.voting_agents:
         if a is None:
@@ -242,4 +242,3 @@ def test_altruism_learning_interaction_clip_applies_in_pipeline() -> None:
     model.step()  # step2 update, should clip
 
     assert float(focal.altruism_factor) == pytest.approx(clip_max, abs=1e-12)
-

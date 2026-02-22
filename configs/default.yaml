@@ -3,6 +3,9 @@ model:
   election_cost_rate: 0.01  # As fraction of common assets
   reward_rate_personal: 0.02
   break_even_distance_common: 0.25 # Default should be below 0.5 (because collective guessing is good)
+  quality_target_mode: puzzle
+  puzzle_local_kappa: 30.0
+  puzzle_shock_prob: 0.05
   election_impact_on_mutation: 1.8
   mu: 0.05
   rule_idx: 0
@@ -48,6 +51,11 @@ model:
   altruism_init: 0.5
   altruism_clip_min: 0.0
   altruism_clip_max: 1.0
+  # Altruism mode: static | surprise_learning | satisfaction
+  altruism_mode: satisfaction
+  # Satisfaction mode response smoothing (1.0 => direct mapping a = 1 - dissatisfaction)
+  altruism_response_gamma: 1.0
+  # Legacy compatibility flag (ignored when altruism_mode is set)
   altruism_learning: false
   altruism_static: 0.5
   # Satisfaction value (learning signal stub; used by altruism learning)

@@ -131,3 +131,32 @@ def test_run_doe_dry_run_phase2_probe_profile_writes_known_cells_range(tmp_path:
     text = spec.read_text(encoding="utf-8")
     assert "\"profile\": \"phase2_altruism_probe\"" in text
     assert "\"known_cells\"" in text
+
+
+def test_run_doe_dry_run_phase3_puzzle_main_profile(tmp_path: Path) -> None:
+    out_root = tmp_path / "doe_dry_phase3_puzzle_main"
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.run_doe",
+        "--points",
+        "1",
+        "--seed-mode",
+        "fixed",
+        "--seeds",
+        "101",
+        "--no-robustness",
+        "--dry-run",
+        "--doe-profile",
+        "phase3_puzzle_main",
+        "--out-root",
+        str(out_root),
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    spec = out_root / "doe_spec.json"
+    assert spec.exists()
+    text = spec.read_text(encoding="utf-8")
+    assert "\"profile\": \"phase3_puzzle_main\"" in text
+    assert "\"quality_target_mode\": \"puzzle\"" in text
+    assert "\"known_cells\"" in text

@@ -121,7 +121,7 @@ def main() -> None:
         "--doe-profile",
         type=str,
         default="phase1",
-        choices=["phase1", "phase2_altruism_learning", "phase2_altruism_probe"],
+        choices=["phase1", "phase2_altruism_learning", "phase2_altruism_probe", "phase3_puzzle_main"],
         help="DOE profile defining ranges + frozen settings.",
     )
     parser.add_argument("--primary-rule-idx", type=int, default=1, help="Primary screening rule (default=1 approval).")

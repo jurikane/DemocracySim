@@ -21,6 +21,9 @@ class ModelConfig(StrictBaseModel):
     # --- Reward knobs (binary quality-sign economics) ---
     reward_rate_personal: float = 0.0  # Reward/punishment magnitude as a fraction of agent assets (0..1)
     break_even_distance_common: float = 0.5  # Quality threshold against dist_to_reality
+    quality_target_mode: str = "puzzle"  # "reality" | "puzzle"
+    puzzle_local_kappa: float = 30.0  # >0; higher => smaller local puzzle jumps
+    puzzle_shock_prob: float = 0.05  # rare full redraw probability in [0,1]
 
     # --- Adaptive participation learning (schema v2 thesis) ---
     participation_alpha: float = 0.05
@@ -36,6 +39,8 @@ class ModelConfig(StrictBaseModel):
     altruism_init: float = 0.5
     altruism_clip_min: float = 0.0
     altruism_clip_max: float = 1.0
+    altruism_mode: str = "satisfaction"  # "static" | "surprise_learning" | "satisfaction"
+    altruism_response_gamma: float = 1.0  # used by altruism_mode="satisfaction" (1 => direct mapping)
     altruism_learning: bool = False
     altruism_static: float = 0.5
 

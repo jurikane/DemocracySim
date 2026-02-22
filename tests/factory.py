@@ -15,6 +15,9 @@ def create_test_model(**overrides) -> tuple[ParticipationModel, dict]:
     Returns:
         tuple: (ParticipationModel instance, config dict)
     """
+    if "altruism_learning" in overrides and "altruism_mode" not in overrides:
+        overrides["altruism_mode"] = "surprise_learning" if bool(overrides["altruism_learning"]) else "static"
+
     model_app_cfg = load_config().model
     params = build_model_kwargs(model_app_cfg)
     params.update(overrides)

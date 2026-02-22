@@ -23,7 +23,10 @@ Per eligible agent:
 
 Quality gate:
 
-- `good_decision = (dist_to_reality <= break_even_distance_common)`
+- quality distance selection:
+  - if `quality_target_mode == "reality"`: `quality_distance = dist_to_reality`
+  - if `quality_target_mode == "puzzle"`: `quality_distance = puzzle_distance`
+- `good_decision = (quality_distance <= break_even_distance_common)`
 - `sign = +1 if good_decision else -1`
 
 Group distance to election outcome:
@@ -75,12 +78,16 @@ Learning consumption contract:
 - `election_cost_rate`: participation fee rate (fraction of current assets)
 - `reward_rate_personal`: unified reward/punishment rate
 - `break_even_distance_common`: quality threshold for sign switch
+- `quality_target_mode`: source of quality distance (`reality` | `puzzle`)
+- `puzzle_local_kappa`: local puzzle random-walk concentration (`>0`; higher means smaller jumps)
+- `puzzle_shock_prob`: probability of a full puzzle redraw (rare large jumps)
 
 ## No-Participation Semantics
 
 - if an area has no participants, no new aggregate profile is computed
 - no standard reward distribution is executed for that election
 - area diagnostics still update `dist_to_reality` for monitoring
+- in puzzle mode, `puzzle_distance` is also updated for monitoring
 
 ## Risk Addressed by Contracts
 

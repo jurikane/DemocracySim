@@ -111,6 +111,9 @@ class RunLoggerV2:
                 "distance_idx": getattr(model, "distance_idx", None) if model is not None else None,
                 "distance_name": getattr(model, "distance_func_name", None) if model is not None else None,
                 "distance_impl_name": getattr(model, "distance_func_implementation_name", None) if model is not None else None,
+                "quality_target_mode": getattr(model, "quality_target_mode", None) if model is not None else None,
+                "puzzle_local_kappa": getattr(model, "puzzle_local_kappa", None) if model is not None else None,
+                "puzzle_shock_prob": getattr(model, "puzzle_shock_prob", None) if model is not None else None,
             },
             "config_ref": str(config_ref) if config_ref is not None else None,
             "config_hash": config_hash,
@@ -440,6 +443,9 @@ class RunLoggerV2:
                 "dist_to_reality": np.float32(
                     float(area.dist_to_reality) if area.dist_to_reality is not None else 0.0
                 ),
+                "puzzle_distance": np.float32(
+                    float(area.puzzle_distance) if area.puzzle_distance is not None else np.nan
+                ),
                 "gini_index": np.int16(0),
             }
 
@@ -454,6 +460,7 @@ class RunLoggerV2:
                 "turnout",
                 "fee_pool",
                 "dist_to_reality",
+                "puzzle_distance",
                 "gini_index",
                 "area_color",
                 "elected_color",
@@ -470,6 +477,7 @@ class RunLoggerV2:
             r["turnout"] = np.float32(float(snapshot["turnout"]))
             r["fee_pool"] = np.float32(float(snapshot["fee_pool"]))
             r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
+            r["puzzle_distance"] = np.float32(float(snapshot["puzzle_distance"]))
             r["gini_index"] = np.int16(int(snapshot["gini_index"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)

@@ -19,6 +19,8 @@ REQUIRED_MODEL_KEYS = {
     "altruism_init",
     "altruism_clip_min",
     "altruism_clip_max",
+    "altruism_mode",
+    "altruism_response_gamma",
 }
 
 

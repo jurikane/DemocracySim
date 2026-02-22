@@ -101,7 +101,7 @@ class VoteAgent(Agent):
         self.personality_group = np.asarray(personality_group)  # ordering / group identity
         self.personality_group_idx = personality_group_idx
         # ColorCell objects the agent knows (knowledge)
-        self.known_cells: List[Optional[ColorCell]] = [None] * model.known_cells
+        self.known_cells: List[Optional[ColorCell] | int] = [None] * model.known_cells
         if add:  # Add the agent to the models' agent list and the cell
             model.voting_agents.append(self)
             cell = model.grid.get_cell_list_contents([(col, row)])[0]
@@ -139,12 +139,11 @@ class VoteAgent(Agent):
         )
         self.voting_strategy = voting_strategy if voting_strategy is not None else DefaultVotingStrategy()
 
-        # --- Adaptive altruism (reality-weight) learning (per agent) ---
-        if model.altruism_learning:
-            init_a = model.altruism_init
-            self.altruism_factor = float(init_a)
-        else:
+        # --- Altruism behavior state (vote-mode probability) ---
+        if str(getattr(model, "altruism_mode", "static")) == "static":
             self.altruism_factor = float(model.altruism_static)
+        else:
+            self.altruism_factor = float(model.altruism_init)
 
     def __str__(self):
         return (f"Agent(id={self.unique_id}, pos={self.position}, "
@@ -259,6 +258,28 @@ class VoteAgent(Agent):
         Args:
             area (Area): The area that holds the pool of cells in question
         """
+        quality_target_mode = str(getattr(self.model, "quality_target_mode", "reality"))
+        if quality_target_mode == "puzzle":
+            k = int(getattr(self.model, "known_cells", len(self.known_cells)))
+            c = int(self.model.num_colors)
+            if c <= 0 or k <= 0:
+                self.known_cells = []
+                return
+
+            puzzle = getattr(area, "puzzle_distribution", None)
+            probs = np.asarray(puzzle, dtype=np.float64) if puzzle is not None else np.asarray([], dtype=np.float64)
+            if probs.ndim != 1 or probs.size != c or not np.all(np.isfinite(probs)):
+                probs = np.full(c, 1.0 / float(c), dtype=np.float64)
+            probs = np.clip(probs, 0.0, np.inf)
+            total = float(np.sum(probs))
+            if total <= 0.0:
+                probs = np.full(c, 1.0 / float(c), dtype=np.float64)
+            else:
+                probs = probs / total
+            draws = self.model.rng_puzzle.choice(c, size=k, replace=True, p=probs)
+            self.known_cells = [int(x) for x in np.asarray(draws, dtype=np.int16).tolist()]
+            return
+
         n_cells = len(area.cells)
         k = len(self.known_cells)
         if n_cells <= 0 or k <= 0:
@@ -358,10 +379,15 @@ class VoteAgent(Agent):
         Returns:
             tuple[np.array, float]: (distribution, confidence)
         """
-        known_colors = np.asarray(
-            [int(c.color) for c in (self.known_cells or []) if c is not None],
-            dtype=np.int16,
-        )
+        known_colors_list: list[int] = []
+        for c in (self.known_cells or []):
+            if c is None:
+                continue
+            if isinstance(c, (int, np.integer)):
+                known_colors_list.append(int(c))
+            else:
+                known_colors_list.append(int(c.color))
+        known_colors = np.asarray(known_colors_list, dtype=np.int16)
         if known_colors.size == 0:
             # No information -> uniform estimate, zero confidence.
             c = int(self.model.num_colors)
@@ -408,7 +434,7 @@ class VoteAgent(Agent):
         """Participant-only learning of altruism_factor (reality-weight).
 
         Update rule:
-            a = a + altruism_alpha * dissatisfaction_signal
+            a = a - altruism_alpha * dissatisfaction_signal
             a = clip(a, [altruism_clip_min, altruism_clip_max])
         """
         if not self.participating:
@@ -420,12 +446,36 @@ class VoteAgent(Agent):
             return
 
         a = float(self.altruism_factor)
-        a = a + alpha * float(dissatisfaction_signal)
+        a = a - alpha * float(dissatisfaction_signal)
 
         lo = float(self.model.altruism_clip_min)
         hi = float(self.model.altruism_clip_max)
         a = float(np.clip(a, lo, hi))
         self.altruism_factor = a
+
+    def apply_altruism_satisfaction_mode(self, dissatisfaction_value: float) -> None:
+        """Set/update altruism from current dissatisfaction level (pre-election).
+
+        Satisfaction-mode contract:
+        - dissatisfaction_value is a normalized distance in [0,1]
+        - target altruism = 1 - dissatisfaction_value
+        - gamma==1 => direct mapping (a := target)
+        - gamma<1  => EMA-like smoothing toward target
+        """
+        if not np.isfinite(dissatisfaction_value):
+            return
+        d = float(np.clip(float(dissatisfaction_value), 0.0, 1.0))
+        target = 1.0 - d
+        gamma = float(getattr(self.model, "altruism_response_gamma", 1.0))
+        gamma = float(np.clip(gamma, 0.0, 1.0))
+        if gamma >= 1.0:
+            a = target
+        else:
+            a_prev = float(self.altruism_factor)
+            a = (1.0 - gamma) * a_prev + gamma * target
+        lo = float(self.model.altruism_clip_min)
+        hi = float(self.model.altruism_clip_max)
+        self.altruism_factor = float(np.clip(a, lo, hi))
 
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)

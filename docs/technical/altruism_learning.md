@@ -1,6 +1,6 @@
-# Altruism Learning (Technical Contract)
+# Altruism / Vote-Mode Adaptation (Technical Contract)
 
-This document is the single reference for **how altruism learning works in code**:
+This document is the single reference for **how altruism / vote-mode adaptation works in code**:
 what is updated, when it is updated, and why the model is designed this way.
 
 ## What “Altruism” Means in This Model
@@ -19,6 +19,20 @@ Code references:
 
 - Default voting: `src/agents/strategies.py::DefaultVotingStrategy.score_options`
 - Agent-held self-regarding scores: `src/agents/vote_agent.py::VoteAgent.self_regarding_oppose_scores`
+
+## Altruism Modes (Current Contract)
+
+The model now supports an explicit mode switch:
+
+- `altruism_mode="static"`: fixed `altruism_factor = altruism_static`
+- `altruism_mode="surprise_learning"`: participant-only post-election learning from `dissatisfaction_signal`
+- `altruism_mode="satisfaction"` (default): pre-election direct/lagged mapping from current dissatisfaction
+
+Config knob:
+
+- `altruism_response_gamma in [0,1]` (used only in `satisfaction` mode)
+  - `1.0` => direct mapping (`a := 1 - dissatisfaction`)
+  - `<1.0` => smoothed response toward that target
 
 ## Where It Happens (Runtime Path)
 
@@ -39,7 +53,7 @@ Code references:
 
 ## State Variables (Per Agent)
 
-Altruism learning uses:
+Altruism adaptation uses:
 
 - `altruism_factor` (float): the agent’s current reality-weight
 - `dissatisfaction_value` (float): dissatisfaction / distance to a target distribution (depends on `satisfaction_mode`)
@@ -74,29 +88,21 @@ Interpretation:
 Note: in this project, dissatisfaction is a **distance** (bigger = worse), so the sign interpretation differs
 from “reward signals”.
 
-## Altruism Learning Toggle and Initialization
+## Initialization
 
-Model-level toggle:
+- `altruism_mode="static"` => `altruism_factor = altruism_static`
+- `altruism_mode in {"surprise_learning", "satisfaction"}` => `altruism_factor = altruism_init`
 
-- `altruism_learning` (bool)
+Note: legacy `altruism_learning` is still accepted as a compatibility fallback for older callers
+that do not provide `altruism_mode`.
 
-Initialization:
+## Update Rule: `surprise_learning` (Participant-Only)
 
-- if `altruism_learning=True`, each agent starts with `altruism_factor = altruism_init`
-- if `altruism_learning=False`, each agent uses a fixed `altruism_factor = altruism_static`
-
-This lets you treat altruism either as:
-
-- a fixed heterogeneity parameter (static), or
-- an adaptive behavioral parameter (learning).
-
-## Update Rule (Participant-Only, Baseline Thesis Mechanism)
-
-Altruism learning is applied **only** to participating agents, after the election:
+Applied **only** to participating agents, after the election:
 
 ```text
 if altruism_learning and participating:
-    altruism_factor <- altruism_factor + altruism_alpha * dissatisfaction_signal
+    altruism_factor <- altruism_factor - altruism_alpha * dissatisfaction_signal
     altruism_factor <- clip(altruism_factor, [altruism_clip_min, altruism_clip_max])
 ```
 
@@ -108,19 +114,38 @@ Design choices:
 
 Practical intuition:
 
-- If dissatisfaction is higher than expected (`signal > 0`), altruism increases (higher probability of altruistic votes).
-- If dissatisfaction is lower than expected (`signal < 0`), altruism decreases (higher probability of self-regarding votes).
+- If dissatisfaction is higher than expected (`signal > 0`), altruism decreases (higher probability of self-regarding votes).
+- If dissatisfaction is lower than expected (`signal < 0`), altruism increases (higher probability of altruistic votes).
 
 Whether this produces stable dynamics depends on the dissatisfaction signal statistics and `altruism_alpha`.
 
+## Update Rule: `satisfaction` (Default)
+
+Applied **before** the election (so it affects the current vote-mode draw), for all agents:
+
+```text
+target = 1 - dissatisfaction_value          # dissatisfaction is in [0,1]
+altruism_factor <- (1-gamma) * altruism_factor + gamma * target
+altruism_factor <- clip(altruism_factor, [altruism_clip_min, altruism_clip_max])
+```
+
+where `gamma = altruism_response_gamma`.
+
+Interpretation:
+
+- low dissatisfaction (high satisfaction) -> higher altruism
+- high dissatisfaction -> lower altruism
+- `gamma=1` gives the direct mapping `altruism_factor = 1 - dissatisfaction_value`
+
 ## Knobs (What They Mean)
 
-Altruism learning knobs (ModelConfig):
+Altruism knobs (ModelConfig):
 
-- `altruism_learning` (bool): learning on/off
+- `altruism_mode`: `"static" | "surprise_learning" | "satisfaction"`
 - `altruism_static` (in `[0,1]`): fixed altruism when learning is off
 - `altruism_init` (in `[0,1]`): initial altruism when learning is on
-- `altruism_alpha` (>= 0): learning rate for altruism updates
+- `altruism_alpha` (>= 0): learning rate for `surprise_learning`
+- `altruism_response_gamma` (in `[0,1]`): response smoothing for `satisfaction` mode
 - `altruism_clip_min`, `altruism_clip_max` (finite, `min <= max`): clip interval for altruism_factor
 
 Dissatisfaction knobs (inputs to altruism updates):
@@ -138,6 +163,9 @@ The thesis scope excludes strategic voting and complex learning models. This alt
 
 It provides a controlled way to create adaptive agents whose voting behavior can change over time,
 without turning the thesis into a reinforcement learning project.
+
+Future extension note (not implemented): `satisfaction` mode may later be upgraded to incorporate
+reward and/or wealth signals to better approximate a broader notion of "being fully satisfied".
 
 ## What To Look At When Debugging
 

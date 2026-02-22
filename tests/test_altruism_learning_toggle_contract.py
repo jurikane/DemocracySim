@@ -134,6 +134,6 @@ def test_altruism_learning_metamorphic_toggle_gates_update() -> None:
     assert float(off_abs.altruism_factor) == pytest.approx(off_abs_a0, abs=0.0)
 
     # Learning on: only participant updates.
-    expected = on_part_a0 + float(m_on.altruism_alpha) * 0.5
+    expected = on_part_a0 - float(m_on.altruism_alpha) * 0.5
     assert float(on_part.altruism_factor) == pytest.approx(expected, abs=1e-12)
     assert float(on_abs.altruism_factor) == pytest.approx(on_abs_a0, abs=0.0)

@@ -11,7 +11,7 @@ import pandas as pd
 DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "max_all_abstain_stretch": 10.0,
     "min_winner_changes_post_burnin": 3.0,
-    "max_winner_changes_post_burnin": 120.0,
+    "max_winner_changes_post_burnin": 170.0,
     "min_group_turnout_range_mean": 0.03,
     "min_roll3_group_turnout_range_max": 0.3,
     "min_roll20_group_turnout_range_max": 0.1,
@@ -160,6 +160,18 @@ def compute_run_features_from_tables(
     if missing_agents:
         raise ValueError(f"agents missing columns: {missing_agents}")
 
+    quality_col = "quality_distance"
+    if "quality_distance" not in area_steps.columns:
+        quality_col = "puzzle_distance" if "puzzle_distance" in area_steps.columns else "dist_to_reality"
+        area_steps = area_steps.copy()
+        area_steps["quality_distance"] = pd.to_numeric(area_steps[quality_col], errors="coerce")
+        if quality_col == "puzzle_distance" and not np.isfinite(
+            area_steps["quality_distance"].to_numpy(dtype=float)
+        ).any():
+            area_steps["quality_distance"] = pd.to_numeric(
+                area_steps["dist_to_reality"], errors="coerce"
+            )
+
     per_step = (
         area_steps.groupby("step", as_index=False)
         .agg(
@@ -167,6 +179,7 @@ def compute_run_features_from_tables(
             turnout=("turnout", "mean"),
             gini_index=("gini_index", "mean"),
             dist_to_reality=("dist_to_reality", "mean"),
+            quality_distance=("quality_distance", "mean"),
             winning_option_id=("winning_option_id", "first"),
         )
         .sort_values("step")
@@ -181,7 +194,7 @@ def compute_run_features_from_tables(
     post = per_step.loc[per_step["step"] > int(burn_in_steps), "winning_option_id"].to_numpy()
     winner_changes_post_burnin = _winner_changes(post)
     winner_entropy_norm = _winner_entropy_norm(post if len(post) > 0 else per_step["winning_option_id"].to_numpy())
-    dist_vals = pd.to_numeric(per_step["dist_to_reality"], errors="coerce").to_numpy(dtype=float)
+    dist_vals = pd.to_numeric(per_step["quality_distance"], errors="coerce").to_numpy(dtype=float)
     finite_dist = np.isfinite(dist_vals)
     if finite_dist.any():
         dist_nonzero_share = float(np.mean(dist_vals[finite_dist] > 1e-12))
@@ -253,7 +266,7 @@ def compute_run_features_from_tables(
 
     roll10_dist_std_mean = 0.0
     if len(per_step) >= 10:
-        v = per_step["dist_to_reality"].rolling(window=10, min_periods=10).std()
+        v = per_step["quality_distance"].rolling(window=10, min_periods=10).std()
         v = pd.to_numeric(v, errors="coerce")
         if v.notna().any():
             roll10_dist_std_mean = float(v.mean(skipna=True))
@@ -366,8 +379,8 @@ def compute_run_features_from_tables(
         "turnout_std": _safe_std(per_step["turnout"]),
         "mean_gini": float(per_step["gini_index"].mean()),
         "gini_std": _safe_std(per_step["gini_index"]),
-        "mean_dist": float(per_step["dist_to_reality"].mean()),
-        "dist_std": _safe_std(per_step["dist_to_reality"]),
+        "mean_dist": float(per_step["quality_distance"].mean()),
+        "dist_std": _safe_std(per_step["quality_distance"]),
         "max_all_abstain_stretch": float(max_all_abstain_stretch),
         "winner_changes_post_burnin": float(winner_changes_post_burnin),
         "winner_entropy_norm": float(winner_entropy_norm),

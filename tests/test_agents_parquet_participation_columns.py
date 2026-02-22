@@ -36,6 +36,7 @@ def test_agents_parquet_includes_participation_baseline_columns(tmp_path: Path) 
             "fee_pool": float(getattr(area, "_election_fee_pool", 0.0)),
             "gini_index": 0,
             "dist_to_reality": 0.0,
+            "puzzle_distance": float("nan"),
         }
 
     logger._votes_rows.append(

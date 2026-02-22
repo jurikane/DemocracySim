@@ -27,7 +27,7 @@ class Area(Agent):
             width (int): The average width of the area (see size_variance).
             size_variance (float): A variance factor applied to height and width.
         """
-        super().__init__(unique_id=unique_id,  model=model)
+        super().__init__(unique_id=unique_id, model=model)
         self.np_random = model.random  # Use the model's random generator for reproducibility
         self._set_dimensions(width, height, size_variance)
         self.agents: List["VoteAgent"] = []
@@ -40,6 +40,8 @@ class Area(Agent):
         self._voted_ordering = None
         self._voter_turnout = 0  # In percent
         self._dist_to_reality = None  # Elected vs. actual color distribution
+        self._puzzle_distance = None  # Elected vs. puzzle ordering distance
+        self._puzzle_distribution = None  # Optional puzzle distribution for this step
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
         self._num_eligible_voters_last = 0  # Eligible population count for diagnostics/logging
@@ -85,6 +87,18 @@ class Area(Agent):
     @property
     def dist_to_reality(self):
         return self._dist_to_reality
+
+    @property
+    def puzzle_distance(self):
+        return self._puzzle_distance
+
+    @property
+    def puzzle_distribution(self):
+        return self._puzzle_distribution
+
+    @property
+    def puzzle_mode(self) -> bool:
+        return self.model.is_puzzle_mode
 
     @property
     def election_fee_pool(self) -> float:
@@ -278,11 +292,8 @@ class Area(Agent):
             #   Alternative to think about: randomly select any available option.
             if self._voted_ordering is None:
                 self._voted_ordering = real_color_ord
-            # Update dist_to_reality for monitoring but no rewards
-            self._dist_to_reality = self.model.distance_func(
-                real_color_ord, self._voted_ordering,
-                self.model.color_search_pairs
-            )
+            # Update quality distances for monitoring even when no one participated.
+            self._update_quality_distances()
             # Thought: agents could be punished here for all abstaining.
             self.num_agents_participated_last = 0
             self._voter_turnout = 0
@@ -315,8 +326,8 @@ class Area(Agent):
                 a.participation_signal = delta
                 a.apply_participation_update(a.participation_signal)
         # TODO put those two loops together
-        # Adaptive altruism learning update (participant-only, optional)
-        if self.model.altruism_learning:
+        # Surprise-learning altruism update (participant-only, optional).
+        if str(getattr(self.model, "altruism_mode", "static")) == "surprise_learning":
             for a in self.agents:
                 if a.participating:
                     a.apply_altruism_update(a.dissatisfaction_signal)
@@ -342,7 +353,10 @@ class Area(Agent):
         for cell in agent.known_cells:
             if cell is None:
                 continue
-            known_colors.append({"color": cell.color})
+            if isinstance(cell, (int, np.integer)):
+                known_colors.append({"color": int(cell)})
+            else:
+                known_colors.append({"color": int(cell.color)})
 
         personality_group = agent.personality_group
         if isinstance(personality_group, np.ndarray):
@@ -471,7 +485,10 @@ class Area(Agent):
 
         Binary quality-sign contract:
         - Decision quality gate:
-            good if dist_to_reality <= break_even_distance_common, else bad
+            good if quality_distance <= break_even_distance_common, else bad
+            quality_distance is selected by model.quality_target_mode:
+                - "reality": dist_to_reality
+                - "puzzle":  puzzle_distance
         - Unified reward rate:
             reward_rate_personal (fraction of current assets)
         - Group distance factor:
@@ -482,18 +499,12 @@ class Area(Agent):
         - Election fee remains separate and participant-only in _tally_votes()/reward_agent().
         """
         dist_func = self.model.distance_func
-        # Calculate the distance to the real distribution using distance_func in [0,1]
-        real_color_ord = self._ordering_from_distribution_tie_aware(
-            self.color_distribution,
-            reference_ordering=self.voted_ordering,
-            rng=self.model.voting_rng,
-        )
         search_pairs = self.model.color_search_pairs
-        self._dist_to_reality = dist_func(
-            real_color_ord, self.voted_ordering, search_pairs
-        )
+        self._update_quality_distances()
+        quality_distance = self._quality_distance()
+
         quality_threshold = float(self.model.break_even_distance_common)
-        decision_good = float(self.dist_to_reality) <= quality_threshold + 1e-12
+        decision_good = quality_distance <= quality_threshold + 1e-12
         sign = 1.0 if decision_good else -1.0
         reward_rate = float(self.model.reward_rate_personal)
 
@@ -535,21 +546,25 @@ class Area(Agent):
             ref = np.asarray(reference_ordering, dtype=np.int64).tolist()
             ref_rank = {int(c): i for i, c in enumerate(ref)}
 
+        # Sort once and form disjoint tie groups in descending order.
+        order_desc = np.argsort(-arr, kind="mergesort").astype(np.int64).tolist()
         ordering: list[int] = []
-        vals_desc = np.sort(np.unique(arr))[::-1]
-        for v in vals_desc:
-            group = np.nonzero(np.isclose(arr, v, rtol=0.0, atol=1e-12))[0].astype(np.int64).tolist()
-            if len(group) <= 1:
-                ordering.extend(group)
-                continue
-            if ref_rank:
-                group.sort(key=lambda c: ref_rank.get(int(c), n + int(c)))
-            else:
-                if rng is None:
-                    raise ValueError("rng is required for unbiased tie-breaking when no reference ordering exists.")
-                group = np.asarray(group, dtype=np.int64)
-                group = rng.permutation(group).astype(np.int64).tolist()
+        i = 0
+        while i < n:
+            j = i + 1
+            base_val = float(arr[order_desc[i]])
+            while j < n and bool(np.isclose(float(arr[order_desc[j]]), base_val, rtol=0.0, atol=1e-12)):
+                j += 1
+            group = [int(c) for c in order_desc[i:j]]
+            if len(group) > 1:
+                if ref_rank:
+                    group.sort(key=lambda c: ref_rank.get(int(c), n + int(c)))
+                else:
+                    if rng is None:
+                        raise ValueError("rng is required for unbiased tie-breaking when no reference ordering exists.")
+                    group = rng.permutation(np.asarray(group, dtype=np.int64)).astype(np.int64).tolist()
             ordering.extend(group)
+            i = j
 
         return np.asarray(ordering, dtype=np.int64)
 
@@ -580,6 +595,89 @@ class Area(Agent):
         """
         cell_set = set(self.cells)
         return [c for c in cell_list if c in cell_set]
+
+    def _sample_fresh_puzzle_distribution(self) -> np.ndarray:
+        """Sample an unbiased random puzzle distribution on the simplex."""
+        num_colors = self.model.num_colors
+        if num_colors <= 0:
+            return np.asarray([], dtype=np.float64)
+        alpha = np.ones(num_colors, dtype=np.float64)
+        sample = np.asarray(self.model.rng_puzzle.dirichlet(alpha), dtype=np.float64)
+        if sample.shape != (num_colors,) or not np.all(np.isfinite(sample)):
+            return np.full(num_colors, 1.0 / num_colors, dtype=np.float64)
+        return sample
+
+    def _sample_local_puzzle_distribution(self, prev: np.ndarray) -> np.ndarray:
+        """Sample a local random walk step around the previous puzzle distribution."""
+        prev_arr = np.asarray(prev, dtype=np.float64)
+        num_colors = self.model.num_colors
+        if prev_arr.shape != (num_colors,) or not np.all(np.isfinite(prev_arr)):
+            return self._sample_fresh_puzzle_distribution()
+        prev_arr = np.clip(prev_arr, 0.0, None)
+        total = float(prev_arr.sum())
+        if not np.isfinite(total) or total <= 0.0:
+            return self._sample_fresh_puzzle_distribution()
+        prev_arr = prev_arr / total
+        eps = 1e-6
+        alpha = float(self.model.puzzle_local_kappa) * prev_arr + eps
+        sample = np.asarray(self.model.rng_puzzle.dirichlet(alpha), dtype=np.float64)
+        if sample.shape != (num_colors,) or not np.all(np.isfinite(sample)):
+            return self._sample_fresh_puzzle_distribution()
+        return sample
+
+    def _update_puzzle_distribution(self) -> None:
+        """Update area-level puzzle distribution via Dirichlet RW + rare shocks."""
+        prev = self._puzzle_distribution
+        if prev is None:
+            self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
+            return
+
+        prev_arr = np.asarray(prev, dtype=np.float64)
+        if prev_arr.shape != (self.model.num_colors,) or not np.all(np.isfinite(prev_arr)):
+            self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
+            return
+
+        shock_prob = float(self.model.puzzle_shock_prob)
+        if shock_prob >= 1.0 or (shock_prob > 0.0 and float(self.model.rng_puzzle.random()) < shock_prob):
+            self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
+            return
+        self._puzzle_distribution = self._sample_local_puzzle_distribution(prev_arr)
+
+    def _clear_puzzle_state(self) -> None:
+        """Drop per-step puzzle state when running in reality mode."""
+        self._puzzle_distribution = None
+        self._puzzle_distance = float("nan")
+
+    def _compute_puzzle_distance(self) -> float:
+        puzzle_distribution = self._puzzle_distribution
+        if puzzle_distribution is None or puzzle_distribution.size == 0:
+            return float("nan")
+        puzzle_ord = self._ordering_from_distribution_tie_aware(
+            np.asarray(puzzle_distribution, dtype=np.float64),
+            reference_ordering=self.voted_ordering,
+            rng=self.model.rng_puzzle,
+        )
+        return float(self.model.distance_func(puzzle_ord, self.voted_ordering, self.model.color_search_pairs))
+
+    def _update_quality_distances(self) -> None:
+        voted_ordering = self.voted_ordering
+        real_color_ord = self._ordering_from_distribution_tie_aware(
+            self.color_distribution,
+            reference_ordering=voted_ordering,
+            rng=self.model.voting_rng,
+        )
+        self._dist_to_reality = float(self.model.distance_func(real_color_ord, voted_ordering, self.model.color_search_pairs))
+        if self.puzzle_mode and self._puzzle_distribution is None:
+            self._update_puzzle_distribution()
+        self._puzzle_distance = self._compute_puzzle_distance()
+
+    def _quality_distance(self) -> float:
+        if self.puzzle_mode:
+            quality_distance = float(self.puzzle_distance)
+            if not np.isfinite(quality_distance):
+                raise RuntimeError("quality_target_mode='puzzle' requires finite puzzle_distance.")
+            return quality_distance
+        return float(self.dist_to_reality)
 
     def _update_diag_history(self) -> None:
         """Append per-area diagnostics for the current step."""
@@ -660,6 +758,7 @@ class Area(Agent):
             {
                 "turnout": float(self.voter_turnout),
                 "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
+                "puzzle_distance": float(self.puzzle_distance) if self.puzzle_distance is not None else float("nan"),
                 "mean_delta_rel_participants": mean_delta_rel_participants,
                 "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
                 "mean_personal_reward": mean_personal_reward,
@@ -722,9 +821,9 @@ class Area(Agent):
             "num_abstainers": len(abstainers),
             "election_held": bool(aggregated is not None),
             "winning_option_id": winning_option_id,
-            "dist_to_reality": float(
-                self._dist_to_reality) if self._dist_to_reality is not None else float(
-                "nan"),
+            "dist_to_reality": float(self._dist_to_reality) if self._dist_to_reality is not None else float("nan"),
+            "puzzle_distance": float(self._puzzle_distance) if self._puzzle_distance is not None else float("nan"),
+            "quality_target_mode": str(getattr(self.model, "quality_target_mode", "reality")),
             "voted_ordering": (
                 self._voted_ordering.tolist()
                 if isinstance(self._voted_ordering, np.ndarray)
@@ -772,6 +871,7 @@ class Area(Agent):
             participants = self.num_agents_participated_last
             turnout = self.voter_turnout
             dist_to_reality = self.dist_to_reality
+            puzzle_distance = self.puzzle_distance
             assets = [float(a.assets) for a in self.agents]
             gini_index = int(gini_index_0_100(assets)) if assets else 0
             area_color = None
@@ -788,6 +888,7 @@ class Area(Agent):
                     "participants": participants,
                     "turnout": turnout,
                     "dist_to_reality": dist_to_reality,
+                    "puzzle_distance": float(puzzle_distance) if puzzle_distance is not None else float("nan"),
                     "gini_index": gini_index,
                     "area_color": area_color,
                     "elected_color": elected_color
@@ -827,6 +928,11 @@ class Area(Agent):
         mutate the cells' colors according to the election outcome
         and update the color distribution of the area.
         """
+        if self.puzzle_mode:
+            self._update_puzzle_distribution()
+        else:
+            self._clear_puzzle_state()
+
         # Update knowledge for all agents before any learning/election logic.
         for agent in self.agents:
             agent.update_known_cells(area=self)
@@ -843,5 +949,8 @@ class Area(Agent):
                 agent.dissatisfaction_signal = sv - baseline
                 alpha = float(self.model.satisfaction_baseline_alpha)
                 agent.dissatisfaction_baseline = (1.0 - alpha) * baseline + alpha * sv
+        if str(getattr(self.model, "altruism_mode", "static")) == "satisfaction":
+            for agent in self.agents:
+                agent.apply_altruism_satisfaction_mode(agent.dissatisfaction_value)
         self.conduct_election()
         # self.mutate_cells()

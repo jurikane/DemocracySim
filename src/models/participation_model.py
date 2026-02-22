@@ -24,6 +24,7 @@ from src.utils.rng import (
     np_rng_debug,
     np_rng_participation,
     np_rng_voting,
+    np_rng_puzzle,
     py_rng,
     py_rng_viz,
     py_rng_debug,
@@ -260,6 +261,8 @@ class ParticipationModel(mesa.Model):
         altruism_init,
         altruism_clip_min,
         altruism_clip_max,
+        altruism_mode,
+        altruism_response_gamma,
         altruism_learning,
         altruism_static,
         satisfaction_mode,
@@ -281,7 +284,19 @@ class ParticipationModel(mesa.Model):
         ):
             raise ValueError("altruism_clip_min/max must be finite and satisfy clip_min <= clip_max.")
 
-        self.altruism_learning = bool(altruism_learning)
+        mode_raw = altruism_mode
+        if isinstance(mode_raw, (int, np.integer, float, np.floating)) and np.isfinite(float(mode_raw)):
+            mode_raw = {0: "static", 1: "surprise_learning", 2: "satisfaction"}.get(int(mode_raw), mode_raw)
+        if mode_raw is None:
+            mode_raw = "surprise_learning" if bool(altruism_learning) else "static"
+        self.altruism_mode = ensure_choice(
+            "altruism_mode",
+            str(mode_raw),
+            {"static", "surprise_learning", "satisfaction"},
+        )
+        self.altruism_response_gamma = ensure_rate_0_1("altruism_response_gamma", altruism_response_gamma)
+        # Legacy compatibility field; use `altruism_mode` for semantics.
+        self.altruism_learning = bool(self.altruism_mode == "surprise_learning")
         self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
 
         self.satisfaction_mode = ensure_choice(
@@ -301,6 +316,9 @@ class ParticipationModel(mesa.Model):
         election_cost_rate,
         reward_rate_personal,
         break_even_distance_common,
+        quality_target_mode,
+        puzzle_local_kappa,
+        puzzle_shock_prob,
         num_colors: int,
     ) -> None:
         """Validate and assign voting-rule, distance, and reward knobs."""
@@ -317,6 +335,14 @@ class ParticipationModel(mesa.Model):
         self.election_cost_rate = is_rate_btw_0_and_1(election_cost_rate)
         self.reward_rate_personal = is_rate_btw_0_and_1(reward_rate_personal)
         self.break_even_distance_common = is_rate_btw_0_and_1(break_even_distance_common)
+        mode_raw = self._normalize_quality_target_mode(quality_target_mode)
+        self.quality_target_mode = ensure_choice(
+            "quality_target_mode",
+            mode_raw,
+            {"reality", "puzzle"},
+        )
+        self.puzzle_local_kappa = ensure_finite_gt_0("puzzle_local_kappa", puzzle_local_kappa)
+        self.puzzle_shock_prob = ensure_rate_0_1("puzzle_shock_prob", puzzle_shock_prob)
 
         self.distance_idx = distance_idx
         dist, d_names, d_name, d_i_names, d_i_name = self._get_dist_conf(distance_idx)
@@ -326,6 +352,14 @@ class ParticipationModel(mesa.Model):
         self.distance_func_implementation_names = d_i_names
         self.distance_func_implementation_name = d_i_name
         self.options = self.create_all_options(num_colors)
+
+    @staticmethod
+    def _normalize_quality_target_mode(value) -> str:
+        if isinstance(value, (int, np.integer)):
+            return "puzzle" if int(value) == 1 else "reality"
+        if isinstance(value, (float, np.floating)) and float(value).is_integer():
+            return "puzzle" if int(value) == 1 else "reality"
+        return str(value)
 
     def _configure_environment_scalars(
         self,
@@ -381,6 +415,9 @@ class ParticipationModel(mesa.Model):
         election_cost_rate,
         reward_rate_personal: float = 0.0,
         break_even_distance_common: float = 0.5,
+        quality_target_mode: str = "puzzle",
+        puzzle_local_kappa: float = 30.0,
+        puzzle_shock_prob: float = 0.05,
         seed=None,
         max_steps: Optional[int] = None,
         participation_alpha: float = 0.05,
@@ -393,6 +430,8 @@ class ParticipationModel(mesa.Model):
         altruism_init: float = 0.5,
         altruism_clip_min: float = 0.0,
         altruism_clip_max: float = 1.0,
+        altruism_mode: Optional[str] = None,
+        altruism_response_gamma: float = 1.0,
         altruism_learning: bool = False,
         altruism_static: float = 0.5,
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
@@ -442,6 +481,8 @@ class ParticipationModel(mesa.Model):
             altruism_init=altruism_init,
             altruism_clip_min=altruism_clip_min,
             altruism_clip_max=altruism_clip_max,
+            altruism_mode=altruism_mode,
+            altruism_response_gamma=altruism_response_gamma,
             altruism_learning=altruism_learning,
             altruism_static=altruism_static,
             satisfaction_mode=satisfaction_mode,
@@ -454,6 +495,7 @@ class ParticipationModel(mesa.Model):
         self.np_random = np_rng()
         self.participation_rng = np_rng_participation()
         self.voting_rng = np_rng_voting()
+        self.rng_puzzle = np_rng_puzzle()
         self.random = py_rng()
         # Dedicated streams for visualization/debug to avoid perturbing simulation RNG.
         self.rng_viz = np_rng_viz()
@@ -491,6 +533,9 @@ class ParticipationModel(mesa.Model):
             election_cost_rate=election_cost_rate,
             reward_rate_personal=reward_rate_personal,
             break_even_distance_common=break_even_distance_common,
+            quality_target_mode=quality_target_mode,
+            puzzle_local_kappa=puzzle_local_kappa,
+            puzzle_shock_prob=puzzle_shock_prob,
             num_colors=num_colors,
         )
         # Create search pairs once for faster iterations when comparing orderings
@@ -603,6 +648,10 @@ class ParticipationModel(mesa.Model):
     @property
     def no_overlap(self) -> bool:
         return self._no_overlap
+
+    @property
+    def is_puzzle_mode(self) -> bool:
+        return self.quality_target_mode == "puzzle"
 
     def register_schema_v2_sinks(self, *, vote_sink, area_snapshot_sink) -> None:
         """Register schema-v2 sink callbacks used by logging."""

@@ -123,6 +123,7 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     # - area_color_0.. area_color_{C-1} (float32)
     # Metrics
     "dist_to_reality",
+    "puzzle_distance",
     "gini_index",
 )
 
@@ -138,6 +139,7 @@ AREA_STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     "fee_pool": "float32",
     "winning_option_id": "int32",
     "dist_to_reality": "float32",
+    "puzzle_distance": "float32",
     "gini_index": "int16",
     # expanded vectors documented but validated dynamically
 }
