@@ -402,7 +402,7 @@ class RunLoggerV2:
 
         options = np.asarray(model.options)
 
-        def _apply_election_vectors(*, r_dict, elected_color_vec, area_color_vec) -> None:
+        def _apply_election_vectors(*, r_dict, elected_color_vec, area_color_vec, puzzle_color_vec=None) -> None:
             """Fill expanded vector columns + winning_option_id into r dictionary.
 
             `elected_color_vec` is a length-C ordering (ints).
@@ -424,6 +424,10 @@ class RunLoggerV2:
                 cdv = np.asarray(area_color_vec, dtype=np.float32)
                 for i in range(num_colors):
                     r_dict[f"area_color_{i}"] = np.float32(cdv[i])
+            if puzzle_color_vec is not None:
+                pdv = np.asarray(puzzle_color_vec, dtype=np.float32)
+                for i in range(num_colors):
+                    r_dict[f"puzzle_color_{i}"] = np.float32(pdv[i])
 
         for area in areas:
             area_id = int(area.unique_id)
@@ -481,6 +485,7 @@ class RunLoggerV2:
             r["gini_index"] = np.int16(int(snapshot["gini_index"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
+            puzzle_cd = snapshot.get("puzzle_color", None)
             if cd is None:
                 raise RuntimeError(
                     f"Missing pre-mutation area_color for step {step}, area {area_id}."
@@ -490,6 +495,7 @@ class RunLoggerV2:
                 r_dict=r,
                 elected_color_vec=voted_ordering,
                 area_color_vec=cd,
+                puzzle_color_vec=puzzle_cd,
             )
 
             rows.append(r)
@@ -517,6 +523,8 @@ class RunLoggerV2:
                     "election_delta_rel": np.float32(float(a.election_delta_rel)),
                     "participation_baseline": np.float32(float(a.participation_baseline)),
                     "participation_signal": np.float32(float(a.participation_signal)),
+                    "q_participation": np.float32(float(a.q_participation)),
+                    "participation_probability": np.float32(float(a.participation_probability())),
                     "altruism_factor": np.float32(float(a.altruism_factor)),
                     "dissatisfaction_value": np.float32(float(a.dissatisfaction_value)),
                     "dissatisfaction_baseline": np.float32(float(a.dissatisfaction_baseline)),

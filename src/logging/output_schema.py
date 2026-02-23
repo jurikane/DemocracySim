@@ -121,6 +121,7 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     # Vectors (expanded):
     # - elected_color_0.. elected_color_{C-1} (int16)
     # - area_color_0.. area_color_{C-1} (float32)
+    # - puzzle_color_0.. puzzle_color_{C-1} (float32, optional; present in puzzle-mode runs)
     # Metrics
     "dist_to_reality",
     "puzzle_distance",
@@ -171,6 +172,8 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "election_delta_rel",
     "participation_baseline",
     "participation_signal",
+    "q_participation",
+    "participation_probability",
     "altruism_factor",
     "dissatisfaction_value",
     "dissatisfaction_baseline",
@@ -194,6 +197,8 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "election_delta_rel": "float32",
     "participation_baseline": "float32",
     "participation_signal": "float32",
+    "q_participation": "float32",
+    "participation_probability": "float32",
     "altruism_factor": "float32",
     "dissatisfaction_value": "float32",
     "dissatisfaction_baseline": "float32",
@@ -472,11 +477,14 @@ def validate_area_steps_df(df: pd.DataFrame) -> None:
         df,
         table_name=table.name,
         exact_allowed=set(table.columns),
-        allowed_prefixes=("elected_color_", "area_color_"),
+        allowed_prefixes=("elected_color_", "area_color_", "puzzle_color_"),
     )
     _validate_dtypes(df, table.dtypes, table.name)
     _validate_expanded_prefix(df, prefix="elected_color", dtype="int16", table_name=table.name)
     _validate_expanded_prefix(df, prefix="area_color", dtype="float32", table_name=table.name)
+    puzzle_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("puzzle_color_")]
+    if puzzle_cols:
+        _validate_expanded_prefix(df, prefix="puzzle_color", dtype="float32", table_name=table.name)
 
 
 def validate_agents_df(df: pd.DataFrame) -> None:

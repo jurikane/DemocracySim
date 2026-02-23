@@ -67,3 +67,8 @@ def test_agents_parquet_includes_participation_baseline_columns(tmp_path: Path) 
     agents_df = pd.read_parquet(tmp_path / "agents.parquet")
     assert "participation_baseline" in agents_df.columns
     assert "participation_signal" in agents_df.columns
+    assert "q_participation" in agents_df.columns
+    assert "participation_probability" in agents_df.columns
+    p = agents_df["participation_probability"].to_numpy(dtype=float)
+    assert np.all(np.isfinite(p))
+    assert np.all((0.0 <= p) & (p <= 1.0))

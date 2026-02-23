@@ -159,6 +159,65 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
         },
         "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
     },
+    "phase3_puzzle_refine1": {
+        "name": "phase3_puzzle_refine1",
+        # Refined from DOE: data/simulation_output/doe_20260222_055633 (250 steps, puzzle mode)
+        # Goal: reduce turnout saturation while keeping puzzle/process knobs exploratory.
+        "ranges": {
+            "election_cost_rate": (0.020, 0.045),
+            "reward_rate_personal": (0.050, 0.160),
+            "break_even_distance_common": (0.33, 0.52),
+            "election_impact_on_mutation": (0.90, 2.20),
+            "mu": (0.05, 0.50),
+            "participation_alpha": (0.07, 0.18),
+            "participation_beta": (3.5, 9.0),
+            # Strongest signal in 250-step DOE: high init_q drove turnout saturation.
+            "participation_init_q": (0.05, 0.55),
+            "known_cells": (5.0, 27.0),
+            # We keep near-direct satisfaction response; effect looked weak in current range.
+            "altruism_response_gamma": (0.75, 1.00),
+            # We keep puzzle dynamics reasonably broad in refine1 (not enough evidence yet to clamp hard).
+            "puzzle_local_kappa": (15.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.135),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 400,
+        },
+    },
+    "phase3_puzzle_summary_dev": {
+        "name": "phase3_puzzle_summary_dev",
+        # Smaller DOE for summary/visual iteration after puzzle refactor.
+        # Bias toward viable regimes, but retain enough spread for varied plot examples.
+        "ranges": {
+            "election_cost_rate": (0.025, 0.045),
+            "reward_rate_personal": (0.055, 0.145),
+            "break_even_distance_common": (0.35, 0.50),  # !!! 
+            "election_impact_on_mutation": (0.95, 2.00),
+            "mu": (0.10, 0.45),
+            "participation_alpha": (0.09, 0.17),
+            "participation_beta": (4.0, 8.5),
+            "participation_init_q": (0.08, 0.45),
+            "known_cells": (10.0, 24.0),
+            "altruism_response_gamma": (0.90, 1.00),
+            "puzzle_local_kappa": (20.0, 75.0),
+            "puzzle_shock_prob": (0.01, 0.10),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 80,
+        },
+    },
 }
 
 

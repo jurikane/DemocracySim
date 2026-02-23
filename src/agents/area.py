@@ -891,7 +891,12 @@ class Area(Agent):
                     "puzzle_distance": float(puzzle_distance) if puzzle_distance is not None else float("nan"),
                     "gini_index": gini_index,
                     "area_color": area_color,
-                    "elected_color": elected_color
+                    "elected_color": elected_color,
+                    "puzzle_color": (
+                        self.puzzle_distribution.copy()
+                        if isinstance(self.puzzle_distribution, np.ndarray)
+                        else None
+                    ),
                 },
             )
 
