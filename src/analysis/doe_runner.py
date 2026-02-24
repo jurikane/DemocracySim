@@ -212,10 +212,11 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             **DEFAULT_FROZEN_MODEL,
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
+            "altruism_static": 0,
         },
         "frozen_simulation": {
             **DEFAULT_FROZEN_SIM,
-            "num_steps": 80,
+            "num_steps": 100,
         },
     },
 }

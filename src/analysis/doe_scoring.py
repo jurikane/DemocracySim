@@ -3,15 +3,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import json
+import itertools
 
 import numpy as np
 import pandas as pd
+import yaml
+
+from src.utils.ballots import score_options_c2
+from src.utils.distance_functions import kendall_tau_order, spearman_fr_order
+from src.utils.social_welfare_functions import (
+    approval_voting,
+    borda_rule,
+    majority_rule,
+    utilitarian_rule,
+)
 
 
 DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "max_all_abstain_stretch": 10.0,
     "min_winner_changes_post_burnin": 3.0,
-    "max_winner_changes_post_burnin": 170.0,
+    "min_winner_change_rate_post_burnin": 0.01,
+    "max_winner_change_rate_post_burnin": 0.70,
     "min_group_turnout_range_mean": 0.03,
     "min_roll3_group_turnout_range_max": 0.3,
     "min_roll20_group_turnout_range_max": 0.1,
@@ -23,6 +35,12 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "min_competitive_step_share": 0.05,
     "min_mean_turnout": 20.0,
     "max_mean_turnout": 90.0,
+    "puzzle_conflict_min_dist": 0.33,
+    "min_puzzle_conflict_step_share_for_gate": 0.20,
+    "max_puzzle_dominance_share_conflict": 0.95,
+    "min_power_recovery_share_conflict": 0.02,
+    "puzzle_dominance_share_score_low": 0.65,
+    "puzzle_dominance_share_score_high": 0.90,
 }
 
 DEFAULT_SCORING_WEIGHTS: dict[str, float] = {
@@ -53,6 +71,10 @@ def load_selection_objective(path: Path | str) -> dict[str, Any]:
         if not isinstance(obj_thr, dict):
             raise ValueError("thresholds must be a JSON object.")
         for k, v in obj_thr.items():
+            # Backward-compat migration for old absolute chaos gate key.
+            if k == "max_winner_changes_post_burnin":
+                # ignored in favor of rate-based gate, but accepted for old files
+                continue
             if k not in thr:
                 raise ValueError(f"Unknown threshold key: {k}")
             thr[k] = float(v)
@@ -145,6 +167,237 @@ def _norm01(series: pd.Series, *, higher_better: bool = True) -> pd.Series:
     return z.clip(0.0, 1.0)
 
 
+def _band_pref01(series: pd.Series, *, low: float, high: float) -> pd.Series:
+    s = pd.to_numeric(series, errors="coerce").astype(float)
+    out = pd.Series(np.nan, index=s.index, dtype=float)
+    if high < low:
+        low, high = high, low
+    if low < 0.0:
+        low = 0.0
+    if high > 1.0:
+        high = 1.0
+    mask = s.notna()
+    if not mask.any():
+        return out
+    vals = s[mask].clip(0.0, 1.0)
+    score = pd.Series(np.ones(len(vals), dtype=float), index=vals.index)
+    if low > 0.0:
+        below = vals < low
+        score.loc[below] = (vals.loc[below] / low).clip(0.0, 1.0)
+    if high < 1.0:
+        above = vals > high
+        score.loc[above] = ((1.0 - vals.loc[above]) / (1.0 - high)).clip(0.0, 1.0)
+    out.loc[mask] = score
+    return out
+
+
+def _ordering_distance_func_from_meta(meta: dict[str, Any]):
+    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    name = str(run_meta.get("distance_impl_name", "") or "").strip()
+    if name in {"kendall_tau_order", "kendall_tau"}:
+        return kendall_tau_order
+    return spearman_fr_order
+
+
+def _ordering_from_distribution_tie_aware(
+    dist: np.ndarray,
+    *,
+    reference_ordering: np.ndarray | None = None,
+    rng: np.random.Generator | None = None,
+    atol: float = 1e-9,
+    rtol: float = 1e-8,
+) -> np.ndarray:
+    vals = np.asarray(dist, dtype=np.float64).reshape(-1)
+    n = int(vals.size)
+    if n <= 0:
+        return np.asarray([], dtype=np.int64)
+    order = np.argsort(-vals, kind="stable").astype(np.int64)
+    sorted_vals = vals[order]
+    out: list[int] = []
+    ref_pos: dict[int, int] | None = None
+    if reference_ordering is not None:
+        ref = np.asarray(reference_ordering, dtype=np.int64).reshape(-1)
+        if ref.size == n:
+            ref_pos = {int(c): i for i, c in enumerate(ref.tolist())}
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n and np.isclose(sorted_vals[j], sorted_vals[i], atol=atol, rtol=rtol):
+            j += 1
+        grp = order[i:j].copy()
+        if grp.size > 1:
+            if ref_pos is not None:
+                grp = np.asarray(
+                    sorted(grp.tolist(), key=lambda c: ref_pos.get(int(c), n + int(c))),
+                    dtype=np.int64,
+                )
+            else:
+                (rng or np.random.default_rng(0)).shuffle(grp)
+        out.extend(int(v) for v in grp.tolist())
+        i = j
+    return np.asarray(out, dtype=np.int64)
+
+
+def _current_rule_power_ordering_for_run(
+    *,
+    meta: dict[str, Any],
+    static: dict[str, Any],
+    agents: pd.DataFrame,
+    num_colors: int,
+) -> np.ndarray | None:
+    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    rule_idx = int(run_meta.get("rule_idx", -1))
+    if rule_idx not in {0, 1, 2, 3}:
+        return None
+    pgi = (static.get("personality_group_info") or {}) if isinstance(static, dict) else {}
+    personality_groups = np.asarray(pgi.get("personality_groups", []), dtype=np.int64)
+    if personality_groups.ndim != 2 or personality_groups.shape[0] <= 0:
+        return None
+    n_groups = int(personality_groups.shape[0])
+    step0 = int(agents["step"].min()) if "step" in agents.columns and len(agents) > 0 else None
+    if step0 is None:
+        return None
+    agents0 = agents.loc[agents["step"].astype(int) == step0].copy()
+    if agents0.empty or "personality_group_idx" not in agents0.columns:
+        return None
+    counts = (
+        agents0.groupby("personality_group_idx", as_index=False)
+        .size()
+        .rename(columns={"size": "residents"})
+        .sort_values("personality_group_idx")
+    )
+    residents_by_group = np.zeros(n_groups, dtype=int)
+    for _, row in counts.iterrows():
+        gi = int(row["personality_group_idx"])
+        if 0 <= gi < n_groups:
+            residents_by_group[gi] = int(row["residents"])
+    if int(residents_by_group.sum()) <= 0:
+        return None
+
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
+    dist_func = _ordering_distance_func_from_meta(meta)
+    search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
+    pref_rows: list[np.ndarray] = []
+    for gi in range(n_groups):
+        cnt = int(residents_by_group[gi])
+        if cnt <= 0:
+            continue
+        target = np.asarray(personality_groups[gi][:num_colors], dtype=np.int64)
+        scores = score_options_c2(
+            target_ordering=target,
+            options=options,
+            distance_func=dist_func,
+            color_search_pairs=search_pairs,
+        ).astype(np.float32)
+        pref_rows.append(np.repeat(scores[None, :], cnt, axis=0))
+    if not pref_rows:
+        return None
+    pref_table = np.vstack(pref_rows)
+    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
+    fn = rule_fns[rule_idx]
+    seed = int(run_meta.get("run_seed", 0))
+    rng = np.random.default_rng((seed * 1_000_003 + 97 * (rule_idx + 1)) % (2**63 - 1))
+    try:
+        opt_order = np.asarray(fn(pref_table, rng=rng), dtype=np.int64)
+        if opt_order.size <= 0:
+            return None
+        winning_option_id = int(opt_order[0])
+        if not (0 <= winning_option_id < int(options.shape[0])):
+            return None
+        return np.asarray(options[winning_option_id], dtype=np.int64)
+    except Exception:
+        return None
+
+
+def _compute_puzzle_power_metrics_for_run(
+    *,
+    run_dir: Path,
+    area_steps: pd.DataFrame,
+    agents: pd.DataFrame,
+    burn_in_steps: int,
+    conflict_min_dist: float,
+) -> dict[str, float]:
+    out = {
+        "puzzle_conflict_step_share": np.nan,
+        "puzzle_dominance_share_conflict": np.nan,
+        "power_recovery_share_conflict": np.nan,
+        "puzzle_power_margin_mean_conflict": np.nan,
+    }
+    if "puzzle_distance" not in area_steps.columns:
+        return out
+    puzzle_cols = [c for c in area_steps.columns if c.startswith("puzzle_color_")]
+    if not puzzle_cols:
+        return out
+    try:
+        meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
+        static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
+    except Exception:
+        return out
+    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    if str(run_meta.get("quality_target_mode", "reality")) != "puzzle":
+        return out
+    num_colors = int(static.get("num_colors", len(puzzle_cols)) or len(puzzle_cols))
+    if num_colors <= 1:
+        return out
+    need_pcols = [f"puzzle_color_{i}" for i in range(num_colors)]
+    if not all(c in area_steps.columns for c in need_pcols):
+        return out
+    if "winning_option_id" not in area_steps.columns:
+        return out
+    power_ord = _current_rule_power_ordering_for_run(meta=meta, static=static, agents=agents, num_colors=num_colors)
+    if power_ord is None:
+        return out
+
+    dist_func = _ordering_distance_func_from_meta(meta)
+    search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
+    df = area_steps.sort_values([c for c in ["step", "area_id"] if c in area_steps.columns]).copy()
+    df = df.loc[df["step"].astype(int) > int(burn_in_steps)].copy()
+    if df.empty:
+        return out
+    tie_rng = np.random.default_rng(int(run_meta.get("run_seed", 0)) + 31337)
+    prev_pord: np.ndarray | None = None
+    d_out_puz: list[float] = []
+    d_out_pow: list[float] = []
+    d_puz_pow: list[float] = []
+    for _, row in df.iterrows():
+        oid = int(row.get("winning_option_id", -1))
+        if not (0 <= oid < int(options.shape[0])):
+            continue
+        out_ord = np.asarray(options[oid], dtype=np.int64)
+        pvals = row[need_pcols].to_numpy(dtype=float)
+        if not np.isfinite(pvals).all():
+            continue
+        pord = _ordering_from_distribution_tie_aware(pvals, reference_ordering=prev_pord, rng=tie_rng)
+        prev_pord = pord
+        # Reuse logged puzzle_distance if finite; otherwise recompute.
+        pd_logged = float(row.get("puzzle_distance", np.nan))
+        if np.isfinite(pd_logged):
+            d_opuz = pd_logged
+        else:
+            d_opuz = float(dist_func(out_ord, pord, search_pairs))
+        d_opow = float(dist_func(out_ord, power_ord, search_pairs))
+        d_ppow = float(dist_func(pord, power_ord, search_pairs))
+        if np.isfinite(d_opuz) and np.isfinite(d_opow) and np.isfinite(d_ppow):
+            d_out_puz.append(d_opuz)
+            d_out_pow.append(d_opow)
+            d_puz_pow.append(d_ppow)
+    if not d_puz_pow:
+        return out
+    a = np.asarray(d_out_puz, dtype=float)
+    b = np.asarray(d_out_pow, dtype=float)
+    c = np.asarray(d_puz_pow, dtype=float)
+    conflict = c >= float(conflict_min_dist)
+    out["puzzle_conflict_step_share"] = float(np.mean(conflict)) if conflict.size else np.nan
+    if not conflict.any():
+        return out
+    margin = b[conflict] - a[conflict]
+    out["puzzle_dominance_share_conflict"] = float(np.mean(margin > 0.0))
+    out["power_recovery_share_conflict"] = float(np.mean(margin < 0.0))
+    out["puzzle_power_margin_mean_conflict"] = float(np.mean(margin))
+    return out
+
+
 def compute_run_features_from_tables(
     area_steps: pd.DataFrame,
     agents: pd.DataFrame,
@@ -193,6 +446,12 @@ def compute_run_features_from_tables(
 
     post = per_step.loc[per_step["step"] > int(burn_in_steps), "winning_option_id"].to_numpy()
     winner_changes_post_burnin = _winner_changes(post)
+    post_transition_count = max(0, int(len(post)) - 1)
+    winner_change_rate_post_burnin = (
+        float(winner_changes_post_burnin) / float(post_transition_count)
+        if post_transition_count > 0
+        else 0.0
+    )
     winner_entropy_norm = _winner_entropy_norm(post if len(post) > 0 else per_step["winning_option_id"].to_numpy())
     dist_vals = pd.to_numeric(per_step["quality_distance"], errors="coerce").to_numpy(dtype=float)
     finite_dist = np.isfinite(dist_vals)
@@ -383,6 +642,7 @@ def compute_run_features_from_tables(
         "dist_std": _safe_std(per_step["quality_distance"]),
         "max_all_abstain_stretch": float(max_all_abstain_stretch),
         "winner_changes_post_burnin": float(winner_changes_post_burnin),
+        "winner_change_rate_post_burnin": float(winner_change_rate_post_burnin),
         "winner_entropy_norm": float(winner_entropy_norm),
         "dist_nonzero_share": float(dist_nonzero_share),
         "competitive_step_share": float(competitive_step_share),
@@ -406,7 +666,12 @@ def compute_run_features_from_tables(
     }
 
 
-def collect_run_features(doe_root: Path, *, burn_in_steps: int = 0) -> pd.DataFrame:
+def collect_run_features(
+    doe_root: Path,
+    *,
+    burn_in_steps: int = 0,
+    puzzle_conflict_min_dist: float = DEFAULT_SCORING_THRESHOLDS["puzzle_conflict_min_dist"],
+) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for run_dir in sorted(doe_root.glob("design_*/rule_*/seed_*/run_0")):
         area_path = run_dir / "area_steps.parquet"
@@ -416,6 +681,15 @@ def collect_run_features(doe_root: Path, *, burn_in_steps: int = 0) -> pd.DataFr
         area = pd.read_parquet(area_path)
         agents = pd.read_parquet(agents_path)
         features = compute_run_features_from_tables(area, agents, burn_in_steps=burn_in_steps)
+        features.update(
+            _compute_puzzle_power_metrics_for_run(
+                run_dir=run_dir,
+                area_steps=area,
+                agents=agents,
+                burn_in_steps=int(burn_in_steps),
+                conflict_min_dist=float(puzzle_conflict_min_dist),
+            )
+        )
 
         design_name = run_dir.parts[-4]
         rule_name = run_dir.parts[-3].replace("rule_", "", 1)
@@ -439,7 +713,9 @@ def apply_hard_gates(
     *,
     max_all_abstain_stretch: float = DEFAULT_SCORING_THRESHOLDS["max_all_abstain_stretch"],
     min_winner_changes_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["min_winner_changes_post_burnin"],
-    max_winner_changes_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["max_winner_changes_post_burnin"],
+    max_winner_changes_post_burnin: float | None = None,  # legacy ignored (rate-based gate now)
+    min_winner_change_rate_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["min_winner_change_rate_post_burnin"],
+    max_winner_change_rate_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["max_winner_change_rate_post_burnin"],
     min_group_turnout_range_mean: float = DEFAULT_SCORING_THRESHOLDS["min_group_turnout_range_mean"],
     min_roll3_group_turnout_range_max: float = DEFAULT_SCORING_THRESHOLDS["min_roll3_group_turnout_range_max"],
     min_roll20_group_turnout_range_max: float = DEFAULT_SCORING_THRESHOLDS["min_roll20_group_turnout_range_max"],
@@ -451,6 +727,9 @@ def apply_hard_gates(
     min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
     min_mean_turnout: float = DEFAULT_SCORING_THRESHOLDS["min_mean_turnout"],
     max_mean_turnout: float = DEFAULT_SCORING_THRESHOLDS["max_mean_turnout"],
+    min_puzzle_conflict_step_share_for_gate: float = DEFAULT_SCORING_THRESHOLDS["min_puzzle_conflict_step_share_for_gate"],
+    max_puzzle_dominance_share_conflict: float = DEFAULT_SCORING_THRESHOLDS["max_puzzle_dominance_share_conflict"],
+    min_power_recovery_share_conflict: float = DEFAULT_SCORING_THRESHOLDS["min_power_recovery_share_conflict"],
 ) -> pd.DataFrame:
     df = run_features.copy()
     if "group_turnout_range_mean" not in df.columns:
@@ -467,9 +746,29 @@ def apply_hard_gates(
         df["competitive_step_share"] = 0.0
     if "mean_turnout" not in df.columns:
         df["mean_turnout"] = 0.0
+    if "winner_change_rate_post_burnin" not in df.columns:
+        # Fallback for legacy run_features (still allows scoring but keeps old distortion).
+        # Use a coarse normalization so small toy tests / legacy tables do not all look
+        # maximally chaotic when only absolute winner-change counts are present.
+        denom = np.full(len(df), 100.0, dtype=float)
+        df["winner_change_rate_post_burnin"] = np.asarray(
+            df.get("winner_changes_post_burnin", pd.Series(0.0, index=df.index)).to_numpy(dtype=float) / denom,
+            dtype=float,
+        )
+    for col in [
+        "puzzle_conflict_step_share",
+        "puzzle_dominance_share_conflict",
+        "power_recovery_share_conflict",
+        "puzzle_power_margin_mean_conflict",
+    ]:
+        if col not in df.columns:
+            df[col] = np.nan
     df["gate_no_collapse"] = df["max_all_abstain_stretch"] <= float(max_all_abstain_stretch)
     df["gate_no_lockin"] = df["winner_changes_post_burnin"] >= float(min_winner_changes_post_burnin)
-    df["gate_not_too_chaotic"] = df["winner_changes_post_burnin"] <= float(max_winner_changes_post_burnin)
+    df["gate_not_too_chaotic"] = (
+        (df["winner_change_rate_post_burnin"] >= float(min_winner_change_rate_post_burnin))
+        & (df["winner_change_rate_post_burnin"] <= float(max_winner_change_rate_post_burnin))
+    )
     df["gate_group_divergence"] = df["group_turnout_range_mean"] >= float(min_group_turnout_range_mean)
     df["gate_roll3_divergence"] = (
         df["roll3_group_turnout_range_max"] >= float(min_roll3_group_turnout_range_max)
@@ -489,6 +788,23 @@ def apply_hard_gates(
         | (df["gini_std"] >= float(min_gini_std))
         | (df["dist_std"] >= float(min_dist_std))
     )
+    puzzle_metric_available = (
+        df["puzzle_conflict_step_share"].notna()
+        & df["puzzle_dominance_share_conflict"].notna()
+        & df["power_recovery_share_conflict"].notna()
+    )
+    enough_conflict = df["puzzle_conflict_step_share"] >= float(min_puzzle_conflict_step_share_for_gate)
+    anti_monopoly_ok = (
+        (df["puzzle_dominance_share_conflict"] <= float(max_puzzle_dominance_share_conflict))
+        & (df["power_recovery_share_conflict"] >= float(min_power_recovery_share_conflict))
+    )
+    # Mild puzzle anti-monopoly gate: only enforced for puzzle-logged runs with enough
+    # conflict between puzzle and static power direction.
+    df["gate_puzzle_anti_monopoly"] = np.where(
+        (puzzle_metric_available & enough_conflict),
+        anti_monopoly_ok,
+        True,
+    )
     df["passes_hard_gates"] = (
         df["gate_no_collapse"]
         & df["gate_no_lockin"]
@@ -500,6 +816,7 @@ def apply_hard_gates(
         & df["gate_competitive_steps"]
         & df["gate_turnout_band"]
         & df["gate_signal_present"]
+        & df["gate_puzzle_anti_monopoly"]
     )
     return df
 
@@ -513,6 +830,8 @@ def score_designs(
     stage_weights: dict[str, float] | None = None,
     required_primary_runs: int | None = None,
     required_matched_seed_pairs: int | None = None,
+    puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
+    puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
     return_meta: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
@@ -524,6 +843,10 @@ def score_designs(
     primary = df.loc[df["rule_name"] == str(primary_rule_name)].copy()
     if len(primary) == 0:
         raise ValueError(f"No primary-rule rows found for rule_name={primary_rule_name!r}.")
+    if "winner_change_rate_post_burnin" not in primary.columns:
+        primary["winner_change_rate_post_burnin"] = 0.0
+    if "puzzle_dominance_share_conflict" not in primary.columns:
+        primary["puzzle_dominance_share_conflict"] = np.nan
     for col in [
         "roll3_group_turnout_range_mean",
         "roll3_group_turnout_range_max",
@@ -532,6 +855,12 @@ def score_designs(
     ]:
         if col not in primary.columns:
             primary[col] = 0.0
+    if "winner_change_rate_post_burnin" in primary.columns:
+        if "winner_changes_post_burnin" in primary.columns:
+            missing_rate = ~np.isfinite(pd.to_numeric(primary["winner_change_rate_post_burnin"], errors="coerce"))
+            if bool(missing_rate.any()):
+                wc = pd.to_numeric(primary.loc[missing_rate, "winner_changes_post_burnin"], errors="coerce").fillna(0.0)
+                primary.loc[missing_rate, "winner_change_rate_post_burnin"] = np.clip(wc / 100.0, 0.0, 1.0)
 
     primary["z_turnout_std"] = _norm01(primary["turnout_std"], higher_better=True)
     primary["z_gini_std"] = _norm01(primary["gini_std"], higher_better=True)
@@ -556,7 +885,12 @@ def score_designs(
     primary["z_winner_entropy"] = _norm01(primary["winner_entropy_norm"], higher_better=True)
     primary["z_dist_nonzero_share"] = _norm01(primary["dist_nonzero_share"], higher_better=True)
     primary["z_competitive_step_share"] = _norm01(primary["competitive_step_share"], higher_better=True)
-    primary["z_winner_changes"] = _norm01(primary["winner_changes_post_burnin"], higher_better=True)
+    primary["z_winner_changes"] = _norm01(primary["winner_change_rate_post_burnin"], higher_better=True)
+    primary["z_puzzle_dom_balance_conflict"] = _band_pref01(
+        primary["puzzle_dominance_share_conflict"],
+        low=float(puzzle_dominance_share_score_low),
+        high=float(puzzle_dominance_share_score_high),
+    )
     primary["run_quality_raw"] = primary[
         [
             "z_turnout_std",
@@ -575,6 +909,7 @@ def score_designs(
             "z_dist_nonzero_share",
             "z_competitive_step_share",
             "z_winner_changes",
+            "z_puzzle_dom_balance_conflict",
         ]
     ].mean(axis=1)
     primary["run_quality_viable"] = np.where(primary["passes_hard_gates"], primary["run_quality_raw"], np.nan)
@@ -735,12 +1070,17 @@ def analyze_doe_root(
     if stage_weights is not None:
         sw.update(dict(stage_weights))
 
-    rf = collect_run_features(root, burn_in_steps=int(burn_in_steps))
+    rf = collect_run_features(
+        root,
+        burn_in_steps=int(burn_in_steps),
+        puzzle_conflict_min_dist=float(thr["puzzle_conflict_min_dist"]),
+    )
     gated = apply_hard_gates(
         rf,
         max_all_abstain_stretch=float(thr["max_all_abstain_stretch"]),
         min_winner_changes_post_burnin=float(thr["min_winner_changes_post_burnin"]),
-        max_winner_changes_post_burnin=float(thr["max_winner_changes_post_burnin"]),
+        min_winner_change_rate_post_burnin=float(thr["min_winner_change_rate_post_burnin"]),
+        max_winner_change_rate_post_burnin=float(thr["max_winner_change_rate_post_burnin"]),
         min_group_turnout_range_mean=float(thr["min_group_turnout_range_mean"]),
         min_roll3_group_turnout_range_max=float(thr["min_roll3_group_turnout_range_max"]),
         min_roll20_group_turnout_range_max=float(thr["min_roll20_group_turnout_range_max"]),
@@ -752,6 +1092,9 @@ def analyze_doe_root(
         min_competitive_step_share=float(thr["min_competitive_step_share"]),
         min_mean_turnout=float(thr["min_mean_turnout"]),
         max_mean_turnout=float(thr["max_mean_turnout"]),
+        min_puzzle_conflict_step_share_for_gate=float(thr["min_puzzle_conflict_step_share_for_gate"]),
+        max_puzzle_dominance_share_conflict=float(thr["max_puzzle_dominance_share_conflict"]),
+        min_power_recovery_share_conflict=float(thr["min_power_recovery_share_conflict"]),
     )
     required_primary_runs: int | None = None
     required_matched_seed_pairs: int | None = None
@@ -784,6 +1127,8 @@ def analyze_doe_root(
         stage_weights=sw,
         required_primary_runs=required_primary_runs,
         required_matched_seed_pairs=required_matched_seed_pairs,
+        puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
+        puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
         return_meta=True,
     )
 
@@ -841,6 +1186,7 @@ def analyze_doe_root(
                     "dist_nonzero_share",
                     "competitive_step_share",
                     "winner_changes_post_burnin",
+                    "puzzle_dominance_share_conflict",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",
             },

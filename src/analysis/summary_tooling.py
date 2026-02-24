@@ -30,6 +30,9 @@ from src.analysis.reference_benchmarks import (
     rawlsian_ref_minimax_l2sq,
     egalitarian_refs_mean_plus_lambda_gini,
 )
+from src.utils.ballots import score_options_c2
+from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
+from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
 
 
 @dataclass(frozen=True)
@@ -397,6 +400,22 @@ def _build_area_series(
         a = a.merge(diversity_rows, on=["step", "area_id"], how="left")
         a["diversity_first_choice_entropy"] = a["diversity_first_choice_entropy"].astype(np.float32)
 
+    mode_alignment = _compute_area_vote_mode_alignment_series(
+        area_steps=area_steps,
+        votes=votes,
+        num_colors=num_colors,
+    )
+    if not mode_alignment.empty:
+        a = a.merge(mode_alignment, on=["step", "area_id"], how="left")
+    else:
+        for c in (
+            "altruistic_rank1_match_puzzle_share",
+            "non_altruistic_rank1_match_puzzle_share",
+            "altruistic_rank1_match_outcome_share",
+            "non_altruistic_rank1_match_outcome_share",
+        ):
+            a[c] = np.float32(np.nan)
+
     area_color_cols = [f"area_color_{i}" for i in range(num_colors)]
     for area_id in sorted(a["area_id"].unique().tolist()):
         mask = a["area_id"].to_numpy(dtype=int) == int(area_id)
@@ -417,6 +436,107 @@ def _build_area_series(
                 a.loc[mask, key] = np.asarray([l1_dist(row, ref) for row in colors], dtype=np.float32)
 
     return a.sort_values(["step", "area_id"]).reset_index(drop=True)
+
+
+def _compute_area_vote_mode_alignment_series(
+    *,
+    area_steps: pd.DataFrame,
+    votes: pd.DataFrame,
+    num_colors: int,
+) -> pd.DataFrame:
+    """Per-area, per-step vote-mode alignment shares (rank-1 matches) to puzzle/outcome."""
+    if votes.empty or num_colors <= 0:
+        return pd.DataFrame(
+            columns=[
+                "step",
+                "area_id",
+                "altruistic_rank1_match_puzzle_share",
+                "non_altruistic_rank1_match_puzzle_share",
+                "altruistic_rank1_match_outcome_share",
+                "non_altruistic_rank1_match_outcome_share",
+            ]
+        )
+    req_vote = {"step", "area_id", "agent_id", "rank_1_option_id", "voted_altruistically"}
+    req_area = {"step", "area_id", "winning_option_id"}
+    if not req_vote.issubset(votes.columns) or not req_area.issubset(area_steps.columns):
+        return pd.DataFrame()
+
+    v = (
+        votes[["step", "area_id", "agent_id", "rank_1_option_id", "voted_altruistically"]]
+        .drop_duplicates(subset=["step", "area_id", "agent_id"], keep="first")
+        .copy()
+    )
+    v = v[v["voted_altruistically"].isin([True, False])].copy()
+    if v.empty:
+        return pd.DataFrame()
+    v["step"] = v["step"].astype("int32")
+    v["area_id"] = v["area_id"].astype("int32")
+    v["rank_1_option_id"] = v["rank_1_option_id"].astype("Int32")
+    v = v.dropna(subset=["rank_1_option_id"])
+    if v.empty:
+        return pd.DataFrame()
+    v["rank_1_option_id"] = v["rank_1_option_id"].astype("int32")
+
+    base = area_steps[["step", "area_id", "winning_option_id"]].copy()
+    base["step"] = base["step"].astype("int32")
+    base["area_id"] = base["area_id"].astype("int32")
+    base["winning_option_id"] = base["winning_option_id"].astype("int32")
+
+    # Puzzle option id requires puzzle distribution vectors; older runs may not have them.
+    puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_steps.columns]
+    base["puzzle_option_id"] = np.int32(-1)
+    if len(puzzle_cols) == num_colors:
+        options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
+        option_lookup = {tuple(int(x) for x in row.tolist()): int(i) for i, row in enumerate(options)}
+        rows = []
+        tie_rng = np.random.default_rng(20240229)
+        for area_id, block in area_steps.sort_values(["area_id", "step"]).groupby("area_id", sort=True):
+            prev_ord = None
+            for _, r in block.iterrows():
+                vals = np.asarray([float(r[c]) for c in puzzle_cols], dtype=np.float64)
+                if np.isfinite(vals).all():
+                    ord_p = _summary_ordering_from_distribution_tie_aware(vals, reference_ordering=prev_ord, rng=tie_rng)
+                    prev_ord = ord_p
+                    oid = option_lookup.get(tuple(int(x) for x in ord_p.tolist()), -1)
+                else:
+                    oid = -1
+                rows.append((int(r["step"]), int(area_id), int(oid)))
+        if rows:
+            p_df = pd.DataFrame(rows, columns=["step", "area_id", "puzzle_option_id"]).astype(
+                {"step": "int32", "area_id": "int32", "puzzle_option_id": "int32"}
+            )
+            base = base.drop(columns=["puzzle_option_id"]).merge(p_df, on=["step", "area_id"], how="left")
+            base["puzzle_option_id"] = base["puzzle_option_id"].fillna(-1).astype("int32")
+
+    v = v.merge(base, on=["step", "area_id"], how="left")
+    if v.empty:
+        return pd.DataFrame()
+    v["match_outcome"] = (v["rank_1_option_id"].to_numpy(dtype=int) == v["winning_option_id"].to_numpy(dtype=int)).astype("int8")
+    v["match_puzzle"] = (
+        (v["puzzle_option_id"].to_numpy(dtype=int) >= 0)
+        & (v["rank_1_option_id"].to_numpy(dtype=int) == v["puzzle_option_id"].to_numpy(dtype=int))
+    ).astype("int8")
+
+    rows_out: list[dict[str, Any]] = []
+    for (step, area_id), block in v.groupby(["step", "area_id"], sort=True):
+        row: dict[str, Any] = {"step": int(step), "area_id": int(area_id)}
+        for mode_val, prefix in ((True, "altruistic"), (False, "non_altruistic")):
+            m = block[block["voted_altruistically"] == mode_val]
+            if len(m) > 0:
+                row[f"{prefix}_rank1_match_outcome_share"] = np.float32(100.0 * float(m["match_outcome"].mean()))
+                # Only meaningful if puzzle option id exists for that row's step.
+                valid_puzzle = m["puzzle_option_id"].to_numpy(dtype=int) >= 0
+                if bool(np.any(valid_puzzle)):
+                    row[f"{prefix}_rank1_match_puzzle_share"] = np.float32(
+                        100.0 * float(m.loc[valid_puzzle, "match_puzzle"].mean())
+                    )
+                else:
+                    row[f"{prefix}_rank1_match_puzzle_share"] = np.float32(np.nan)
+            else:
+                row[f"{prefix}_rank1_match_outcome_share"] = np.float32(np.nan)
+                row[f"{prefix}_rank1_match_puzzle_share"] = np.float32(np.nan)
+        rows_out.append(row)
+    return pd.DataFrame(rows_out)
 
 
 def _compute_area_gini_dissatisfaction(*, agents: pd.DataFrame, area_agent_ids: dict[int, list[int]]) -> pd.DataFrame:
@@ -480,6 +600,10 @@ def _build_area_group_series(
         "altruistic_voters_mean_participation_q_delta",
         "non_altruistic_voters_mean_participation_q_delta",
         "group_mean_participation_p_delta",
+        "group_std_q_participation",
+        "group_std_participation_probability",
+        "group_gini_assets_within",
+        "group_gini_dissatisfaction_within",
         "participants_mean_participation_p_delta",
         "abstainers_mean_participation_p_delta",
         "group_mean_participation_q_update_proxy",
@@ -579,8 +703,34 @@ def _build_area_group_series(
             eligible=("assets", lambda s: int(np.sum(np.asarray(s, dtype=float) > 0.0))),
             mean_assets=("assets", "mean"),
             mean_dissatisfaction=("dissatisfaction_value", "mean"),
+            group_std_q_participation=("q_participation", "std"),
+            group_std_participation_probability=("participation_probability", "std"),
         )
     )
+
+    gini_rows: list[dict[str, Any]] = []
+    for (step, area_id, gi), block in residents.groupby(
+        ["step", "area_id", "personality_group_idx"], sort=False
+    ):
+        a_vals = pd.to_numeric(block["assets"], errors="coerce").dropna().to_numpy(dtype=float)
+        d_vals = pd.to_numeric(block["dissatisfaction_value"], errors="coerce").dropna().to_numpy(dtype=float)
+        gini_rows.append(
+            {
+                "step": int(step),
+                "area_id": int(area_id),
+                "personality_group_idx": int(gi),
+                "group_gini_assets_within": np.float32(gini_index_0_100(a_vals) if a_vals.size > 0 else np.nan),
+                "group_gini_dissatisfaction_within": np.float32(
+                    gini_index_0_100(d_vals) if d_vals.size > 0 else np.nan
+                ),
+            }
+        )
+    if gini_rows:
+        grouped = grouped.merge(
+            pd.DataFrame(gini_rows),
+            on=["step", "area_id", "personality_group_idx"],
+            how="left",
+        )
 
     if votes.empty:
         participants = pd.DataFrame(
@@ -1080,6 +1230,10 @@ def _build_area_group_series(
         "vote_mode_switch_from_altruistic_share",
         "vote_mode_switch_from_non_altruistic_share",
         "participation_switch_to_abstain_share",
+        "group_std_q_participation",
+        "group_std_participation_probability",
+        "group_gini_assets_within",
+        "group_gini_dissatisfaction_within",
     ):
         if c not in out.columns:
             out[c] = np.nan
@@ -1943,19 +2097,22 @@ def _render_area_detail_pdf(
             hspace=0.28,
             wspace=0.12,
         )
-        ax_note_p = fig2p.add_subplot(gs2p[0, 0])
+        ax_power = fig2p.add_subplot(gs2p[0, 0])
         ax_pcurve = fig2p.add_subplot(gs2p[0, 1], sharex=ax_color)
         ax_pg_p = fig2p.add_subplot(gs2p[1, 0])
         ax_pdist = fig2p.add_subplot(gs2p[1, 1], sharex=ax_pcurve)
-
-        ax_note_p.axis("off")
-        ax_note_p.text(
-            0.02,
-            0.98,
-            "Puzzle Tracking\n\nTop: puzzle distribution curves\nBottom: elected ordering\nbackground + puzzle_distance",
-            va="top",
-            ha="left",
-            fontsize=9,
+        current_rule_idx = int(((meta.get("run", {}) or {}).get("rule_idx", -1)) or -1)
+        power_dirs = _compute_area_power_direction_orderings(
+            area_group_series=area_group_series,
+            personality_groups=personality_groups,
+            num_colors=int(static.get("num_colors", 0)),
+            meta=meta,
+        )
+        _draw_power_direction_panel(
+            ax=ax_power,
+            power_dirs=power_dirs,
+            current_rule_idx=current_rule_idx,
+            num_colors=int(static.get("num_colors", 0)),
         )
 
         puzzle_cols = sorted(
@@ -2004,25 +2161,93 @@ def _render_area_detail_pdf(
                     interpolation="nearest",
                     zorder=0,
                 )
+        power_current = None
+        for item in power_dirs:
+            if int(item.get("rule_idx", -1)) == current_rule_idx:
+                power_current = np.asarray(item.get("color_ordering", []), dtype=np.int64)
+                break
+        dist_decomp = _compute_area_puzzle_power_distances(
+            area_series=area_series,
+            num_colors=int(static.get("num_colors", 0)),
+            power_ordering_current_rule=power_current,
+            meta=meta,
+        )
         ax_pdist.plot(
             x,
             area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float),
             color="black",
             linestyle="--",
             linewidth=1.6,
+            label="outcome↔puzzle",
             zorder=3,
         )
+        if np.isfinite(dist_decomp["dist_outcome_power"]).any():
+            ax_pdist.plot(
+                x,
+                dist_decomp["dist_outcome_power"].astype(float),
+                color="tab:red",
+                linewidth=1.4,
+                label="outcome↔power",
+                zorder=3,
+            )
+        if np.isfinite(dist_decomp["dist_puzzle_power"]).any():
+            ax_pdist.plot(
+                x,
+                dist_decomp["dist_puzzle_power"].astype(float),
+                color="tab:blue",
+                linewidth=1.2,
+                linestyle="-.",
+                label="puzzle↔power",
+                zorder=3,
+            )
+        if np.isfinite(dist_decomp["dist_grid_power"]).any():
+            ax_pdist.plot(
+                x,
+                dist_decomp["dist_grid_power"].astype(float),
+                color="tab:orange",
+                linewidth=1.2,
+                linestyle=":",
+                label="grid↔power",
+                zorder=3,
+            )
+        margin_line = None
+        if np.isfinite(dist_decomp["dist_outcome_power"]).any():
+            puzzle_vals = area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float)
+            margin = dist_decomp["dist_outcome_power"].astype(float) - puzzle_vals
+            if np.isfinite(margin).any():
+                ax_margin = ax_pdist.twinx()
+                ax_margin.plot(
+                    x,
+                    margin,
+                    color="purple",
+                    linewidth=0.9,
+                    alpha=0.95,
+                    label="puzzle_power_margin",
+                    zorder=4,
+                )
+                ax_margin.axhline(0.0, color="purple", linestyle=":", linewidth=0.8, alpha=0.8, zorder=1)
+                ax_margin.set_ylim(-1.02, 1.02)
+                ax_margin.set_ylabel("margin", color="purple")
+                ax_margin.tick_params(axis="y", colors="purple", labelsize=8)
+                margin_line = ax_margin.lines[0]
         if np.isfinite(puzzle_threshold):
             ax_pdist.axhline(
                 puzzle_threshold,
                 color="#4a4a4a",
                 linestyle=":",
                 linewidth=1.4,
+                label="threshold",
                 zorder=2,
             )
-        ax_pdist.set_title("puzzle_distance")
+        ax_pdist.set_title("Puzzle / Power Distance Decomposition")
         ax_pdist.set_ylabel("distance [0..1]")
         _set_unit_ylim_visible(ax_pdist)
+        if len(ax_pdist.lines) > 0:
+            handles, labels = ax_pdist.get_legend_handles_labels()
+            if margin_line is not None:
+                handles = handles + [margin_line]
+                labels = labels + ["puzzle_power_margin (>0 puzzle closer)"]
+            ax_pdist.legend(handles, labels, loc="upper right", fontsize=7, ncol=2)
         for a in (ax_pcurve, ax_pdist):
             if a.has_data():
                 a.grid(True, alpha=0.25)
@@ -2031,7 +2256,132 @@ def _render_area_detail_pdf(
         pdf.savefig(fig2p, dpi=140)
         plt.close(fig2p)
 
-        # Following pages (group diagnostics etc.) come after the two core area pages.
+        # Page 3: vote-mode alignment diagnostics (how votes track puzzle/outcome).
+        fig2m, axes2m = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        axm = np.asarray(axes2m).ravel()
+        has_mode_alignment = False
+        for col, color, ls, label in (
+            ("altruistic_rank1_match_puzzle_share", "tab:green", "-", "altruistic -> puzzle"),
+            ("non_altruistic_rank1_match_puzzle_share", "tab:red", "--", "non-altruistic -> puzzle"),
+        ):
+            if col in area_series.columns:
+                y = area_series[col].to_numpy(dtype=float)
+                if np.isfinite(y).any():
+                    axm[0].plot(x, y, color=color, linestyle=ls, linewidth=1.5, label=label)
+                    has_mode_alignment = True
+        axm[0].set_title("Rank-1 Match to Puzzle by Vote Mode [% of mode votes]")
+        axm[0].set_ylabel("%")
+        _set_percent_ylim_visible(axm[0])
+        if len(axm[0].lines) > 0:
+            axm[0].legend(loc="best", fontsize=8)
+
+        for col, color, ls, label in (
+            ("altruistic_rank1_match_outcome_share", "tab:green", "-", "altruistic -> elected"),
+            ("non_altruistic_rank1_match_outcome_share", "tab:red", "--", "non-altruistic -> elected"),
+        ):
+            if col in area_series.columns:
+                y = area_series[col].to_numpy(dtype=float)
+                if np.isfinite(y).any():
+                    axm[1].plot(x, y, color=color, linestyle=ls, linewidth=1.5, label=label)
+                    has_mode_alignment = True
+        axm[1].set_title("Rank-1 Match to Elected Outcome by Vote Mode [% of mode votes]")
+        axm[1].set_ylabel("%")
+        _set_percent_ylim_visible(axm[1])
+        if len(axm[1].lines) > 0:
+            axm[1].legend(loc="best", fontsize=8)
+        if not has_mode_alignment:
+            for a in axm:
+                a.text(0.5, 0.5, "Mode alignment unavailable (requires votes + puzzle logging)", ha="center", va="center")
+                a.set_yticks([])
+        for a in axm:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig2m.suptitle(suptitle, fontsize=11)
+        fig2m.tight_layout()
+        pdf.savefig(fig2m, dpi=140)
+        plt.close(fig2m)
+
+        # Page 4: group puzzle opportunity alignment vs observed group behavior.
+        fig2g, axes2g = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        axg = np.asarray(axes2g).ravel()
+        opp_df = _compute_group_puzzle_opportunity_distances(
+            area_series=area_series,
+            personality_groups=personality_groups,
+            num_colors=int(static.get("num_colors", 0)),
+            meta=meta,
+        )
+        groups_sorted = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist()) if not area_group_series.empty else []
+        has_opp = False
+        if not opp_df.empty:
+            xs = opp_df["step"].to_numpy(dtype=float)
+            for g in groups_sorted:
+                c = f"group_{g}_puzzle_opp_dist"
+                if c in opp_df.columns:
+                    y = opp_df[c].to_numpy(dtype=float)
+                    if np.isfinite(y).any():
+                        axg[0].plot(xs, y, color=get_group_color(int(g)), linewidth=1.3, label=f"g{g}")
+                        has_opp = True
+        axg[0].set_title("Group Opportunity Alignment to Puzzle [distance(group ordering, puzzle ordering)]")
+        axg[0].set_ylabel("distance [0..1]\n(lower=more aligned)")
+        _set_unit_ylim_visible(axg[0])
+        if len(axg[0].lines) > 0:
+            axg[0].legend(loc="best", fontsize=8, ncol=min(5, len(axg[0].lines)))
+
+        has_behavior = False
+        if not area_group_series.empty and groups_sorted:
+            steps_g = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
+            part_vals_all = area_group_series["participants"].to_numpy(dtype=float)
+            non_alt_vals_all = area_group_series["non_altruistic_voters"].to_numpy(dtype=float)
+            non_alt_share_vals = np.full(len(area_group_series), np.nan, dtype=np.float32)
+            np.divide(
+                100.0 * non_alt_vals_all,
+                part_vals_all,
+                out=non_alt_share_vals,
+                where=part_vals_all > 0.0,
+            )
+            p_non_alt_share = (
+                area_group_series.assign(
+                    non_alt_share=non_alt_share_vals
+                )
+                .pivot(index="step", columns="group_idx", values="non_alt_share")
+                .reindex(index=steps_g.astype(int), columns=groups_sorted)
+                .astype(float)
+            )
+            p_turn = (
+                area_group_series.pivot(index="step", columns="group_idx", values="turnout")
+                .reindex(index=steps_g.astype(int), columns=groups_sorted)
+                .astype(float)
+            )
+            for g in groups_sorted:
+                color = get_group_color(int(g))
+                y_non = p_non_alt_share[g].to_numpy(dtype=float)
+                y_turn = p_turn[g].to_numpy(dtype=float)
+                if np.isfinite(y_non).any():
+                    axg[1].plot(steps_g, y_non, color=color, linewidth=1.3, linestyle=":", label=f"g{g} non-alt")
+                    has_behavior = True
+                if np.isfinite(y_turn).any():
+                    axg[1].plot(steps_g, y_turn, color=color, linewidth=0.9, linestyle="-", alpha=0.9, label=f"g{g} turnout")
+                    has_behavior = True
+        axg[1].set_title("Group Behavior vs Puzzle Opportunity (dotted=non-altruistic share, solid=turnout)")
+        axg[1].set_ylabel("%")
+        _set_percent_ylim_visible(axg[1])
+        if len(axg[1].lines) > 0:
+            axg[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(6, len(axg[1].lines)))
+        if not has_opp:
+            axg[0].text(0.5, 0.5, "Opportunity alignment unavailable (requires puzzle distribution logging)", ha="center", va="center")
+            axg[0].set_yticks([])
+        if not has_behavior:
+            axg[1].text(0.5, 0.5, "Group behavior series unavailable", ha="center", va="center")
+            axg[1].set_yticks([])
+        for a in axg:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig2g.suptitle(suptitle, fontsize=11)
+        fig2g.tight_layout()
+        pdf.savefig(fig2g, dpi=140)
+        plt.close(fig2g)
+
+        # Following pages (group diagnostics etc.) come after the core area + puzzle analysis pages.
         if not area_group_series.empty:
             _render_area_group_pages(
                 pdf=pdf,
@@ -2182,6 +2532,10 @@ def _render_area_group_pages(
     p_q_update = pivot_optional("group_mean_participation_q_update_proxy")
     p_q_delta_exact = pivot_optional("group_mean_participation_q_delta")
     p_p_delta_exact = pivot_optional("group_mean_participation_p_delta")
+    p_q_std_within = pivot_optional("group_std_q_participation")
+    p_p_std_within = pivot_optional("group_std_participation_probability")
+    p_gini_assets_within = pivot_optional("group_gini_assets_within")
+    p_gini_diss_within = pivot_optional("group_gini_dissatisfaction_within")
     p_part_q_update = pivot_optional("participants_mean_participation_q_update_proxy")
     p_abs_q_update = pivot_optional("abstainers_mean_participation_q_update_proxy")
     p_part_q_delta_exact = pivot_optional("participants_mean_participation_q_delta")
@@ -2569,7 +2923,66 @@ def _render_area_group_pages(
     pdf.savefig(fig7, dpi=140)
     plt.close(fig7)
 
-    # Page 7 (Page B-extra): participation-q-update proxy split views.
+    # Page 7b: within-group dispersion / inequality (q, p, assets, dissatisfaction).
+    fig7b, ax7b = plt.subplots(2, 2, figsize=(11.69, 8.27), sharex=True)
+    ax7b = np.asarray(ax7b).ravel()
+
+    def _plot_group_panel(ax, pdata, *, title: str, ylab: str, scale: float = 1.0, percent: bool = False) -> None:
+        has = pdata is not None and np.isfinite(pdata.to_numpy(dtype=float)).any()
+        ax.set_title(title)
+        ax.set_ylabel(ylab)
+        if has and pdata is not None:
+            for g in groups:
+                ax.plot(
+                    steps,
+                    pdata[g].to_numpy(dtype=float) * scale,
+                    color=get_group_color(int(g)),
+                    linewidth=1.0,
+                    alpha=0.9,
+                    label=f"g{g}",
+                )
+            if percent:
+                _set_percent_ylim_visible(ax)
+            if groups:
+                ax.legend(loc="best", fontsize=7, ncol=min(4, len(groups)))
+        else:
+            ax.text(0.5, 0.5, "Unavailable", ha="center", va="center")
+            ax.set_yticks([])
+        ax.grid(True, alpha=0.25)
+        ax.set_xlabel("step")
+
+    _plot_group_panel(
+        ax7b[0],
+        p_q_std_within,
+        title="Within-Group Std of q_participation",
+        ylab="std(q)",
+    )
+    _plot_group_panel(
+        ax7b[1],
+        p_p_std_within,
+        title="Within-Group Std of participation probability",
+        ylab="std(p)",
+    )
+    _plot_group_panel(
+        ax7b[2],
+        p_gini_assets_within,
+        title="Within-Group Gini Assets",
+        ylab="gini [0..100]",
+        percent=True,
+    )
+    _plot_group_panel(
+        ax7b[3],
+        p_gini_diss_within,
+        title="Within-Group Gini Dissatisfaction",
+        ylab="gini [0..100]",
+        percent=True,
+    )
+    fig7b.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
+    fig7b.tight_layout()
+    pdf.savefig(fig7b, dpi=140)
+    plt.close(fig7b)
+
+    # Page 8 (Page B-extra): participation-q-update proxy split views.
     fig8, ax8 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
     q_part_plot = p_part_q_delta_exact if p_part_q_delta_exact is not None else p_part_q_update
     q_abs_plot = p_abs_q_delta_exact if p_abs_q_delta_exact is not None else p_abs_q_update
@@ -2644,7 +3057,7 @@ def _render_area_group_pages(
     pdf.savefig(fig8, dpi=140)
     plt.close(fig8)
 
-    # Page 8: vote-mode switching share views by group.
+    # Page 9: vote-mode switching share views by group.
     fig9, ax9 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
     ax9[0].set_title("Share of Participants who switched Vote-Mode from their previous participation")
     ax9[0].set_ylabel("%")
@@ -2738,7 +3151,7 @@ def _render_area_group_pages(
     pdf.savefig(fig9, dpi=140)
     plt.close(fig9)
 
-    # Page 9: altruism signal + altruism shift proxy.
+    # Page 10: altruism signal + altruism shift proxy.
     fig10, ax10 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
     ax10[0].set_title("Altruism Learning Signal by Group (solid=altruistic voters, dotted=non-altruistic voters)")
     ax10[0].set_ylabel("signal (dissatisfaction)")
@@ -3308,6 +3721,253 @@ def _sim_color(color_idx: int) -> str:
         # Matplotlib normalizes both spellings; keep a single one for consistency.
         return "LightGrey" if name == "LightGray" else str(name)
     return "black"
+
+
+def _summary_ordering_distance_func(meta: dict[str, Any]):
+    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    name = str(run_meta.get("distance_impl_name", "") or "").strip()
+    if name in {"kendall_tau_order", "kendall_tau"}:
+        return kendall_tau_order
+    return spearman_fr_order
+
+
+def _summary_ordering_from_distribution_tie_aware(
+    dist: np.ndarray,
+    *,
+    reference_ordering: np.ndarray | None = None,
+    rng: np.random.Generator | None = None,
+    atol: float = 1e-9,
+    rtol: float = 1e-8,
+) -> np.ndarray:
+    """Distribution -> ordering with unbiased tie-break and optional continuity reference."""
+    vals = np.asarray(dist, dtype=np.float64).reshape(-1)
+    n = int(vals.size)
+    if n <= 0:
+        return np.asarray([], dtype=np.int64)
+    order = np.argsort(-vals, kind="stable").astype(np.int64)
+    sorted_vals = vals[order]
+    out: list[int] = []
+    ref_pos: dict[int, int] | None = None
+    if reference_ordering is not None:
+        ref = np.asarray(reference_ordering, dtype=np.int64).reshape(-1)
+        if ref.size == n:
+            ref_pos = {int(c): i for i, c in enumerate(ref.tolist())}
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n and np.isclose(sorted_vals[j], sorted_vals[i], atol=atol, rtol=rtol):
+            j += 1
+        grp = order[i:j].copy()
+        if grp.size > 1:
+            if ref_pos is not None:
+                grp = np.asarray(sorted(grp.tolist(), key=lambda c: ref_pos.get(int(c), n + int(c))), dtype=np.int64)
+            else:
+                (rng or np.random.default_rng(0)).shuffle(grp)
+        out.extend(int(v) for v in grp.tolist())
+        i = j
+    return np.asarray(out, dtype=np.int64)
+
+
+def _compute_area_power_direction_orderings(
+    *,
+    area_group_series: pd.DataFrame,
+    personality_groups: np.ndarray,
+    num_colors: int,
+    meta: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Static self-regarding counterfactual outcomes per voting rule for this area."""
+    if area_group_series.empty or personality_groups.ndim != 2 or num_colors <= 0:
+        return []
+    if "group_idx" not in area_group_series.columns or "residents" not in area_group_series.columns:
+        return []
+    step0 = int(area_group_series["step"].min()) if "step" in area_group_series.columns else 1
+    block = area_group_series[area_group_series["step"].astype(int) == step0].copy()
+    if block.empty:
+        return []
+
+    n_groups = int(personality_groups.shape[0])
+    residents_by_group = np.zeros(n_groups, dtype=int)
+    for _, row in block.iterrows():
+        gi = int(row["group_idx"])
+        if 0 <= gi < n_groups:
+            residents_by_group[gi] = int(max(0, int(row.get("residents", 0))))
+    if int(residents_by_group.sum()) <= 0:
+        return []
+
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
+    dist_func = _summary_ordering_distance_func(meta)
+    search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
+
+    pref_rows: list[np.ndarray] = []
+    for gi in range(min(n_groups, int(personality_groups.shape[0]))):
+        cnt = int(residents_by_group[gi])
+        if cnt <= 0:
+            continue
+        target = np.asarray(personality_groups[gi][:num_colors], dtype=np.int64)
+        scores = score_options_c2(
+            target_ordering=target,
+            options=options,
+            distance_func=dist_func,
+            color_search_pairs=search_pairs,
+        ).astype(np.float32)
+        pref_rows.append(np.repeat(scores[None, :], cnt, axis=0))
+    if not pref_rows:
+        return []
+    pref_table = np.vstack(pref_rows)
+
+    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
+    rule_names = ["Majority", "Approval", "Utilitarian", "Borda"]
+    run_seed = int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0)
+    out: list[dict[str, Any]] = []
+    for idx, (fn, name) in enumerate(zip(rule_fns, rule_names)):
+        rng = np.random.default_rng((run_seed * 1_000_003 + 97 * (idx + 1)) % (2**63 - 1))
+        try:
+            opt_order = np.asarray(fn(pref_table, rng=rng), dtype=np.int64)
+            if opt_order.size <= 0:
+                continue
+            winning_option_id = int(opt_order[0])
+            color_ordering = np.asarray(options[winning_option_id], dtype=np.int64)
+            out.append(
+                {
+                    "rule_idx": int(idx),
+                    "rule_name": str(name),
+                    "winning_option_id": int(winning_option_id),
+                    "color_ordering": color_ordering,
+                }
+            )
+        except Exception:
+            continue
+    return out
+
+
+def _draw_power_direction_panel(*, ax, power_dirs: list[dict[str, Any]], current_rule_idx: int | None, num_colors: int) -> None:
+    ax.set_title("Static Power Directions\n(All Self-Regarding)")
+    if not power_dirs or num_colors <= 0:
+        ax.axis("off")
+        ax.text(0.5, 0.5, "Power baselines unavailable", ha="center", va="center")
+        return
+    n = len(power_dirs)
+    ax.set_xlim(0.0, float(num_colors + 1.9))
+    ax.set_ylim(-0.5, float(n - 0.5))
+    ax.invert_yaxis()
+    ax.set_xticks([])
+    ax.set_yticks(np.arange(n))
+    labels = []
+    for item in power_dirs:
+        nm = str(item.get("rule_name", "rule"))
+        ridx = int(item.get("rule_idx", -1))
+        labels.append(f"{nm}{' *' if current_rule_idx is not None and ridx == int(current_rule_idx) else ''}")
+    ax.set_yticklabels(labels, fontsize=8)
+    for row, item in enumerate(power_dirs):
+        ordering = np.asarray(item.get("color_ordering", []), dtype=int)
+        for rank in range(min(num_colors, ordering.size)):
+            c_idx = int(ordering[rank])
+            face = _sim_color(c_idx)
+            rect = plt.Rectangle(
+                (0.9 + rank, row - 0.35),
+                0.9,
+                0.7,
+                facecolor=face,
+                edgecolor="black" if int(item.get("rule_idx", -1)) == int(current_rule_idx or -99) else "#666666",
+                linewidth=1.8 if int(item.get("rule_idx", -1)) == int(current_rule_idx or -99) else 0.8,
+            )
+            ax.add_patch(rect)
+            r, g, b, _ = to_rgba(face)
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            tcol = "black" if lum > 0.55 else "white"
+            ax.text(0.9 + rank + 0.45, row, f"{c_idx}", ha="center", va="center", fontsize=7, color=tcol, fontweight="bold")
+            ax.text(0.9 + rank + 0.45, row - 0.46, f"{rank+1}", ha="center", va="top", fontsize=6, color="#333333")
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+
+def _compute_area_puzzle_power_distances(
+    *,
+    area_series: pd.DataFrame,
+    num_colors: int,
+    power_ordering_current_rule: np.ndarray | None,
+    meta: dict[str, Any],
+) -> dict[str, np.ndarray]:
+    xlen = int(len(area_series))
+    out = {
+        "dist_outcome_power": np.full(xlen, np.nan, dtype=np.float32),
+        "dist_puzzle_power": np.full(xlen, np.nan, dtype=np.float32),
+        "dist_grid_power": np.full(xlen, np.nan, dtype=np.float32),
+    }
+    if power_ordering_current_rule is None or num_colors <= 0 or xlen <= 0:
+        return out
+    power_ord = np.asarray(power_ordering_current_rule, dtype=np.int64).reshape(-1)
+    if power_ord.size != int(num_colors):
+        return out
+    dist_func = _summary_ordering_distance_func(meta)
+    search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
+
+    color_cols = [f"area_color_{i}" for i in range(num_colors) if f"area_color_{i}" in area_series.columns]
+    puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_series.columns]
+    grid_prev = None
+    puzzle_prev = None
+    tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 4242)
+
+    win_ids = area_series["winning_option_id"].to_numpy(dtype=int) if "winning_option_id" in area_series.columns else np.full(xlen, -1, dtype=int)
+    for i in range(xlen):
+        oid = int(win_ids[i])
+        if 0 <= oid < int(options.shape[0]):
+            out["dist_outcome_power"][i] = np.float32(float(dist_func(np.asarray(options[oid], dtype=np.int64), power_ord, search_pairs)))
+        if len(puzzle_cols) == num_colors:
+            pvals = area_series.loc[area_series.index[i], puzzle_cols].to_numpy(dtype=float)
+            if np.isfinite(pvals).all():
+                pord = _summary_ordering_from_distribution_tie_aware(pvals, reference_ordering=puzzle_prev, rng=tie_rng)
+                out["dist_puzzle_power"][i] = np.float32(float(dist_func(pord, power_ord, search_pairs)))
+                puzzle_prev = pord
+        if len(color_cols) == num_colors:
+            gvals = area_series.loc[area_series.index[i], color_cols].to_numpy(dtype=float)
+            if np.isfinite(gvals).all():
+                gord = _summary_ordering_from_distribution_tie_aware(gvals, reference_ordering=grid_prev, rng=tie_rng)
+                out["dist_grid_power"][i] = np.float32(float(dist_func(gord, power_ord, search_pairs)))
+                grid_prev = gord
+    return out
+
+
+def _compute_group_puzzle_opportunity_distances(
+    *,
+    area_series: pd.DataFrame,
+    personality_groups: np.ndarray,
+    num_colors: int,
+    meta: dict[str, Any],
+) -> pd.DataFrame:
+    """Per-step distance between puzzle ordering and each personality-group ordering."""
+    if num_colors <= 0 or personality_groups.ndim != 2:
+        return pd.DataFrame()
+    puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_series.columns]
+    if len(puzzle_cols) != num_colors or area_series.empty:
+        return pd.DataFrame()
+    dist_func = _summary_ordering_distance_func(meta)
+    search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
+    x = area_series["step"].to_numpy(dtype=int)
+    out = pd.DataFrame({"step": x.astype(np.int32)})
+    prev_ord = None
+    tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 7171)
+    puzzle_orders: list[np.ndarray | None] = []
+    for _, r in area_series.iterrows():
+        vals = r[puzzle_cols].to_numpy(dtype=float)
+        if np.isfinite(vals).all():
+            pord = _summary_ordering_from_distribution_tie_aware(vals, reference_ordering=prev_ord, rng=tie_rng)
+            prev_ord = pord
+            puzzle_orders.append(pord)
+        else:
+            puzzle_orders.append(None)
+    n_groups = int(personality_groups.shape[0])
+    for gi in range(n_groups):
+        target = np.asarray(personality_groups[gi][:num_colors], dtype=np.int64)
+        vals = np.full(len(puzzle_orders), np.nan, dtype=np.float32)
+        for i, pord in enumerate(puzzle_orders):
+            if pord is None:
+                continue
+            vals[i] = np.float32(float(dist_func(np.asarray(pord, dtype=np.int64), target, search_pairs)))
+        out[f"group_{gi}_puzzle_opp_dist"] = vals
+    return out
 
 
 def _build_elected_ordering_background_image(
