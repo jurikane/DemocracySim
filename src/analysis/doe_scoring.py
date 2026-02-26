@@ -17,13 +17,14 @@ from src.utils.social_welfare_functions import (
     majority_rule,
     utilitarian_rule,
 )
+from src.utils.representations import distribution_to_ordering_tie_aware
 
 
 DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "max_all_abstain_stretch": 10.0,
     "min_winner_changes_post_burnin": 3.0,
     "min_winner_change_rate_post_burnin": 0.01,
-    "max_winner_change_rate_post_burnin": 0.70,
+    "max_winner_change_rate_post_burnin": 0.80,
     "min_group_turnout_range_mean": 0.03,
     "min_roll3_group_turnout_range_max": 0.3,
     "min_roll20_group_turnout_range_max": 0.1,
@@ -41,6 +42,17 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "min_power_recovery_share_conflict": 0.02,
     "puzzle_dominance_share_score_low": 0.65,
     "puzzle_dominance_share_score_high": 0.90,
+    # Turnout shape soft score (step-count independent; avoids deceptive mean-only scoring).
+    "turnout_start_score_low": 20.0,
+    "turnout_start_score_high": 80.0,
+    "turnout_end_score_low": 20.0,
+    "turnout_end_score_high": 80.0,
+    "turnout_drop_score_good_max": 15.0,
+    "turnout_drop_score_zero_at": 60.0,
+    "turnout_decline_score_good_max": 0.08,
+    "turnout_decline_score_zero_at": 0.50,
+    "turnout_outside_band_share_good_max": 0.20,
+    "turnout_outside_band_share_zero_at": 0.80,
 }
 
 DEFAULT_SCORING_WEIGHTS: dict[str, float] = {
@@ -122,6 +134,28 @@ def _safe_std(series: pd.Series) -> float:
     return v
 
 
+def _mean_finite_pairwise_corr(window: np.ndarray) -> float | None:
+    """Return mean pairwise correlation across columns, excluding constant columns."""
+    if window.ndim != 2 or window.shape[0] < 2 or window.shape[1] < 2:
+        return None
+    if not np.isfinite(window).all():
+        return None
+    std = np.std(window, axis=0)
+    keep = np.isfinite(std) & (std > 1e-12)
+    if int(np.count_nonzero(keep)) < 2:
+        return None
+    w = window[:, keep]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        c = np.corrcoef(w, rowvar=False)
+    if c.ndim != 2 or c.shape[0] < 2:
+        return None
+    tri = c[np.triu_indices_from(c, k=1)]
+    tri = tri[np.isfinite(tri)]
+    if len(tri) == 0:
+        return None
+    return float(np.mean(tri))
+
+
 def _max_true_stretch(mask: np.ndarray) -> int:
     best = 0
     cur = 0
@@ -172,22 +206,42 @@ def _band_pref01(series: pd.Series, *, low: float, high: float) -> pd.Series:
     out = pd.Series(np.nan, index=s.index, dtype=float)
     if high < low:
         low, high = high, low
-    if low < 0.0:
-        low = 0.0
-    if high > 1.0:
-        high = 1.0
     mask = s.notna()
     if not mask.any():
         return out
-    vals = s[mask].clip(0.0, 1.0)
+    vals = s[mask]
     score = pd.Series(np.ones(len(vals), dtype=float), index=vals.index)
-    if low > 0.0:
-        below = vals < low
-        score.loc[below] = (vals.loc[below] / low).clip(0.0, 1.0)
-    if high < 1.0:
-        above = vals > high
-        score.loc[above] = ((1.0 - vals.loc[above]) / (1.0 - high)).clip(0.0, 1.0)
-    out.loc[mask] = score
+    width = float(high - low)
+    if not np.isfinite(width) or width <= 1e-12:
+        width = 1.0
+    below = vals < low
+    if bool(below.any()):
+        score.loc[below] = (1.0 - ((low - vals.loc[below]) / width)).clip(0.0, 1.0)
+    above = vals > high
+    if bool(above.any()):
+        score.loc[above] = (1.0 - ((vals.loc[above] - high) / width)).clip(0.0, 1.0)
+    out.loc[mask] = score.clip(0.0, 1.0)
+    return out
+
+
+def _upper_bound_pref01(series: pd.Series, *, good_max: float, zero_at: float) -> pd.Series:
+    s = pd.to_numeric(series, errors="coerce").astype(float)
+    out = pd.Series(np.nan, index=s.index, dtype=float)
+    if zero_at < good_max:
+        good_max, zero_at = zero_at, good_max
+    mask = s.notna()
+    if not mask.any():
+        return out
+    vals = s[mask]
+    score = pd.Series(np.ones(len(vals), dtype=float), index=vals.index)
+    if zero_at <= good_max + 1e-12:
+        score.loc[vals > good_max] = 0.0
+        out.loc[mask] = score
+        return out
+    mid = vals > good_max
+    if bool(mid.any()):
+        score.loc[mid] = (1.0 - ((vals.loc[mid] - good_max) / (zero_at - good_max))).clip(0.0, 1.0)
+    out.loc[mask] = score.clip(0.0, 1.0)
     return out
 
 
@@ -197,45 +251,6 @@ def _ordering_distance_func_from_meta(meta: dict[str, Any]):
     if name in {"kendall_tau_order", "kendall_tau"}:
         return kendall_tau_order
     return spearman_fr_order
-
-
-def _ordering_from_distribution_tie_aware(
-    dist: np.ndarray,
-    *,
-    reference_ordering: np.ndarray | None = None,
-    rng: np.random.Generator | None = None,
-    atol: float = 1e-9,
-    rtol: float = 1e-8,
-) -> np.ndarray:
-    vals = np.asarray(dist, dtype=np.float64).reshape(-1)
-    n = int(vals.size)
-    if n <= 0:
-        return np.asarray([], dtype=np.int64)
-    order = np.argsort(-vals, kind="stable").astype(np.int64)
-    sorted_vals = vals[order]
-    out: list[int] = []
-    ref_pos: dict[int, int] | None = None
-    if reference_ordering is not None:
-        ref = np.asarray(reference_ordering, dtype=np.int64).reshape(-1)
-        if ref.size == n:
-            ref_pos = {int(c): i for i, c in enumerate(ref.tolist())}
-    i = 0
-    while i < n:
-        j = i + 1
-        while j < n and np.isclose(sorted_vals[j], sorted_vals[i], atol=atol, rtol=rtol):
-            j += 1
-        grp = order[i:j].copy()
-        if grp.size > 1:
-            if ref_pos is not None:
-                grp = np.asarray(
-                    sorted(grp.tolist(), key=lambda c: ref_pos.get(int(c), n + int(c))),
-                    dtype=np.int64,
-                )
-            else:
-                (rng or np.random.default_rng(0)).shuffle(grp)
-        out.extend(int(v) for v in grp.tolist())
-        i = j
-    return np.asarray(out, dtype=np.int64)
 
 
 def _current_rule_power_ordering_for_run(
@@ -339,10 +354,11 @@ def _compute_puzzle_power_metrics_for_run(
     num_colors = int(static.get("num_colors", len(puzzle_cols)) or len(puzzle_cols))
     if num_colors <= 1:
         return out
-    need_pcols = [f"puzzle_color_{i}" for i in range(num_colors)]
-    if not all(c in area_steps.columns for c in need_pcols):
-        return out
     if "winning_option_id" not in area_steps.columns:
+        return out
+    has_puzzle_ids = "puzzle_ordering_id" in area_steps.columns
+    need_pcols = [f"puzzle_color_{i}" for i in range(num_colors)]
+    if not has_puzzle_ids and not all(c in area_steps.columns for c in need_pcols):
         return out
     power_ord = _current_rule_power_ordering_for_run(meta=meta, static=static, agents=agents, num_colors=num_colors)
     if power_ord is None:
@@ -365,10 +381,22 @@ def _compute_puzzle_power_metrics_for_run(
         if not (0 <= oid < int(options.shape[0])):
             continue
         out_ord = np.asarray(options[oid], dtype=np.int64)
-        pvals = row[need_pcols].to_numpy(dtype=float)
-        if not np.isfinite(pvals).all():
-            continue
-        pord = _ordering_from_distribution_tie_aware(pvals, reference_ordering=prev_pord, rng=tie_rng)
+        pord: np.ndarray | None = None
+        if has_puzzle_ids:
+            pid = int(row.get("puzzle_ordering_id", -1))
+            if 0 <= pid < int(options.shape[0]):
+                pord = np.asarray(options[pid], dtype=np.int64)
+        if pord is None:
+            pvals = row[need_pcols].to_numpy(dtype=float)
+            if not np.isfinite(pvals).all():
+                continue
+            pord = distribution_to_ordering_tie_aware(
+                pvals,
+                reference_ordering=prev_pord,
+                rng=tie_rng,
+                atol=1e-9,
+                rtol=1e-8,
+            )
         prev_pord = pord
         # Reuse logged puzzle_distance if finite; otherwise recompute.
         pd_logged = float(row.get("puzzle_distance", np.nan))
@@ -440,6 +468,26 @@ def compute_run_features_from_tables(
     )
     if len(per_step) == 0:
         raise ValueError("area_steps has no rows.")
+
+    turnout_series = pd.to_numeric(per_step["turnout"], errors="coerce").astype(float)
+    n_steps = int(len(turnout_series))
+    # Step-count independent windows: use a fractional window with a small floor, capped by run length.
+    win = max(1, min(n_steps, max(5, int(np.ceil(0.10 * n_steps)))))
+    turnout_start_window_mean = float(turnout_series.iloc[:win].mean())
+    turnout_end_window_mean = float(turnout_series.iloc[-win:].mean())
+    turnout_drop_start_end = float(turnout_start_window_mean - turnout_end_window_mean)
+    turnout_outside_20_80_share = float(
+        np.mean((turnout_series.to_numpy(dtype=float) < 20.0) | (turnout_series.to_numpy(dtype=float) > 80.0))
+    )
+    turnout_trend_slope_norm = 0.0
+    turnout_decline_slope_norm = 0.0
+    if n_steps >= 2:
+        x = np.linspace(0.0, 1.0, num=n_steps, dtype=float)
+        y = (turnout_series.to_numpy(dtype=float) / 100.0).astype(float)
+        if np.isfinite(y).all():
+            coeffs = np.polyfit(x, y, 1)
+            turnout_trend_slope_norm = float(coeffs[0])
+            turnout_decline_slope_norm = float(max(0.0, -turnout_trend_slope_norm))
 
     abstain_mask = (per_step["participants"].to_numpy(dtype=float) <= 0.0)
     max_all_abstain_stretch = _max_true_stretch(abstain_mask)
@@ -559,14 +607,9 @@ def compute_run_features_from_tables(
         sync_vals: list[float] = []
         for i in range(0, arr.shape[0] - 9):
             w = arr[i : i + 10, :]
-            if not np.isfinite(w).all():
-                continue
-            c = np.corrcoef(w, rowvar=False)
-            if c.shape[0] >= 2:
-                tri = c[np.triu_indices_from(c, k=1)]
-                tri = tri[np.isfinite(tri)]
-                if len(tri) > 0:
-                    sync_vals.append(float(np.mean(tri)))
+            mean_corr = _mean_finite_pairwise_corr(w)
+            if mean_corr is not None:
+                sync_vals.append(mean_corr)
         if sync_vals:
             roll10_group_sync_index = float(np.mean(sync_vals))
 
@@ -608,11 +651,12 @@ def compute_run_features_from_tables(
                 if gaps.notna().any():
                     group_pa_delta_rel_gap_abs = float(gaps.mean())
 
-    lag1_group_signal_turnout_response_corr = 0.0
-    if ("election_delta_rel" in agents.columns) and (len(group_step) > 0):
+    def _lag1_group_signal_turnout_corr(signal_col: str) -> float:
+        if (signal_col not in agents.columns) or (len(group_step) == 0):
+            return 0.0
         sig = (
             agents.groupby(["step", "personality_group_idx"], as_index=False)
-            .agg(signal=("election_delta_rel", "mean"))
+            .agg(signal=(signal_col, "mean"))
             .sort_values(["personality_group_idx", "step"])
         )
         tur = group_step.rename(columns={"turnout_resident": "turnout"}).sort_values(
@@ -621,21 +665,38 @@ def compute_run_features_from_tables(
         merged = sig.merge(tur, on=["step", "personality_group_idx"], how="inner").sort_values(
             ["personality_group_idx", "step"]
         )
-        if len(merged) > 0:
-            merged["turnout_next"] = merged.groupby("personality_group_idx")["turnout"].shift(-1)
-            merged["turnout_delta_next"] = merged["turnout_next"] - merged["turnout"]
-            valid = merged[["signal", "turnout_delta_next"]].dropna()
-            if len(valid) >= 3:
-                x = valid["signal"].to_numpy(dtype=float)
-                y = valid["turnout_delta_next"].to_numpy(dtype=float)
-                if np.std(x) > 0.0 and np.std(y) > 0.0:
-                    c = float(np.corrcoef(x, y)[0, 1])
-                    if np.isfinite(c):
-                        lag1_group_signal_turnout_response_corr = float(c)
+        if len(merged) == 0:
+            return 0.0
+        merged["turnout_next"] = merged.groupby("personality_group_idx")["turnout"].shift(-1)
+        merged["turnout_delta_next"] = merged["turnout_next"] - merged["turnout"]
+        valid = merged[["signal", "turnout_delta_next"]].dropna()
+        if len(valid) < 3:
+            return 0.0
+        x = valid["signal"].to_numpy(dtype=float)
+        y = valid["turnout_delta_next"].to_numpy(dtype=float)
+        if np.std(x) <= 0.0 or np.std(y) <= 0.0:
+            return 0.0
+        c = float(np.corrcoef(x, y)[0, 1])
+        return float(c) if np.isfinite(c) else 0.0
+
+    lag1_group_signal_turnout_response_corr = _lag1_group_signal_turnout_corr("election_delta_rel")
+    lag1_participation_signal_turnout_response_corr = _lag1_group_signal_turnout_corr("participation_signal")
+    lag1_participation_signal_group_component_turnout_response_corr = _lag1_group_signal_turnout_corr(
+        "participation_signal_group_component"
+    )
+    lag1_participation_signal_fee_component_turnout_response_corr = _lag1_group_signal_turnout_corr(
+        "participation_signal_fee_component"
+    )
 
     return {
         "mean_turnout": float(per_step["turnout"].mean()),
         "turnout_std": _safe_std(per_step["turnout"]),
+        "turnout_start_window_mean": float(turnout_start_window_mean),
+        "turnout_end_window_mean": float(turnout_end_window_mean),
+        "turnout_drop_start_end": float(turnout_drop_start_end),
+        "turnout_outside_20_80_share": float(turnout_outside_20_80_share),
+        "turnout_trend_slope_norm": float(turnout_trend_slope_norm),
+        "turnout_decline_slope_norm": float(turnout_decline_slope_norm),
         "mean_gini": float(per_step["gini_index"].mean()),
         "gini_std": _safe_std(per_step["gini_index"]),
         "mean_dist": float(per_step["quality_distance"].mean()),
@@ -658,6 +719,15 @@ def compute_run_features_from_tables(
         "roll10_turnout_slope_abs_mean": float(roll10_turnout_slope_abs_mean),
         "roll10_group_sync_index": float(roll10_group_sync_index),
         "lag1_group_signal_turnout_response_corr": float(lag1_group_signal_turnout_response_corr),
+        "lag1_participation_signal_turnout_response_corr": float(
+            lag1_participation_signal_turnout_response_corr
+        ),
+        "lag1_participation_signal_group_component_turnout_response_corr": float(
+            lag1_participation_signal_group_component_turnout_response_corr
+        ),
+        "lag1_participation_signal_fee_component_turnout_response_corr": float(
+            lag1_participation_signal_fee_component_turnout_response_corr
+        ),
         "group_turnout_residual_abs_mean": float(group_turnout_residual_abs_mean),
         "participant_abstainer_delta_rel_gap_abs": _gap_abs("election_delta_rel"),
         "group_participant_abstainer_delta_rel_gap_abs": float(group_pa_delta_rel_gap_abs),
@@ -832,6 +902,16 @@ def score_designs(
     required_matched_seed_pairs: int | None = None,
     puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
     puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
+    turnout_start_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_low"],
+    turnout_start_score_high: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_high"],
+    turnout_end_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_end_score_low"],
+    turnout_end_score_high: float = DEFAULT_SCORING_THRESHOLDS["turnout_end_score_high"],
+    turnout_drop_score_good_max: float = DEFAULT_SCORING_THRESHOLDS["turnout_drop_score_good_max"],
+    turnout_drop_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["turnout_drop_score_zero_at"],
+    turnout_decline_score_good_max: float = DEFAULT_SCORING_THRESHOLDS["turnout_decline_score_good_max"],
+    turnout_decline_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["turnout_decline_score_zero_at"],
+    turnout_outside_band_share_good_max: float = DEFAULT_SCORING_THRESHOLDS["turnout_outside_band_share_good_max"],
+    turnout_outside_band_share_zero_at: float = DEFAULT_SCORING_THRESHOLDS["turnout_outside_band_share_zero_at"],
     return_meta: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
@@ -847,6 +927,19 @@ def score_designs(
         primary["winner_change_rate_post_burnin"] = 0.0
     if "puzzle_dominance_share_conflict" not in primary.columns:
         primary["puzzle_dominance_share_conflict"] = np.nan
+    if "turnout_start_window_mean" not in primary.columns:
+        primary["turnout_start_window_mean"] = pd.to_numeric(primary.get("mean_turnout", 0.0), errors="coerce").fillna(0.0)
+    if "turnout_end_window_mean" not in primary.columns:
+        primary["turnout_end_window_mean"] = pd.to_numeric(primary.get("mean_turnout", 0.0), errors="coerce").fillna(0.0)
+    if "turnout_drop_start_end" not in primary.columns:
+        primary["turnout_drop_start_end"] = (
+            pd.to_numeric(primary["turnout_start_window_mean"], errors="coerce").fillna(0.0)
+            - pd.to_numeric(primary["turnout_end_window_mean"], errors="coerce").fillna(0.0)
+        )
+    if "turnout_decline_slope_norm" not in primary.columns:
+        primary["turnout_decline_slope_norm"] = 0.0
+    if "turnout_outside_20_80_share" not in primary.columns:
+        primary["turnout_outside_20_80_share"] = 0.0
     for col in [
         "roll3_group_turnout_range_mean",
         "roll3_group_turnout_range_max",
@@ -886,6 +979,45 @@ def score_designs(
     primary["z_dist_nonzero_share"] = _norm01(primary["dist_nonzero_share"], higher_better=True)
     primary["z_competitive_step_share"] = _norm01(primary["competitive_step_share"], higher_better=True)
     primary["z_winner_changes"] = _norm01(primary["winner_change_rate_post_burnin"], higher_better=True)
+    primary["z_mean_turnout_centered"] = _band_pref01(
+        primary["mean_turnout"],
+        low=float(turnout_start_score_low),
+        high=float(turnout_start_score_high),
+    )
+    primary["z_turnout_start_band"] = _band_pref01(
+        primary["turnout_start_window_mean"],
+        low=float(turnout_start_score_low),
+        high=float(turnout_start_score_high),
+    )
+    primary["z_turnout_end_band"] = _band_pref01(
+        primary["turnout_end_window_mean"],
+        low=float(turnout_end_score_low),
+        high=float(turnout_end_score_high),
+    )
+    primary["z_turnout_drop_stability"] = _upper_bound_pref01(
+        primary["turnout_drop_start_end"],
+        good_max=float(turnout_drop_score_good_max),
+        zero_at=float(turnout_drop_score_zero_at),
+    )
+    primary["z_turnout_decline_stability"] = _upper_bound_pref01(
+        primary["turnout_decline_slope_norm"],
+        good_max=float(turnout_decline_score_good_max),
+        zero_at=float(turnout_decline_score_zero_at),
+    )
+    primary["z_turnout_band_time"] = _upper_bound_pref01(
+        primary["turnout_outside_20_80_share"],
+        good_max=float(turnout_outside_band_share_good_max),
+        zero_at=float(turnout_outside_band_share_zero_at),
+    )
+    primary["z_turnout_shape"] = primary[
+        [
+            "z_turnout_start_band",
+            "z_turnout_end_band",
+            "z_turnout_drop_stability",
+            "z_turnout_decline_stability",
+            "z_turnout_band_time",
+        ]
+    ].mean(axis=1)
     primary["z_puzzle_dom_balance_conflict"] = _band_pref01(
         primary["puzzle_dominance_share_conflict"],
         low=float(puzzle_dominance_share_score_low),
@@ -909,6 +1041,11 @@ def score_designs(
             "z_dist_nonzero_share",
             "z_competitive_step_share",
             "z_winner_changes",
+            "z_turnout_shape",
+            # Extra emphasis on sustained turnout shape quality (drop / monotone decline),
+            # beyond the aggregate turnout-shape score.
+            "z_turnout_drop_stability",
+            "z_turnout_decline_stability",
             "z_puzzle_dom_balance_conflict",
         ]
     ].mean(axis=1)
@@ -1129,6 +1266,16 @@ def analyze_doe_root(
         required_matched_seed_pairs=required_matched_seed_pairs,
         puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
         puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
+        turnout_start_score_low=float(thr["turnout_start_score_low"]),
+        turnout_start_score_high=float(thr["turnout_start_score_high"]),
+        turnout_end_score_low=float(thr["turnout_end_score_low"]),
+        turnout_end_score_high=float(thr["turnout_end_score_high"]),
+        turnout_drop_score_good_max=float(thr["turnout_drop_score_good_max"]),
+        turnout_drop_score_zero_at=float(thr["turnout_drop_score_zero_at"]),
+        turnout_decline_score_good_max=float(thr["turnout_decline_score_good_max"]),
+        turnout_decline_score_zero_at=float(thr["turnout_decline_score_zero_at"]),
+        turnout_outside_band_share_good_max=float(thr["turnout_outside_band_share_good_max"]),
+        turnout_outside_band_share_zero_at=float(thr["turnout_outside_band_share_zero_at"]),
         return_meta=True,
     )
 
@@ -1186,6 +1333,9 @@ def analyze_doe_root(
                     "dist_nonzero_share",
                     "competitive_step_share",
                     "winner_changes_post_burnin",
+                    "turnout_shape (start/end/drop/decline/band-time)",
+                    "turnout_drop_start_end (extra weight)",
+                    "turnout_decline_slope_norm (extra weight)",
                     "puzzle_dominance_share_conflict",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",

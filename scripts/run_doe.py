@@ -128,6 +128,11 @@ def main() -> None:
             "phase3_puzzle_main",
             "phase3_puzzle_refine1",
             "phase3_puzzle_summary_dev",
+            "phase3_puzzle_motion_hypothesis",
+            "phase3_puzzle_refine2",
+            "phase3_puzzle_refine3",
+            "phase3_turnout_focus_medium",
+            "phase3_refine4",
         ],
         help="DOE profile defining ranges + frozen settings.",
     )
@@ -223,7 +228,9 @@ def main() -> None:
     )
     write_run_manifest(out_root=out_root, plan=plan)
 
+    started_at = datetime.now()
     print(f"DOE root: {out_root}")
+    print(f"DOE started at: {started_at.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Design points: {len(design_points)} | Seeds: {len(seeds)} | Planned runs: {len(plan)}")
 
     if args.dry_run:
@@ -242,7 +249,10 @@ def main() -> None:
     if summary["failed"] > 0 and bool(args.continue_on_error):
         print("[DOE][WARN] Some runs failed; inspect logs above.")
 
+    finished_at = datetime.now()
     print("DOE finished:", out_root)
+    print(f"DOE finished at: {finished_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"DOE duration: {finished_at - started_at}")
 
 
 if __name__ == "__main__":

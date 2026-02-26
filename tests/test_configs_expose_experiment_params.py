@@ -21,6 +21,8 @@ REQUIRED_MODEL_KEYS = {
     "altruism_clip_max",
     "altruism_mode",
     "altruism_response_gamma",
+    "altruism_satisfaction_theta",
+    "altruism_satisfaction_slope",
 }
 
 

@@ -29,7 +29,9 @@ Participation learning uses the following per-agent state:
 
 - `q_participation` (float): internal propensity value (unbounded, but typically clipped)
 - `participation_baseline` (float): EMA baseline of experienced outcomes (`delta_rel`), initialized as `NaN`
-- `participation_signal` (float): **learning signal used for the update** (equals realized `delta_rel`)
+- `participation_signal` (float): **learning signal used for the update** (mode-dependent)
+- `participation_signal_group_component` (float): group-relative component used in centered mode
+- `participation_signal_fee_component` (float): explicit fee component used in centered mode (typically `<= 0`)
 - `participating` (bool): last action in the current election step (set during `_tally_votes`)
 
 And the following per-election outcome signals:
@@ -69,7 +71,11 @@ Design note: additive bias is a simple “civic duty / default norm” knob that
 separable from learning. It can be restricted in the UI (e.g. `[0, 0.5]`) even if the model
 allows a broader conceptual range (e.g. `[-1, 1]`) for controlled baselines.
 
-## Learning Signal: Realized Level Outcome
+## Learning Signal Modes
+
+The participation learner now supports two signal modes:
+
+### `raw_delta_rel` (legacy)
 
 After the election is executed and the agent’s per-election `delta_rel` is computed,
 the learning signal is:
@@ -78,22 +84,38 @@ the learning signal is:
 signal <- delta_rel
 ```
 
-`participation_baseline_alpha` is an EMA step size:
+### `group_centered_delta_rel_plus_fee` (current experimental alternative)
+
+Let `mu_g` be the mean `delta_rel` of eligible agents in group `g` for the current step,
+and `mu_groups` the mean of those group means (equal-weighted across groups).
+
+```text
+group_component_g = (mu_g - mu_groups) * n_g / (n_g + participation_signal_group_shrink_k)
+fee_component_i   = - participation_signal_fee_weight * fee_rel_i   (participants only; else 0)
+signal_i          = clip(group_component_g + fee_component_i, ±participation_signal_clip)
+```
+
+This mode is intended to reduce step-wide common shock dominance (e.g. puzzle gate good/bad)
+while preserving fee/free-rider tension in the learning signal.
+
+### Baseline trace (diagnostic)
+
+`participation_baseline_alpha` is an EMA step size applied to the **actual participation signal**:
 
 - `0.0` means baseline never changes
 - `1.0` means baseline becomes the last observed `delta_rel` immediately
 
-Baseline maintenance is still tracked for diagnostics/logging:
+Baseline maintenance is tracked for diagnostics/logging:
 
 ```text
 if baseline is NaN:
     baseline <- delta_rel
 else:
     baseline <- (1 - participation_baseline_alpha) * baseline
-               + participation_baseline_alpha * delta_rel
+               + participation_baseline_alpha * signal
 ```
 
-`participation_baseline` no longer changes learning behavior; it is an explanatory trace.
+`participation_baseline` does not change learning behavior; it is an explanatory trace.
 
 ## Participation Update Rule (Reinforce Last Action)
 
@@ -187,7 +209,9 @@ For any surprising turnout dynamics, inspect per-agent traces of:
 
 In schema v2 outputs:
 
-- `agents.parquet` contains `participation_baseline` and `participation_signal` (and can be extended with q/p if desired).
+- `agents.parquet` contains `participation_baseline`, `participation_signal`,
+  `participation_signal_group_component`, `participation_signal_fee_component`,
+  `q_participation`, and `participation_probability`.
 
 ## Test Coverage (What Is Locked By Pytests)
 
@@ -203,7 +227,7 @@ The following tests lock the contract:
   - `tests/test_no_participation_debug_snapshot.py` (no-participation step keeps participation debug semantics consistent)
 - Interaction tests exercising multi-knob behavior under controlled RNG:
   - `tests/test_participation_learning_interactions.py`:
-    - Level-signal contract: `participation_signal == election_delta_rel` and q-updates are baseline-alpha invariant.
+    - Raw-mode contract: `participation_signal == election_delta_rel` and q-updates are baseline-alpha invariant.
     - Clipping interaction: demonstrates repeated updates drive `q_participation` until it hits `±participation_q_max`.
     - Beta sensitivity: holds the same q and the same RNG draw fixed, and shows that higher
       `participation_beta` can flip the next participation decision (more sensitivity to q).

@@ -33,6 +33,10 @@ class ModelConfig(StrictBaseModel):
     bias_toward_participation: float = 0.0
     # EMA alpha for participation baseline (1.0 => baseline becomes last step's value).
     participation_baseline_alpha: float = 0.1
+    participation_signal_mode: str = "raw_delta_rel"  # "raw_delta_rel" | "group_centered_delta_rel_plus_fee"
+    participation_signal_fee_weight: float = 1.0
+    participation_signal_group_shrink_k: float = 10.0
+    participation_signal_clip: float = 0.25
 
     # --- Adaptive altruism learning (reality-weight) ---
     altruism_alpha: float = 0.05
@@ -41,6 +45,8 @@ class ModelConfig(StrictBaseModel):
     altruism_clip_max: float = 1.0
     altruism_mode: str = "satisfaction"  # "static" | "surprise_learning" | "satisfaction"
     altruism_response_gamma: float = 1.0  # used by altruism_mode="satisfaction" (1 => direct mapping)
+    altruism_satisfaction_theta: float = 0.5  # satisfaction threshold for sigmoid mapping in satisfaction mode
+    altruism_satisfaction_slope: float = 4.0  # sigmoid steepness for satisfaction mode (>0)
     altruism_learning: bool = False
     altruism_static: float = 0.5
 

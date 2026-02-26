@@ -113,29 +113,6 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
         },
         "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
     },
-    "phase2_altruism_probe": {
-        "name": "phase2_altruism_probe",
-        "ranges": {
-            "altruism_alpha": (0.01, 0.08),
-            "altruism_init": (0.20, 0.80),
-            "satisfaction_baseline_alpha": (0.01, 0.30),
-            "known_cells": _known_cells_probe_bounds(DEFAULT_FROZEN_MODEL),
-            "mu": (0.4, 0.9),
-            "election_impact_on_mutation": (1.0, 2.0),
-            "participation_alpha": (0.09, 0.19),
-            "participation_beta": (6.0, 7.5),
-            "participation_init_q": (0.25, 0.6),
-            "reward_rate_personal": (0.08, 0.5),
-            "break_even_distance_common": (0.3, 0.6),
-        },
-        "frozen_model": {
-            **DEFAULT_FROZEN_MODEL,
-            "altruism_mode": "surprise_learning",
-            "altruism_learning": True,
-            "election_cost_rate": 0.08,
-        },
-        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
-    },
     "phase3_puzzle_main": {
         "name": "phase3_puzzle_main",
         "ranges": {
@@ -156,6 +133,10 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             **DEFAULT_FROZEN_MODEL,
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
         },
         "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
     },
@@ -184,10 +165,14 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             **DEFAULT_FROZEN_MODEL,
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
         },
         "frozen_simulation": {
             **DEFAULT_FROZEN_SIM,
-            "num_steps": 400,
+            "num_steps": 300,
         },
     },
     "phase3_puzzle_summary_dev": {
@@ -204,7 +189,6 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "participation_beta": (4.0, 8.5),
             "participation_init_q": (0.08, 0.45),
             "known_cells": (10.0, 24.0),
-            "altruism_response_gamma": (0.90, 1.00),
             "puzzle_local_kappa": (20.0, 75.0),
             "puzzle_shock_prob": (0.01, 0.10),
         },
@@ -212,13 +196,219 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             **DEFAULT_FROZEN_MODEL,
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
-            "altruism_static": 0,
+            "altruism_static": 1,
+            "altruism_response_gamma": 1.0,
+            "altruism_satisfaction_theta": 0.7,
+            "altruism_satisfaction_slope": 10.0,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.5,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
         },
         "frozen_simulation": {
             **DEFAULT_FROZEN_SIM,
             "num_steps": 100,
         },
     },
+    "phase3_puzzle_motion_hypothesis": {
+        "name": "phase3_puzzle_motion_hypothesis",
+        # Focused hypothesis DOE:
+        # Test whether jumpier / less persistent puzzle motion reduces puzzle dominance.
+        # Vary puzzle motion + the strongest observed confounds, keep the rest near a viable center.
+        "ranges": {
+            "known_cells": (4.0, 27.0),
+            "election_impact_on_mutation": (0.90, 2.80),
+            "puzzle_local_kappa": (1.0, 120.0),
+            "puzzle_shock_prob": (0.00, 0.40),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "altruism_response_gamma": 1.0,
+            # Freeze the post-Stage-A/majority-confirmed mapping while testing puzzle-motion effects.
+            "altruism_satisfaction_theta": 0.7,
+            "altruism_satisfaction_slope": 2.0,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
+            # Refine1-like center values to isolate the puzzle-motion hypothesis.
+            "election_cost_rate": 0.035,
+            "reward_rate_personal": 0.12,
+            "break_even_distance_common": 0.425,
+            "mu": 0.30,
+            "participation_alpha": 0.14,
+            "participation_beta": 6.5,
+            "participation_init_q": 0.30,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
+    "phase3_puzzle_refine2": {
+    "name": "phase3_puzzle_refine2",
+    # Refine1 + targeted re-widening after broadcheck audit on current participation signal mode.
+    "ranges": {
+        # re-widened (boundary pressure in broadcheck)
+        "election_cost_rate": (0.015, 0.055),
+        "reward_rate_personal": (0.050, 0.240),
+        "break_even_distance_common": (0.30, 0.58),
+        "election_impact_on_mutation": (0.80, 2.80),
+        "participation_init_q": (0.03, 0.70),
+        "puzzle_shock_prob": (0.00, 0.15),
+
+        # unchanged from refine1
+        "mu": (0.05, 0.50),
+        "participation_alpha": (0.07, 0.18),
+        "participation_beta": (3.5, 9.0),
+        "known_cells": (5.0, 27.0),
+        "altruism_response_gamma": (0.75, 1.00),
+        "puzzle_local_kappa": (15.0, 80.0),
+    },
+    "frozen_model": {
+        **DEFAULT_FROZEN_MODEL,
+        "altruism_mode": "satisfaction",
+        "altruism_satisfaction_theta": 0.7,
+        "altruism_satisfaction_slope": 2.0,
+        "altruism_learning": False,
+        "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+        "participation_signal_fee_weight": 1.0,
+        "participation_signal_group_shrink_k": 10.0,
+        "participation_signal_clip": 0.25,
+    },
+    "frozen_simulation": {
+        **DEFAULT_FROZEN_SIM,
+        "num_steps": 300,
+    },
+    },
+    "phase3_puzzle_refine3": {
+        "name": "phase3_puzzle_refine3",
+        "ranges": {
+            # Turnout-start / turnout-shape focused
+            "participation_init_q": (0.10, 0.45),
+            "participation_beta": (3.5, 7.5),
+            "participation_alpha": (0.08, 0.18),
+            "election_cost_rate": (0.015, 0.050),
+
+            # Reward / punishment gate balance
+            "reward_rate_personal": (0.060, 0.220),
+            "break_even_distance_common": (0.32, 0.58),
+
+            # Puzzle dominance levers
+            "known_cells": (4.0, 15.0),
+            "election_impact_on_mutation": (1.00, 2.80),
+
+            # Puzzle motion (secondary; keep conservative shock upper bound)
+            "puzzle_local_kappa": (15.0, 70.0),
+            "puzzle_shock_prob": (0.00, 0.06),
+
+            # General dynamics
+            "mu": (0.08, 0.45),
+            "altruism_response_gamma": (0.80, 1.00),
+
+            # Re-open narrow local window for mapping confirmation
+            "altruism_satisfaction_theta": (0.65, 0.75),
+            "altruism_satisfaction_slope": (1.5, 4.0),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_turnout_focus_medium": {
+        "name": "phase3_turnout_focus_medium",
+        "ranges": {
+            # Constrain startup turnout drivers to target a realistic initial window.
+            "participation_init_q": (0.11, 0.18),
+            "participation_beta": (3.8, 6.2),
+
+            # Primary turnout-drop / participation dynamics levers.
+            "election_cost_rate": (0.010, 0.035),
+            "participation_alpha": (0.07, 0.14),
+            "reward_rate_personal": (0.10, 0.24),
+            "break_even_distance_common": (0.34, 0.62),
+
+            # Keep puzzle/power balance in a reasonable regime.
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.80),
+            "puzzle_local_kappa": (25.0, 75.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+
+            # General dynamics.
+            "mu": (0.08, 0.40),
+            "altruism_response_gamma": (0.90, 1.00),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_satisfaction_theta": 0.70,
+            "altruism_satisfaction_slope": 2.0,
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_refine4": {
+        "name": "phase3_refine4",
+        # Refine3 + turnout-focused constraints from phase3_turnout_focus_medium partial run
+        # + alpha=2 puzzle-generator regime assumptions.
+        "ranges": {
+            # Startup turnout constraints (successful in turnout_focus_medium)
+            "participation_init_q": (0.11, 0.18),
+            "participation_beta": (3.8, 6.0),
+
+            # Turnout-drop / participation dynamics levers (focused)
+            "election_cost_rate": (0.010, 0.030),
+            "participation_alpha": (0.07, 0.12),
+            "reward_rate_personal": (0.12, 0.26),
+            "break_even_distance_common": (0.34, 0.62),
+
+            # Puzzle / power balance in alpha=2 generator regime
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.60),
+            "puzzle_local_kappa": (30.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+
+            # General dynamics
+            "mu": (0.08, 0.35),
+            "altruism_response_gamma": (0.90, 1.00),
+
+            # Keep mapping in the empirically good neighborhood (slight local re-open)
+            "altruism_satisfaction_theta": (0.68, 0.74),
+            "altruism_satisfaction_slope": (1.6, 2.8),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+            "participation_signal_fee_weight": 1.0,
+            "participation_signal_group_shrink_k": 10.0,
+            "participation_signal_clip": 0.25,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+
 }
 
 

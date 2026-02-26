@@ -31,7 +31,7 @@ The model now supports an explicit mode switch:
 Config knob:
 
 - `altruism_response_gamma in [0,1]` (used only in `satisfaction` mode)
-  - `1.0` => direct mapping (`a := 1 - dissatisfaction`)
+  - `1.0` => direct mapping to the sigmoid target for the current dissatisfaction
   - `<1.0` => smoothed response toward that target
 
 ## Where It Happens (Runtime Path)
@@ -124,18 +124,22 @@ Whether this produces stable dynamics depends on the dissatisfaction signal stat
 Applied **before** the election (so it affects the current vote-mode draw), for all agents:
 
 ```text
-target = 1 - dissatisfaction_value          # dissatisfaction is in [0,1]
+satisfaction = 1 - dissatisfaction_value    # dissatisfaction is in [0,1]
+target = sigmoid(k * (satisfaction - theta))
 altruism_factor <- (1-gamma) * altruism_factor + gamma * target
 altruism_factor <- clip(altruism_factor, [altruism_clip_min, altruism_clip_max])
 ```
 
 where `gamma = altruism_response_gamma`.
+`theta = altruism_satisfaction_theta`, `k = altruism_satisfaction_slope`.
 
 Interpretation:
 
 - low dissatisfaction (high satisfaction) -> higher altruism
 - high dissatisfaction -> lower altruism
-- `gamma=1` gives the direct mapping `altruism_factor = 1 - dissatisfaction_value`
+- `theta` shifts the threshold where altruism rises above 0.5
+- `k` controls how sharply satisfaction translates into altruism
+- `gamma=1` gives the direct sigmoid target mapping for the current step
 
 ## Knobs (What They Mean)
 
@@ -146,6 +150,8 @@ Altruism knobs (ModelConfig):
 - `altruism_init` (in `[0,1]`): initial altruism when learning is on
 - `altruism_alpha` (>= 0): learning rate for `surprise_learning`
 - `altruism_response_gamma` (in `[0,1]`): response smoothing for `satisfaction` mode
+- `altruism_satisfaction_theta` (in `[0,1]`): satisfaction threshold for sigmoid target in `satisfaction` mode
+- `altruism_satisfaction_slope` (> 0): sigmoid steepness in `satisfaction` mode
 - `altruism_clip_min`, `altruism_clip_max` (finite, `min <= max`): clip interval for altruism_factor
 
 Dissatisfaction knobs (inputs to altruism updates):

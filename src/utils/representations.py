@@ -168,6 +168,73 @@ def distribution_to_ordering(
     return np.argsort(arr, kind=kind)[::-1].astype(np.int64)
 
 
+def distribution_to_ordering_tie_aware(
+    dist: np.ndarray,
+    *,
+    reference_ordering: np.ndarray | None = None,
+    rng: np.random.Generator | None = None,
+    atol: float = 1e-12,
+    rtol: float = 0.0,
+) -> np.ndarray:
+    """Convert Distribution -> Ordering with reference-based tie handling.
+
+    This is the canonical helper for distribution-to-ordering conversion when ties or
+    near-ties can occur and call sites need:
+    - unbiased tie-breaking (via `rng`) and/or
+    - continuity tie-breaking (via `reference_ordering`)
+
+    Tie policy:
+    - If a tie-group has size > 1 and `reference_ordering` is provided, colors in that
+      group keep the order given by the reference ordering.
+    - Otherwise, ties are broken uniformly at random using `rng`.
+    - If neither reference nor rng is available for a tie, fail loudly.
+    """
+    arr = np.asarray(dist, dtype=np.float64)
+    if arr.ndim != 1:
+        raise ValueError("distribution must be 1D")
+    n = int(arr.size)
+    if n <= 0:
+        return np.asarray([], dtype=np.int64)
+
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("distribution must be finite")
+    if float(arr.min(initial=0.0)) < 0.0:
+        raise ValueError("distribution must be nonnegative")
+    total = float(arr.sum())
+    if not np.isfinite(total) or total <= 0.0:
+        raise ValueError("distribution sum must be > 0")
+
+    ref_rank: dict[int, int] = {}
+    if reference_ordering is not None:
+        ref = np.asarray(reference_ordering, dtype=np.int64).reshape(-1)
+        if ref.size == n:
+            validate_ordering(ref, n)
+            ref_rank = {int(c): i for i, c in enumerate(ref.tolist())}
+
+    order_desc = np.argsort(-arr, kind="mergesort").astype(np.int64).tolist()
+    ordering: list[int] = []
+    i = 0
+    while i < n:
+        j = i + 1
+        base_val = float(arr[order_desc[i]])
+        while j < n and bool(np.isclose(float(arr[order_desc[j]]), base_val, rtol=rtol, atol=atol)):
+            j += 1
+        group = [int(c) for c in order_desc[i:j]]
+        if len(group) > 1:
+            if ref_rank:
+                group.sort(key=lambda c: ref_rank.get(int(c), n + int(c)))
+            else:
+                if rng is None:
+                    raise ValueError("rng is required for unbiased tie-breaking when no reference ordering exists.")
+                group = rng.permutation(np.asarray(group, dtype=np.int64)).astype(np.int64).tolist()
+        ordering.extend(group)
+        i = j
+
+    out = np.asarray(ordering, dtype=np.int64)
+    validate_ordering(out, n)
+    return out
+
+
 def scores_to_distribution(
     scores: np.ndarray,
     *,

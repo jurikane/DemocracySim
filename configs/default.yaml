@@ -42,6 +42,10 @@ model:
   bias_toward_participation: 0.0
   # EMA alpha for participation baseline (1.0 => baseline becomes last step's value)
   participation_baseline_alpha: 0.1
+  participation_signal_mode: raw_delta_rel
+  participation_signal_fee_weight: 1.0
+  participation_signal_group_shrink_k: 10.0  # tb removed if not needed
+  participation_signal_clip: 0.25  # tb removed if not needed
 
   # Per-agent personal preference shape (static)
   personal_preference_peakedness: 1.0
@@ -53,8 +57,11 @@ model:
   altruism_clip_max: 1.0
   # Altruism mode: static | surprise_learning | satisfaction
   altruism_mode: satisfaction
-  # Satisfaction mode response smoothing (1.0 => direct mapping a = 1 - dissatisfaction)
+  # Satisfaction mode response smoothing (1.0 => direct mapping to sigmoid target)
   altruism_response_gamma: 1.0
+  # Satisfaction mode sigmoid target = sigmoid(k * (satisfaction - theta))
+  altruism_satisfaction_theta: 0.5
+  altruism_satisfaction_slope: 4.0
   # Legacy compatibility flag (ignored when altruism_mode is set)
   altruism_learning: false
   altruism_static: 0.5

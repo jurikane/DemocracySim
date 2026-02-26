@@ -48,8 +48,8 @@ RNG = RNGManager()
 
 
 def set_seed(seed: Optional[int]) -> None:
-    if seed is not None:  # Make user aware of the seed setting.
-        print(f"Set models random seed to {seed}")
+    #if seed is not None:  # Make user aware of the seed setting.
+    #    print(f"Set models random seed to {seed}")
     RNG.set_seed(seed)
 
 

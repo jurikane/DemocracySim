@@ -105,7 +105,7 @@ def run_once(run_id: int, cfg, out_dir: Path):
     # NOTE: schema v2 meta.yaml has already been written above.
 
 
-def batch_run(config_file: str = None):
+def batch_run(config_file: str = None, out_root: str | None = None, num_steps: int | None = None):
     """Run multiple simulation runs in batch mode based on the provided config.
     Attributes:
         config_file (str): Path to the YAML/TOML config file.
@@ -119,10 +119,15 @@ def batch_run(config_file: str = None):
         base_seed = random.SystemRandom().randint(0, 2 ** 31 - 1)
         print(f"No base_seed specified in config; using random seed {base_seed}")
         setattr(sim_cfg, "base_seed", int(base_seed))
-    # Determine base directory
-    base_out_dir = resolve_output_dir(conf)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_root = base_out_dir / ts
+    if num_steps is not None:
+        setattr(sim_cfg, "num_steps", int(num_steps))
+    # Determine output directory (explicit path wins; otherwise timestamp under config output dir)
+    if out_root:
+        run_root = Path(out_root)
+    else:
+        base_out_dir = resolve_output_dir(conf)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_root = base_out_dir / ts
     run_root.mkdir(parents=True, exist_ok=True)
     # Save the used config for reference
     with open(run_root / "config_used.yaml", "w") as f:
@@ -150,8 +155,12 @@ def headless_main() -> None:
     parser = argparse.ArgumentParser(description="Run DemocracySim headless")
     parser.add_argument("--config", "-c", type=str, default=None,
                         help="Path to YAML/TOML config (or name under configs/)")
+    parser.add_argument("--out-root", type=str, default=None,
+                        help="Explicit output root directory (no timestamp suffix added)")
+    parser.add_argument("--num-steps", type=int, default=None,
+                        help="Override simulation.num_steps for this run")
     args = parser.parse_args()
-    batch_run(config_file=args.config)
+    batch_run(config_file=args.config, out_root=args.out_root, num_steps=args.num_steps)
 
 
 if __name__ == "__main__":

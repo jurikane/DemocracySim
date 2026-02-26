@@ -45,6 +45,15 @@ def test_num_colors_metamorphic_factorial_growth_ratio() -> None:
     assert (c4 // c3) == 4
 
 
+def test_option_id_lookup_matches_options_rows() -> None:
+    model, _ = create_test_model(seed=504, num_colors=4, num_personality_groups=4, num_agents=5, num_areas=1, known_cells=0, mu=0.0)
+    opts = np.asarray(model.options, dtype=np.int64)
+    for i in (0, 3, 7, len(opts) - 1):
+        ordering = opts[int(i)]
+        assert int(model.option_id_for_ordering(ordering)) == int(i)
+    assert int(model.option_id_for_ordering(np.asarray([99, 1, 2, 3], dtype=np.int64))) == -1
+
+
 def test_num_colors_validation_minimum_two() -> None:
     with pytest.raises(ValueError, match=r"num_colors must be >= 2"):
         create_test_model(seed=502, num_colors=1)
@@ -54,4 +63,3 @@ def test_num_colors_validation_explosion_cap() -> None:
     # 9! = 362880 > 50000 cap => must raise early.
     with pytest.raises(ValueError, match=r"num_colors=9 implies 362880 options"):
         create_test_model(seed=503, num_colors=9)
-

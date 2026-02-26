@@ -6,8 +6,17 @@ if TYPE_CHECKING:  # Type hint for IDEs
     from src.models.participation_model import ParticipationModel
     from src.agents.color_cell import ColorCell
 from src.agents.vote_agent import VoteAgent
-from src.utils.representations import scores_to_ordering, validate_score_vector_unit_interval
+from src.utils.representations import (
+    distribution_to_ordering_tie_aware,
+    scores_to_ordering,
+    validate_score_vector_unit_interval,
+)
 # from src.utils.rng import np_rng_debug
+
+# Center-biased symmetric Dirichlet priors for puzzle generation.
+# Per-component concentration keeps behavior comparable across num_colors.
+_PUZZLE_ALPHA_CENTER_PER_COMPONENT = 2.0
+_PUZZLE_ALPHA_SHOCK_PER_COMPONENT = 2.0
 
 
 class Area(Agent):
@@ -42,6 +51,8 @@ class Area(Agent):
         self._dist_to_reality = None  # Elected vs. actual color distribution
         self._puzzle_distance = None  # Elected vs. puzzle ordering distance
         self._puzzle_distribution = None  # Optional puzzle distribution for this step
+        self._grid_ordering_for_quality = None
+        self._puzzle_ordering_for_quality = None
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
         self._num_eligible_voters_last = 0  # Eligible population count for diagnostics/logging
@@ -311,20 +322,18 @@ class Area(Agent):
         self._distribute_rewards()
 
         # Adaptive participation learning update (eligible agents only)
-        # V1 contract: learning consumes realized level signal (delta_rel),
-        # while EMA baseline is maintained as a diagnostic trace.
-        for a in self.agents:
-            # Eligible agents are exactly those evaluated in _tally_votes()
-            if a.eligible_for_election:
-                delta = float(a.election_delta_rel)
-                if not np.isfinite(a.participation_baseline):
-                    a.participation_baseline = delta
-                else:
-                    baseline = a.participation_baseline
-                    alpha = float(self.model.participation_baseline_alpha)
-                    a.participation_baseline = (1.0 - alpha) * baseline + alpha * delta
-                a.participation_signal = delta
-                a.apply_participation_update(a.participation_signal)
+        signals = self._compute_participation_learning_signals(self.agents, self.model)
+        for a, signal in zip(self.agents, signals):
+            if not a.eligible_for_election:
+                continue
+            if not np.isfinite(a.participation_baseline):
+                a.participation_baseline = signal
+            else:
+                baseline = a.participation_baseline
+                alpha = float(self.model.participation_baseline_alpha)
+                a.participation_baseline = (1.0 - alpha) * baseline + alpha * signal
+            a.participation_signal = float(signal)
+            a.apply_participation_update(a.participation_signal)
         # TODO put those two loops together
         # Surprise-learning altruism update (participant-only, optional).
         if str(getattr(self.model, "altruism_mode", "static")) == "surprise_learning":
@@ -341,6 +350,89 @@ class Area(Agent):
         self._capture_debug_snapshot(preference_profile, aggregated)
         self._capture_area_snapshot_for_logger()
         return area_voter_turnout # Voter turnout in percent
+
+    @staticmethod
+    def _compute_participation_learning_signals(agents, model) -> list[float]:
+        """Build participation-learning signals for all agents in list order.
+
+        Modes:
+        - raw_delta_rel: legacy behavior; exact pass-through of election_delta_rel.
+        - group_centered_delta_rel_plus_fee: centered group mean delta_rel signal
+          (eligible agents only), shrunk by group size, plus an explicit fee penalty
+          for participating agents.
+        """
+        mode = str(getattr(model, "participation_signal_mode", "raw_delta_rel"))
+        signals = [0.0] * len(agents)
+
+        def _set_components(agent, *, group_component: float, fee_component: float) -> None:
+            agent.participation_signal_group_component = float(group_component)
+            agent.participation_signal_fee_component = float(fee_component)
+
+        for a in agents:
+            _set_components(a, group_component=0.0, fee_component=0.0)
+
+        if mode == "raw_delta_rel":
+            for idx, a in enumerate(agents):
+                if not a.eligible_for_election:
+                    continue
+                delta_rel = float(a.election_delta_rel)
+                signals[idx] = delta_rel
+                _set_components(a, group_component=delta_rel, fee_component=0.0)
+            return signals
+
+        if mode != "group_centered_delta_rel_plus_fee":
+            raise ValueError(f"Unknown participation_signal_mode: {mode}")
+
+        fee_weight = float(model.participation_signal_fee_weight)
+        shrink_k = float(model.participation_signal_group_shrink_k)
+        signal_clip = float(model.participation_signal_clip)
+
+        eligible_indices: list[int] = []
+        group_values: dict[int, list[float]] = {}
+        group_counts: dict[int, int] = {}
+        for idx, a in enumerate(agents):
+            if not a.eligible_for_election:
+                continue
+            eligible_indices.append(idx)
+            g = int(a.personality_group_idx)
+            delta = float(a.election_delta_rel)
+            group_values.setdefault(g, []).append(delta)
+            group_counts[g] = group_counts.get(g, 0) + 1
+
+        if not eligible_indices:
+            return signals
+
+        group_means = {g: float(np.mean(vals)) for g, vals in group_values.items() if vals}
+        if not group_means:
+            return signals
+        mu_groups = float(np.mean(list(group_means.values())))
+
+        group_centered: dict[int, float] = {}
+        for g, mu_g in group_means.items():
+            n_g = float(group_counts.get(g, 0))
+            w_g = n_g / (n_g + shrink_k) if shrink_k > 0.0 else 1.0
+            group_centered[g] = float(w_g * (mu_g - mu_groups))
+
+        for idx in eligible_indices:
+            a = agents[idx]
+            g = int(a.personality_group_idx)
+            centered = float(group_centered.get(g, 0.0))
+
+            fee_component = 0.0
+            if a.participating:
+                fee_abs = float(a.election_fee)
+                assets_post = float(a.assets)
+                delta_abs = float(a.election_delta_abs)
+                assets_pre = assets_post - delta_abs
+                if np.isfinite(assets_pre) and assets_pre > 0.0 and np.isfinite(fee_abs):
+                    fee_rel = max(0.0, fee_abs / assets_pre)
+                    fee_component = -fee_weight * fee_rel
+
+            signal = centered + fee_component
+            signal = float(np.clip(signal, -signal_clip, signal_clip))
+            _set_components(a, group_component=centered, fee_component=fee_component)
+            signals[idx] = signal
+        return signals
 
     @staticmethod
     def _snapshot_agent(agent) -> dict:
@@ -528,45 +620,19 @@ class Area(Agent):
             reference_ordering: np.ndarray | None,
             rng: np.random.Generator | None,
     ) -> np.ndarray:
-        """Deterministic ordering from distribution with reference-based tie handling.
+        """Compatibility wrapper; canonical implementation lives in utils.representations."""
+        return distribution_to_ordering_tie_aware(
+            dist,
+            reference_ordering=reference_ordering,
+            rng=rng,
+            atol=1e-12,
+            rtol=0.0,
+        )
 
-        For equal-probability colors:
-        - use their order in `reference_ordering` when available
-        - otherwise break ties uniformly at random with `rng` (unbiased)
-        """
-        arr = np.asarray(dist, dtype=np.float64)
-        if arr.ndim != 1:
-            raise ValueError("dist must be 1D")
-        n = int(arr.size)
-        if n <= 0:
-            return np.asarray([], dtype=np.int64)
-
-        ref_rank: dict[int, int] = {}
-        if reference_ordering is not None:
-            ref = np.asarray(reference_ordering, dtype=np.int64).tolist()
-            ref_rank = {int(c): i for i, c in enumerate(ref)}
-
-        # Sort once and form disjoint tie groups in descending order.
-        order_desc = np.argsort(-arr, kind="mergesort").astype(np.int64).tolist()
-        ordering: list[int] = []
-        i = 0
-        while i < n:
-            j = i + 1
-            base_val = float(arr[order_desc[i]])
-            while j < n and bool(np.isclose(float(arr[order_desc[j]]), base_val, rtol=0.0, atol=1e-12)):
-                j += 1
-            group = [int(c) for c in order_desc[i:j]]
-            if len(group) > 1:
-                if ref_rank:
-                    group.sort(key=lambda c: ref_rank.get(int(c), n + int(c)))
-                else:
-                    if rng is None:
-                        raise ValueError("rng is required for unbiased tie-breaking when no reference ordering exists.")
-                    group = rng.permutation(np.asarray(group, dtype=np.int64)).astype(np.int64).tolist()
-            ordering.extend(group)
-            i = j
-
-        return np.asarray(ordering, dtype=np.int64)
+    def _ordering_to_option_id(self, ordering: np.ndarray | None) -> int:
+        if ordering is None:
+            return -1
+        return int(self.model.option_id_for_ordering(ordering))
 
     def update_color_distribution(self) -> None:
         """
@@ -596,16 +662,30 @@ class Area(Agent):
         cell_set = set(self.cells)
         return [c for c in cell_list if c in cell_set]
 
-    def _sample_fresh_puzzle_distribution(self) -> np.ndarray:
-        """Sample an unbiased random puzzle distribution on the simplex."""
+    def _normalize_puzzle_distribution(self, sample: np.ndarray) -> np.ndarray:
+        """Normalize puzzle samples without edge hacks; fallback to uniform if invalid."""
         num_colors = self.model.num_colors
         if num_colors <= 0:
             return np.asarray([], dtype=np.float64)
-        alpha = np.ones(num_colors, dtype=np.float64)
+        arr = np.asarray(sample, dtype=np.float64)
+        if arr.shape != (num_colors,) or not np.all(np.isfinite(arr)):
+            return np.full(num_colors, 1.0 / num_colors, dtype=np.float64)
+        arr = np.clip(arr, 0.0, None)
+        total = float(arr.sum())
+        if not np.isfinite(total) or total <= 0.0:
+            return np.full(num_colors, 1.0 / num_colors, dtype=np.float64)
+        return arr / total
+
+    def _sample_fresh_puzzle_distribution(self) -> np.ndarray:
+        """Sample a color-symmetric, center-biased puzzle distribution on the simplex."""
+        num_colors = self.model.num_colors
+        if num_colors <= 0:
+            return np.asarray([], dtype=np.float64)
+        alpha = np.full(num_colors, _PUZZLE_ALPHA_SHOCK_PER_COMPONENT, dtype=np.float64)
         sample = np.asarray(self.model.rng_puzzle.dirichlet(alpha), dtype=np.float64)
         if sample.shape != (num_colors,) or not np.all(np.isfinite(sample)):
             return np.full(num_colors, 1.0 / num_colors, dtype=np.float64)
-        return sample
+        return self._normalize_puzzle_distribution(sample)
 
     def _sample_local_puzzle_distribution(self, prev: np.ndarray) -> np.ndarray:
         """Sample a local random walk step around the previous puzzle distribution."""
@@ -618,12 +698,11 @@ class Area(Agent):
         if not np.isfinite(total) or total <= 0.0:
             return self._sample_fresh_puzzle_distribution()
         prev_arr = prev_arr / total
-        eps = 1e-6
-        alpha = float(self.model.puzzle_local_kappa) * prev_arr + eps
+        alpha = float(self.model.puzzle_local_kappa) * prev_arr + _PUZZLE_ALPHA_CENTER_PER_COMPONENT
         sample = np.asarray(self.model.rng_puzzle.dirichlet(alpha), dtype=np.float64)
         if sample.shape != (num_colors,) or not np.all(np.isfinite(sample)):
             return self._sample_fresh_puzzle_distribution()
-        return sample
+        return self._normalize_puzzle_distribution(sample)
 
     def _update_puzzle_distribution(self) -> None:
         """Update area-level puzzle distribution via Dirichlet RW + rare shocks."""
@@ -647,16 +726,19 @@ class Area(Agent):
         """Drop per-step puzzle state when running in reality mode."""
         self._puzzle_distribution = None
         self._puzzle_distance = float("nan")
+        self._puzzle_ordering_for_quality = None
 
     def _compute_puzzle_distance(self) -> float:
         puzzle_distribution = self._puzzle_distribution
         if puzzle_distribution is None or puzzle_distribution.size == 0:
+            self._puzzle_ordering_for_quality = None
             return float("nan")
         puzzle_ord = self._ordering_from_distribution_tie_aware(
             np.asarray(puzzle_distribution, dtype=np.float64),
             reference_ordering=self.voted_ordering,
             rng=self.model.rng_puzzle,
         )
+        self._puzzle_ordering_for_quality = np.asarray(puzzle_ord, dtype=np.int64)
         return float(self.model.distance_func(puzzle_ord, self.voted_ordering, self.model.color_search_pairs))
 
     def _update_quality_distances(self) -> None:
@@ -666,6 +748,7 @@ class Area(Agent):
             reference_ordering=voted_ordering,
             rng=self.model.voting_rng,
         )
+        self._grid_ordering_for_quality = np.asarray(real_color_ord, dtype=np.int64)
         self._dist_to_reality = float(self.model.distance_func(real_color_ord, voted_ordering, self.model.color_search_pairs))
         if self.puzzle_mode and self._puzzle_distribution is None:
             self._update_puzzle_distribution()
@@ -805,10 +888,9 @@ class Area(Agent):
         try:
             vo = self._voted_ordering
             if vo is not None:
-                options = np.asarray(self.model.options)
-                matches = np.nonzero((options == np.asarray(vo)).all(axis=1))[0]
-                if len(matches) > 0:
-                    winning_option_id = int(matches[0])
+                oid = int(self.model.option_id_for_ordering(vo))
+                if oid >= 0:
+                    winning_option_id = oid
         except ValueError:
             winning_option_id = None
 
@@ -880,6 +962,8 @@ class Area(Agent):
             elected_color = None
             if self.voted_ordering is not None:
                 elected_color = self.voted_ordering.copy()
+            grid_ordering_id = self._ordering_to_option_id(self._grid_ordering_for_quality)
+            puzzle_ordering_id = self._ordering_to_option_id(self._puzzle_ordering_for_quality)
             snapshot_sink(
                 area=self,
                 snapshot={
@@ -892,6 +976,8 @@ class Area(Agent):
                     "gini_index": gini_index,
                     "area_color": area_color,
                     "elected_color": elected_color,
+                    "grid_ordering_id": int(grid_ordering_id),
+                    "puzzle_ordering_id": int(puzzle_ordering_id),
                     "puzzle_color": (
                         self.puzzle_distribution.copy()
                         if isinstance(self.puzzle_distribution, np.ndarray)

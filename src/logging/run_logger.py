@@ -400,8 +400,6 @@ class RunLoggerV2:
         areas = model.areas
         num_colors = int(model.num_colors)
 
-        options = np.asarray(model.options)
-
         def _apply_election_vectors(*, r_dict, elected_color_vec, area_color_vec, puzzle_color_vec=None) -> None:
             """Fill expanded vector columns + winning_option_id into r dictionary.
 
@@ -412,13 +410,12 @@ class RunLoggerV2:
                 vo = np.asarray(elected_color_vec, dtype=np.int16).tolist()
                 for i in range(num_colors):
                     r_dict[f"elected_color_{i}"] = np.int16(vo[i])
-                if options is not None:
-                    try:
-                        matches = np.nonzero((options == np.asarray(elected_color_vec)).all(axis=1))[0]
-                        if len(matches) > 0:
-                            r_dict["winning_option_id"] = np.int32(int(matches[0]))
-                    except (ValueError, IndexError, TypeError):
-                        pass
+                try:
+                    oid = int(model.option_id_for_ordering(elected_color_vec))
+                    if oid >= 0:
+                        r_dict["winning_option_id"] = np.int32(oid)
+                except (AttributeError, ValueError, TypeError):
+                    pass
 
             if area_color_vec is not None:
                 cdv = np.asarray(area_color_vec, dtype=np.float32)
@@ -444,6 +441,8 @@ class RunLoggerV2:
                 "turnout": np.float32(float(area.voter_turnout)),  # In percent
                 "fee_pool": np.float32(float(area.election_fee_pool)),
                 "winning_option_id": np.int32(-1),
+                "grid_ordering_id": np.int32(-1),
+                "puzzle_ordering_id": np.int32(-1),
                 "dist_to_reality": np.float32(
                     float(area.dist_to_reality) if area.dist_to_reality is not None else 0.0
                 ),
@@ -468,6 +467,8 @@ class RunLoggerV2:
                 "gini_index",
                 "area_color",
                 "elected_color",
+                "grid_ordering_id",
+                "puzzle_ordering_id",
             )
             missing = [k for k in required if k not in snapshot]
             if missing:
@@ -483,6 +484,8 @@ class RunLoggerV2:
             r["dist_to_reality"] = np.float32(float(snapshot["dist_to_reality"]))
             r["puzzle_distance"] = np.float32(float(snapshot["puzzle_distance"]))
             r["gini_index"] = np.int16(int(snapshot["gini_index"]))
+            r["grid_ordering_id"] = np.int32(int(snapshot["grid_ordering_id"]))
+            r["puzzle_ordering_id"] = np.int32(int(snapshot["puzzle_ordering_id"]))
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
             puzzle_cd = snapshot.get("puzzle_color", None)
@@ -523,6 +526,8 @@ class RunLoggerV2:
                     "election_delta_rel": np.float32(float(a.election_delta_rel)),
                     "participation_baseline": np.float32(float(a.participation_baseline)),
                     "participation_signal": np.float32(float(a.participation_signal)),
+                    "participation_signal_group_component": np.float32(float(a.participation_signal_group_component)),
+                    "participation_signal_fee_component": np.float32(float(a.participation_signal_fee_component)),
                     "q_participation": np.float32(float(a.q_participation)),
                     "participation_probability": np.float32(float(a.participation_probability())),
                     "altruism_factor": np.float32(float(a.altruism_factor)),

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 import numpy as np
 
-from src.utils.ballots import ordering_from_distribution, score_options_c2
+from src.utils.ballots import ordering_from_distribution
 
 
 class ParticipationStrategy(Protocol):
@@ -59,12 +59,7 @@ class DefaultVotingStrategy:
                 rng=agent.model.voting_rng,
             )
             agent.voted_altruistically = True
-            return score_options_c2(
-                target_ordering=target_ordering,
-                options=np.asarray(options),
-                distance_func=agent.model.distance_func,
-                color_search_pairs=agent.model.color_search_pairs,
-            )
+            return agent.model.get_altruistic_oppose_scores_for_ordering(target_ordering)
 
         agent.voted_altruistically = False
         return np.asarray(agent.self_regarding_oppose_scores, dtype=np.float32)

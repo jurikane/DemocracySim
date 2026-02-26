@@ -8,6 +8,8 @@ import json
 import pandas as pd
 
 from src.analysis.doe_scoring import (
+    _band_pref01,
+    _upper_bound_pref01,
     analyze_doe_root,
     apply_hard_gates,
     compute_run_features_from_tables,
@@ -48,8 +50,27 @@ def test_compute_run_features_from_tables_contract() -> None:
     assert 0.0 <= f["winner_entropy_norm"] <= 1.0
     assert f["dist_nonzero_share"] > 0.0
     assert f["turnout_std"] > 0.0
+    assert 0.0 <= f["turnout_start_window_mean"] <= 100.0
+    assert 0.0 <= f["turnout_end_window_mean"] <= 100.0
+    assert f["turnout_drop_start_end"] >= -100.0
+    assert 0.0 <= f["turnout_outside_20_80_share"] <= 1.0
+    assert f["turnout_decline_slope_norm"] >= 0.0
     assert f["group_participation_std"] > 0.0
     assert f["participant_abstainer_delta_rel_gap_abs"] > 0.0
+
+
+def test_turnout_shape_score_helpers_are_not_limited_to_unit_scale() -> None:
+    s = pd.Series([10.0, 50.0, 90.0])
+    band = _band_pref01(s, low=20.0, high=80.0)
+    assert float(band.iloc[1]) == 1.0
+    assert 0.0 < float(band.iloc[0]) < 1.0
+    assert 0.0 < float(band.iloc[2]) < 1.0
+
+    ub = _upper_bound_pref01(pd.Series([5.0, 20.0, 60.0, 80.0]), good_max=20.0, zero_at=70.0)
+    assert float(ub.iloc[0]) == 1.0
+    assert float(ub.iloc[1]) == 1.0
+    assert 0.0 < float(ub.iloc[2]) < 1.0
+    assert float(ub.iloc[3]) == 0.0
 
 
 def test_apply_hard_gates_contract() -> None:

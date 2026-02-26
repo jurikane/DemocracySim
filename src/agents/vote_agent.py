@@ -134,6 +134,8 @@ class VoteAgent(Agent):
         # EMA baseline and signal for participation learning.
         self.participation_baseline: float = float("nan")
         self.participation_signal: float = 0.0
+        self.participation_signal_group_component: float = 0.0
+        self.participation_signal_fee_component: float = 0.0
         self.participation_strategy = (
             participation_strategy if participation_strategy is not None else DefaultParticipationStrategy()
         )
@@ -458,14 +460,22 @@ class VoteAgent(Agent):
 
         Satisfaction-mode contract:
         - dissatisfaction_value is a normalized distance in [0,1]
-        - target altruism = 1 - dissatisfaction_value
+        - s = 1 - dissatisfaction_value
+        - target altruism = sigmoid(k * (s - theta))
         - gamma==1 => direct mapping (a := target)
         - gamma<1  => EMA-like smoothing toward target
         """
         if not np.isfinite(dissatisfaction_value):
             return
         d = float(np.clip(float(dissatisfaction_value), 0.0, 1.0))
-        target = 1.0 - d
+        s = 1.0 - d
+        theta = float(getattr(self.model, "altruism_satisfaction_theta", 0.5))
+        theta = float(np.clip(theta, 0.0, 1.0))
+        slope = float(getattr(self.model, "altruism_satisfaction_slope", 4.0))
+        if not np.isfinite(slope) or slope <= 0.0:
+            return
+        z = float(slope * (s - theta))
+        target = float(1.0 / (1.0 + np.exp(-z)))
         gamma = float(getattr(self.model, "altruism_response_gamma", 1.0))
         gamma = float(np.clip(gamma, 0.0, 1.0))
         if gamma >= 1.0:

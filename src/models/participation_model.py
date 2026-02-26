@@ -9,6 +9,7 @@ from src.utils.distance_functions import (
     spearman_fr_order,
     kendall_tau_order,
 )
+from src.utils.ballots import score_options_c2
 from itertools import permutations, product, combinations
 from src.utils.metrics import (compute_gini_index, compute_collective_assets,
                                get_voter_turnout, get_grid_colors)
@@ -230,6 +231,10 @@ class ParticipationModel(mesa.Model):
         participation_q_max,
         bias_toward_participation,
         participation_baseline_alpha,
+        participation_signal_mode,
+        participation_signal_fee_weight,
+        participation_signal_group_shrink_k,
+        participation_signal_clip,
     ) -> None:
         """Validate and assign participation-learning knobs."""
         self.participation_alpha = is_learning_rate(participation_alpha)
@@ -253,6 +258,20 @@ class ParticipationModel(mesa.Model):
         self.participation_baseline_alpha = ensure_rate_0_1(
             "participation_baseline_alpha", participation_baseline_alpha
         )
+        self.participation_signal_mode = ensure_choice(
+            "participation_signal_mode",
+            participation_signal_mode,
+            ("raw_delta_rel", "group_centered_delta_rel_plus_fee"),
+        )
+        self.participation_signal_fee_weight = ensure_finite_ge_0(
+            "participation_signal_fee_weight", participation_signal_fee_weight
+        )
+        self.participation_signal_group_shrink_k = ensure_finite_ge_0(
+            "participation_signal_group_shrink_k", participation_signal_group_shrink_k
+        )
+        self.participation_signal_clip = ensure_finite_gt_0(
+            "participation_signal_clip", participation_signal_clip
+        )
 
     def _configure_altruism_learning_and_satisfaction(
         self,
@@ -263,6 +282,8 @@ class ParticipationModel(mesa.Model):
         altruism_clip_max,
         altruism_mode,
         altruism_response_gamma,
+        altruism_satisfaction_theta,
+        altruism_satisfaction_slope,
         altruism_learning,
         altruism_static,
         satisfaction_mode,
@@ -295,6 +316,12 @@ class ParticipationModel(mesa.Model):
             {"static", "surprise_learning", "satisfaction"},
         )
         self.altruism_response_gamma = ensure_rate_0_1("altruism_response_gamma", altruism_response_gamma)
+        self.altruism_satisfaction_theta = ensure_rate_0_1(
+            "altruism_satisfaction_theta", altruism_satisfaction_theta
+        )
+        self.altruism_satisfaction_slope = ensure_finite_gt_0(
+            "altruism_satisfaction_slope", altruism_satisfaction_slope
+        )
         # Legacy compatibility field; use `altruism_mode` for semantics.
         self.altruism_learning = bool(self.altruism_mode == "surprise_learning")
         self.altruism_static = ensure_rate_0_1("altruism_static", altruism_static)
@@ -352,6 +379,10 @@ class ParticipationModel(mesa.Model):
         self.distance_func_implementation_names = d_i_names
         self.distance_func_implementation_name = d_i_name
         self.options = self.create_all_options(num_colors)
+        self.option_id_by_ordering = self._build_option_id_lookup(self.options)
+        self.altruistic_oppose_scores_by_option_id: dict[int, np.ndarray] = {}
+        self.altruistic_score_cache_hits = 0
+        self.altruistic_score_cache_misses = 0
 
     @staticmethod
     def _normalize_quality_target_mode(value) -> str:
@@ -426,12 +457,18 @@ class ParticipationModel(mesa.Model):
         participation_q_max: float = 2.0,
         bias_toward_participation: float = 0.0,
         participation_baseline_alpha: float = 0.1,
+        participation_signal_mode: str = "raw_delta_rel",
+        participation_signal_fee_weight: float = 1.0,
+        participation_signal_group_shrink_k: float = 10.0,
+        participation_signal_clip: float = 0.25,
         altruism_alpha: float = 0.05,
         altruism_init: float = 0.5,
         altruism_clip_min: float = 0.0,
         altruism_clip_max: float = 1.0,
         altruism_mode: Optional[str] = None,
         altruism_response_gamma: float = 1.0,
+        altruism_satisfaction_theta: float = 0.5,
+        altruism_satisfaction_slope: float = 4.0,
         altruism_learning: bool = False,
         altruism_static: float = 0.5,
         satisfaction_mode: str = "area",  # "global", "area", "knowledge", or "combination"
@@ -475,6 +512,10 @@ class ParticipationModel(mesa.Model):
             participation_q_max=participation_q_max,
             bias_toward_participation=bias_toward_participation,
             participation_baseline_alpha=participation_baseline_alpha,
+            participation_signal_mode=participation_signal_mode,
+            participation_signal_fee_weight=participation_signal_fee_weight,
+            participation_signal_group_shrink_k=participation_signal_group_shrink_k,
+            participation_signal_clip=participation_signal_clip,
         )
         self._configure_altruism_learning_and_satisfaction(
             altruism_alpha=altruism_alpha,
@@ -483,6 +524,8 @@ class ParticipationModel(mesa.Model):
             altruism_clip_max=altruism_clip_max,
             altruism_mode=altruism_mode,
             altruism_response_gamma=altruism_response_gamma,
+            altruism_satisfaction_theta=altruism_satisfaction_theta,
+            altruism_satisfaction_slope=altruism_satisfaction_slope,
             altruism_learning=altruism_learning,
             altruism_static=altruism_static,
             satisfaction_mode=satisfaction_mode,
@@ -652,6 +695,48 @@ class ParticipationModel(mesa.Model):
     @property
     def is_puzzle_mode(self) -> bool:
         return self.quality_target_mode == "puzzle"
+
+    @staticmethod
+    def _build_option_id_lookup(options: np.ndarray) -> dict[tuple[int, ...], int]:
+        arr = np.asarray(options, dtype=np.int64)
+        if arr.ndim != 2:
+            raise ValueError("options must be a 2D array")
+        return {tuple(int(x) for x in row.tolist()): int(i) for i, row in enumerate(arr)}
+
+    def option_id_for_ordering(self, ordering) -> int:
+        """Return option id for an ordering, or -1 if invalid/not found."""
+        try:
+            arr = np.asarray(ordering, dtype=np.int64).reshape(-1)
+        except (TypeError, ValueError):
+            return -1
+        return int(self.option_id_by_ordering.get(tuple(int(x) for x in arr.tolist()), -1))
+
+    def get_altruistic_oppose_scores_for_ordering(self, ordering) -> np.ndarray:
+        """Return cached option oppose-scores for a target ordering.
+
+        Raises loudly if the ordering is invalid or not part of the current option set.
+        """
+        option_id = int(self.option_id_for_ordering(ordering))
+        if option_id < 0:
+            raise ValueError("ordering is invalid or not present in model.options")
+        cached = self.altruistic_oppose_scores_by_option_id.get(option_id)
+        if cached is not None:
+            self.altruistic_score_cache_hits += 1
+            return cached
+
+        scores = np.asarray(
+            score_options_c2(
+                target_ordering=np.asarray(ordering, dtype=np.int64),
+                options=np.asarray(self.options),
+                distance_func=self.distance_func,
+                color_search_pairs=self.color_search_pairs,
+            ),
+            dtype=np.float32,
+        )
+        scores.setflags(write=False)
+        self.altruistic_oppose_scores_by_option_id[option_id] = scores
+        self.altruistic_score_cache_misses += 1
+        return scores
 
     def register_schema_v2_sinks(self, *, vote_sink, area_snapshot_sink) -> None:
         """Register schema-v2 sink callbacks used by logging."""

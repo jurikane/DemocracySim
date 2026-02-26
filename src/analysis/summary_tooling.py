@@ -32,6 +32,7 @@ from src.analysis.reference_benchmarks import (
 )
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
+from src.utils.representations import distribution_to_ordering_tie_aware
 from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
 
 
@@ -379,6 +380,10 @@ def _build_area_series(
         a["puzzle_distance"] = area_steps["puzzle_distance"].astype(np.float32)
     else:
         a["puzzle_distance"] = np.float32(np.nan)
+    if "grid_ordering_id" in area_steps.columns:
+        a["grid_ordering_id"] = area_steps["grid_ordering_id"].astype(np.int32)
+    if "puzzle_ordering_id" in area_steps.columns:
+        a["puzzle_ordering_id"] = area_steps["puzzle_ordering_id"].astype(np.int32)
     for c in area_color_cols:
         a[c] = area_steps[c].astype(np.float32)
     for c in [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_steps.columns]:
@@ -485,7 +490,9 @@ def _compute_area_vote_mode_alignment_series(
     # Puzzle option id requires puzzle distribution vectors; older runs may not have them.
     puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_steps.columns]
     base["puzzle_option_id"] = np.int32(-1)
-    if len(puzzle_cols) == num_colors:
+    if "puzzle_ordering_id" in area_steps.columns:
+        base["puzzle_option_id"] = area_steps["puzzle_ordering_id"].fillna(-1).astype("int32")
+    elif len(puzzle_cols) == num_colors:
         options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
         option_lookup = {tuple(int(x) for x in row.tolist()): int(i) for i, row in enumerate(options)}
         rows = []
@@ -3739,33 +3746,14 @@ def _summary_ordering_from_distribution_tie_aware(
     atol: float = 1e-9,
     rtol: float = 1e-8,
 ) -> np.ndarray:
-    """Distribution -> ordering with unbiased tie-break and optional continuity reference."""
-    vals = np.asarray(dist, dtype=np.float64).reshape(-1)
-    n = int(vals.size)
-    if n <= 0:
-        return np.asarray([], dtype=np.int64)
-    order = np.argsort(-vals, kind="stable").astype(np.int64)
-    sorted_vals = vals[order]
-    out: list[int] = []
-    ref_pos: dict[int, int] | None = None
-    if reference_ordering is not None:
-        ref = np.asarray(reference_ordering, dtype=np.int64).reshape(-1)
-        if ref.size == n:
-            ref_pos = {int(c): i for i, c in enumerate(ref.tolist())}
-    i = 0
-    while i < n:
-        j = i + 1
-        while j < n and np.isclose(sorted_vals[j], sorted_vals[i], atol=atol, rtol=rtol):
-            j += 1
-        grp = order[i:j].copy()
-        if grp.size > 1:
-            if ref_pos is not None:
-                grp = np.asarray(sorted(grp.tolist(), key=lambda c: ref_pos.get(int(c), n + int(c))), dtype=np.int64)
-            else:
-                (rng or np.random.default_rng(0)).shuffle(grp)
-        out.extend(int(v) for v in grp.tolist())
-        i = j
-    return np.asarray(out, dtype=np.int64)
+    """Compatibility wrapper; canonical implementation lives in utils.representations."""
+    return distribution_to_ordering_tie_aware(
+        dist,
+        reference_ordering=reference_ordering,
+        rng=rng,
+        atol=atol,
+        rtol=rtol,
+    )
 
 
 def _compute_area_power_direction_orderings(
@@ -3906,6 +3894,8 @@ def _compute_area_puzzle_power_distances(
 
     color_cols = [f"area_color_{i}" for i in range(num_colors) if f"area_color_{i}" in area_series.columns]
     puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_series.columns]
+    has_grid_ids = "grid_ordering_id" in area_series.columns
+    has_puzzle_ids = "puzzle_ordering_id" in area_series.columns
     grid_prev = None
     puzzle_prev = None
     tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 4242)
@@ -3915,18 +3905,30 @@ def _compute_area_puzzle_power_distances(
         oid = int(win_ids[i])
         if 0 <= oid < int(options.shape[0]):
             out["dist_outcome_power"][i] = np.float32(float(dist_func(np.asarray(options[oid], dtype=np.int64), power_ord, search_pairs)))
-        if len(puzzle_cols) == num_colors:
+        pord = None
+        if has_puzzle_ids:
+            pid = int(area_series.iloc[i]["puzzle_ordering_id"])
+            if 0 <= pid < int(options.shape[0]):
+                pord = np.asarray(options[pid], dtype=np.int64)
+        elif len(puzzle_cols) == num_colors:
             pvals = area_series.loc[area_series.index[i], puzzle_cols].to_numpy(dtype=float)
             if np.isfinite(pvals).all():
                 pord = _summary_ordering_from_distribution_tie_aware(pvals, reference_ordering=puzzle_prev, rng=tie_rng)
-                out["dist_puzzle_power"][i] = np.float32(float(dist_func(pord, power_ord, search_pairs)))
-                puzzle_prev = pord
-        if len(color_cols) == num_colors:
+        if pord is not None:
+            out["dist_puzzle_power"][i] = np.float32(float(dist_func(pord, power_ord, search_pairs)))
+            puzzle_prev = pord
+        gord = None
+        if has_grid_ids:
+            gid = int(area_series.iloc[i]["grid_ordering_id"])
+            if 0 <= gid < int(options.shape[0]):
+                gord = np.asarray(options[gid], dtype=np.int64)
+        elif len(color_cols) == num_colors:
             gvals = area_series.loc[area_series.index[i], color_cols].to_numpy(dtype=float)
             if np.isfinite(gvals).all():
                 gord = _summary_ordering_from_distribution_tie_aware(gvals, reference_ordering=grid_prev, rng=tie_rng)
-                out["dist_grid_power"][i] = np.float32(float(dist_func(gord, power_ord, search_pairs)))
-                grid_prev = gord
+        if gord is not None:
+            out["dist_grid_power"][i] = np.float32(float(dist_func(gord, power_ord, search_pairs)))
+            grid_prev = gord
     return out
 
 
@@ -3941,7 +3943,8 @@ def _compute_group_puzzle_opportunity_distances(
     if num_colors <= 0 or personality_groups.ndim != 2:
         return pd.DataFrame()
     puzzle_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_series.columns]
-    if len(puzzle_cols) != num_colors or area_series.empty:
+    has_puzzle_ids = "puzzle_ordering_id" in area_series.columns
+    if (not has_puzzle_ids and len(puzzle_cols) != num_colors) or area_series.empty:
         return pd.DataFrame()
     dist_func = _summary_ordering_distance_func(meta)
     search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
@@ -3949,11 +3952,19 @@ def _compute_group_puzzle_opportunity_distances(
     out = pd.DataFrame({"step": x.astype(np.int32)})
     prev_ord = None
     tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 7171)
+    options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=int)
     puzzle_orders: list[np.ndarray | None] = []
     for _, r in area_series.iterrows():
-        vals = r[puzzle_cols].to_numpy(dtype=float)
-        if np.isfinite(vals).all():
-            pord = _summary_ordering_from_distribution_tie_aware(vals, reference_ordering=prev_ord, rng=tie_rng)
+        pord = None
+        if has_puzzle_ids:
+            pid = int(r.get("puzzle_ordering_id", -1))
+            if 0 <= pid < int(options.shape[0]):
+                pord = np.asarray(options[pid], dtype=np.int64)
+        elif len(puzzle_cols) == num_colors:
+            vals = r[puzzle_cols].to_numpy(dtype=float)
+            if np.isfinite(vals).all():
+                pord = _summary_ordering_from_distribution_tie_aware(vals, reference_ordering=prev_ord, rng=tie_rng)
+        if pord is not None:
             prev_ord = pord
             puzzle_orders.append(pord)
         else:

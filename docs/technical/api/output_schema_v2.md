@@ -128,7 +128,11 @@ Agent snapshot table (**agent state only**).
 | election_delta_abs         | float32 | realized absolute asset delta                |
 | election_delta_rel         | float32 | realized relative asset delta                |
 | participation_baseline     | float32 | EMA baseline for participation learning      |
-| participation_signal       | float32 | participation learning signal (`= election_delta_rel`) |
+| participation_signal       | float32 | participation learning signal (mode-dependent) |
+| participation_signal_group_component | float32 | centered/group component of participation signal |
+| participation_signal_fee_component | float32 | explicit fee component of participation signal |
+| q_participation            | float32 | learned participation propensity (`q`) |
+| participation_probability  | float32 | current participation probability from `q` |
 | altruism_factor            | float32 | agent altruism_factor                        |
 | dissatisfaction_value         | float32 | dissatisfaction (distance)                   |
 | dissatisfaction_baseline      | float32 | EMA baseline for dissatisfaction             |

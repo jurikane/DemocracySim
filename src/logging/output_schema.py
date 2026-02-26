@@ -118,6 +118,8 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "fee_pool",
     # Outcome
     "winning_option_id",
+    "grid_ordering_id",
+    "puzzle_ordering_id",
     # Vectors (expanded):
     # - elected_color_0.. elected_color_{C-1} (int16)
     # - area_color_0.. area_color_{C-1} (float32)
@@ -139,6 +141,8 @@ AREA_STEPS_BASE_DTYPES: Final[dict[str, str]] = {
     # fee_pool must match simulation internal type; allow float.
     "fee_pool": "float32",
     "winning_option_id": "int32",
+    "grid_ordering_id": "int32",
+    "puzzle_ordering_id": "int32",
     "dist_to_reality": "float32",
     "puzzle_distance": "float32",
     "gini_index": "int16",
@@ -172,6 +176,8 @@ AGENTS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     "election_delta_rel",
     "participation_baseline",
     "participation_signal",
+    "participation_signal_group_component",
+    "participation_signal_fee_component",
     "q_participation",
     "participation_probability",
     "altruism_factor",
@@ -197,6 +203,8 @@ AGENTS_BASE_DTYPES: Final[dict[str, str]] = {
     "election_delta_rel": "float32",
     "participation_baseline": "float32",
     "participation_signal": "float32",
+    "participation_signal_group_component": "float32",
+    "participation_signal_fee_component": "float32",
     "q_participation": "float32",
     "participation_probability": "float32",
     "altruism_factor": "float32",
