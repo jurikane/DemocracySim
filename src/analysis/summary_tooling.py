@@ -595,6 +595,15 @@ def _build_area_group_series(
         "resident_share",
         "eligible_share",
         "participant_share",
+        "group_reward_count",
+        "group_punishment_count",
+        "participants_reward_count",
+        "participants_punishment_count",
+        "abstainers_reward_count",
+        "abstainers_punishment_count",
+        "learning_direction_score",
+        "learning_intensity_rel_mean",
+        "learning_signed_pressure",
         "participants_mean_delta_rel",
         "abstainers_mean_delta_rel",
         "participants_mean_fee",
@@ -662,6 +671,7 @@ def _build_area_group_series(
     optional_cols = [
         "participating",
         "election_fee",
+        "election_delta_abs",
         "election_delta_rel",
         "participation_signal",
         "dissatisfaction_signal",
@@ -681,6 +691,8 @@ def _build_area_group_series(
         state["participating"] = False
     if "election_fee" not in state.columns:
         state["election_fee"] = np.nan
+    if "election_delta_abs" not in state.columns:
+        state["election_delta_abs"] = np.nan
     if "election_delta_rel" not in state.columns:
         state["election_delta_rel"] = np.nan
     if "participation_signal" not in state.columns:
@@ -695,6 +707,7 @@ def _build_area_group_series(
         state["altruism_factor"] = np.nan
     state["participating"] = state["participating"].astype("boolean").fillna(False).astype(bool)
     state["election_fee"] = state["election_fee"].astype("float32")
+    state["election_delta_abs"] = state["election_delta_abs"].astype("float32")
     state["election_delta_rel"] = state["election_delta_rel"].astype("float32")
     state["participation_signal"] = state["participation_signal"].astype("float32")
     state["dissatisfaction_signal"] = state["dissatisfaction_signal"].astype("float32")
@@ -863,6 +876,74 @@ def _build_area_group_series(
     ).astype("float32")
     p_mask = residents["participating"].astype(bool).to_numpy()
     a_mask = ~p_mask
+    delta_abs = residents["election_delta_abs"].to_numpy(dtype=float)
+    residents["is_reward"] = (delta_abs > 0.0).astype("int8")
+    residents["is_punishment"] = (delta_abs < 0.0).astype("int8")
+
+    # Learning-aligned diagnostics:
+    # direction follows action/outcome sign logic, intensity is normalized by
+    # step-global mean |delta_abs| for the same action/outcome channel.
+    mask_part_reward = p_mask & (delta_abs > 0.0)
+    mask_part_punish = p_mask & (delta_abs < 0.0)
+    mask_abs_reward = a_mask & (delta_abs > 0.0)
+    mask_abs_punish = a_mask & (delta_abs < 0.0)
+    learning_direction = np.zeros(len(residents), dtype=float)
+    learning_direction[mask_part_reward] = 1.0
+    learning_direction[mask_part_punish] = -1.0
+    learning_direction[mask_abs_reward] = -1.0
+    learning_direction[mask_abs_punish] = 1.0
+    residents["learning_direction"] = learning_direction.astype("float32")
+
+    def _global_abs_delta_mean(mask: np.ndarray) -> pd.Series:
+        cols_local = ["step", "area_id", "election_delta_abs"]
+        tmp = residents.loc[mask, cols_local].copy()
+        if tmp.empty:
+            return pd.Series(dtype=float)
+        tmp["delta_abs_mag"] = pd.to_numeric(tmp["election_delta_abs"], errors="coerce").abs()
+        return tmp.groupby(["step", "area_id"], sort=False)["delta_abs_mag"].mean()
+
+    idx_step_area = pd.MultiIndex.from_arrays([residents["step"], residents["area_id"]])
+    g_part_reward = _global_abs_delta_mean(mask_part_reward).reindex(idx_step_area).to_numpy(dtype=float)
+    g_part_punish = _global_abs_delta_mean(mask_part_punish).reindex(idx_step_area).to_numpy(dtype=float)
+    g_abs_reward = _global_abs_delta_mean(mask_abs_reward).reindex(idx_step_area).to_numpy(dtype=float)
+    g_abs_punish = _global_abs_delta_mean(mask_abs_punish).reindex(idx_step_area).to_numpy(dtype=float)
+
+    denom = np.full(len(residents), np.nan, dtype=float)
+    denom[mask_part_reward] = g_part_reward[mask_part_reward]
+    denom[mask_part_punish] = g_part_punish[mask_part_punish]
+    denom[mask_abs_reward] = g_abs_reward[mask_abs_reward]
+    denom[mask_abs_punish] = g_abs_punish[mask_abs_punish]
+
+    abs_delta = np.abs(delta_abs)
+    learning_intensity_rel = np.zeros(len(residents), dtype=float)
+    valid_intensity = np.isfinite(abs_delta) & np.isfinite(denom) & (denom > 0.0)
+    learning_intensity_rel[valid_intensity] = abs_delta[valid_intensity] / denom[valid_intensity]
+    residents["learning_intensity_rel"] = learning_intensity_rel.astype("float32")
+    residents["learning_signed_pressure"] = (learning_direction * learning_intensity_rel).astype("float32")
+
+    reward_counts = (
+        residents.groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            group_reward_count=("is_reward", "sum"),
+            group_punishment_count=("is_punishment", "sum"),
+        )
+    )
+    participant_reward_counts = (
+        residents.loc[p_mask]
+        .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            participants_reward_count=("is_reward", "sum"),
+            participants_punishment_count=("is_punishment", "sum"),
+        )
+    )
+    abstainer_reward_counts = (
+        residents.loc[a_mask]
+        .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            abstainers_reward_count=("is_reward", "sum"),
+            abstainers_punishment_count=("is_punishment", "sum"),
+        )
+    )
 
     p_delta_rel = (
         residents.loc[p_mask]
@@ -953,6 +1034,18 @@ def _build_area_group_series(
         .mean()
         .rename(columns={"participation_p_delta": "abstainers_mean_participation_p_delta"})
     )
+    learning_diag = (
+        residents.groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            learning_direction_score=("learning_direction", "mean"),
+            learning_intensity_rel_mean=("learning_intensity_rel", "mean"),
+            learning_signed_pressure=("learning_signed_pressure", "mean"),
+        )
+    )
+    out = out.merge(reward_counts, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(participant_reward_counts, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(abstainer_reward_counts, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(learning_diag, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(p_delta_rel, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(a_delta, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(p_fee, on=["step", "area_id", "personality_group_idx"], how="left")
@@ -1208,6 +1301,15 @@ def _build_area_group_series(
             out = out.merge(v_non_a, on=["step", "area_id", "personality_group_idx"], how="left")
             out = out.merge(v_switch, on=["step", "area_id", "personality_group_idx"], how="left")
     for c in (
+        "group_reward_count",
+        "group_punishment_count",
+        "participants_reward_count",
+        "participants_punishment_count",
+        "abstainers_reward_count",
+        "abstainers_punishment_count",
+        "learning_direction_score",
+        "learning_intensity_rel_mean",
+        "learning_signed_pressure",
         "participants_mean_delta_rel",
         "abstainers_mean_delta_rel",
         "participants_mean_fee",
@@ -1251,6 +1353,17 @@ def _build_area_group_series(
     out["group_idx"] = out["group_idx"].astype("int16")
     out["mean_assets"] = out["mean_assets"].astype("float32")
     out["mean_dissatisfaction"] = out["mean_dissatisfaction"].astype("float32")
+    for c in (
+        "group_reward_count",
+        "group_punishment_count",
+        "participants_reward_count",
+        "participants_punishment_count",
+        "abstainers_reward_count",
+        "abstainers_punishment_count",
+    ):
+        if c not in out.columns:
+            out[c] = 0
+        out[c] = out[c].fillna(0).astype("int32")
     return out[cols].sort_values(["area_id", "step", "group_idx"]).reset_index(drop=True)
 
 
@@ -2532,6 +2645,12 @@ def _render_area_group_pages(
     p_dissat = pivot("mean_dissatisfaction")
     p_res_share = pivot("resident_share")
     p_part_share = pivot("participant_share")
+    p_part_reward_count = pivot_optional("participants_reward_count")
+    p_part_punish_count = pivot_optional("participants_punishment_count")
+    p_abs_reward_count = pivot_optional("abstainers_reward_count")
+    p_abs_punish_count = pivot_optional("abstainers_punishment_count")
+    p_learning_intensity = pivot_optional("learning_intensity_rel_mean")
+    p_learning_pressure = pivot_optional("learning_signed_pressure")
     p_part_delta = pivot_optional("participants_mean_delta_rel")
     p_abs_delta = pivot_optional("abstainers_mean_delta_rel")
     p_part_fee = pivot_optional("participants_mean_fee")
@@ -2860,6 +2979,145 @@ def _render_area_group_pages(
     fig6.tight_layout()
     pdf.savefig(fig6, dpi=140)
     plt.close(fig6)
+
+    # Page 5b: learning-direction and learning-intensity diagnostics by group.
+    fig6b, ax6b = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+    ax6b[0].set_title("Learning Direction by Group (toward participation + / away from participation -)")
+    ax6b[0].set_ylabel("direction score [% pts]")
+    has_direction_components = (
+        p_part_reward_count is not None
+        and p_part_punish_count is not None
+        and p_abs_reward_count is not None
+        and p_abs_punish_count is not None
+        and (
+            np.isfinite(p_part_reward_count.to_numpy(dtype=float)).any()
+            or np.isfinite(p_part_punish_count.to_numpy(dtype=float)).any()
+            or np.isfinite(p_abs_reward_count.to_numpy(dtype=float)).any()
+            or np.isfinite(p_abs_punish_count.to_numpy(dtype=float)).any()
+        )
+    )
+    if has_direction_components:
+        for g in groups:
+            part_vals = p_part[g].to_numpy(dtype=float)
+            abs_vals = np.maximum(0.0, p_res[g].to_numpy(dtype=float) - part_vals)
+            reward_vals = p_part_reward_count[g].to_numpy(dtype=float)
+            punish_vals = p_part_punish_count[g].to_numpy(dtype=float)
+            abs_reward_vals = p_abs_reward_count[g].to_numpy(dtype=float)
+            abs_punish_vals = p_abs_punish_count[g].to_numpy(dtype=float)
+            part_reward_share = np.zeros_like(reward_vals, dtype=float)
+            part_punish_share = np.zeros_like(punish_vals, dtype=float)
+            abs_reward_share = np.zeros_like(abs_reward_vals, dtype=float)
+            abs_punish_share = np.zeros_like(abs_punish_vals, dtype=float)
+            np.divide(reward_vals, part_vals, out=part_reward_share, where=part_vals > 0.0)
+            np.divide(punish_vals, part_vals, out=part_punish_share, where=part_vals > 0.0)
+            np.divide(abs_reward_vals, abs_vals, out=abs_reward_share, where=abs_vals > 0.0)
+            np.divide(abs_punish_vals, abs_vals, out=abs_punish_share, where=abs_vals > 0.0)
+            # Direction logic:
+            # + participant reward, - participant punishment,
+            # - abstainer reward, + abstainer punishment.
+            direction_score = 0.5 * (
+                (part_reward_share + abs_punish_share) - (part_punish_share + abs_reward_share)
+            )
+            color = get_group_color(int(g))
+            ax6b[0].plot(
+                steps,
+                direction_score * 100.0,
+                color=color,
+                linewidth=1.0,
+                alpha=0.95,
+                label=f"g{g}",
+            )
+        ax6b[0].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+        if groups:
+            ax6b[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+        ax6b[0].text(
+            0.01,
+            0.03,
+            "score = 0.5 * [(P(participant rewarded)+P(abstainer punished))"
+            " - (P(participant punished)+P(abstainer rewarded))]",
+            transform=ax6b[0].transAxes,
+            fontsize=7,
+            ha="left",
+            va="bottom",
+            alpha=0.85,
+        )
+    else:
+        ax6b[0].text(0.5, 0.5, "Direction components unavailable", ha="center", va="center")
+        ax6b[0].set_yticks([])
+
+    ax6b[1].set_title("Learning Pressure by Group (solid) + Relative Intensity vs step-global mean (dotted)")
+    ax6b[1].set_ylabel("signed pressure")
+    has_learning_pressure = (
+        p_learning_pressure is not None
+        and np.isfinite(p_learning_pressure.to_numpy(dtype=float)).any()
+    )
+    has_learning_intensity = (
+        p_learning_intensity is not None
+        and np.isfinite(p_learning_intensity.to_numpy(dtype=float)).any()
+    )
+    if has_learning_pressure:
+        ax6b1_rhs = ax6b[1].twinx() if has_learning_intensity else None
+        rhs_handles = []
+        rhs_labels = []
+        for g in groups:
+            color = get_group_color(int(g))
+            ax6b[1].plot(
+                steps,
+                p_learning_pressure[g].to_numpy(dtype=float),
+                color=color,
+                linewidth=1.0,
+                alpha=0.95,
+                label=f"g{g}",
+            )
+            if ax6b1_rhs is not None:
+                line_rhs = ax6b1_rhs.plot(
+                    steps,
+                    p_learning_intensity[g].to_numpy(dtype=float),
+                    color=color,
+                    linestyle=":",
+                    linewidth=1.7,
+                    alpha=0.85,
+                )
+                rhs_handles.extend(line_rhs)
+                rhs_labels.append(f"g{g} intensity")
+        ax6b[1].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+        if ax6b1_rhs is not None:
+            ax6b1_rhs.set_ylabel("relative intensity [x step-global mean]")
+            ax6b1_rhs.grid(False)
+        if groups:
+            h1, l1 = ax6b[1].get_legend_handles_labels()
+            if ax6b1_rhs is not None and rhs_handles:
+                ax6b[1].legend(
+                    h1 + rhs_handles,
+                    l1 + rhs_labels,
+                    loc="upper center",
+                    bbox_to_anchor=(0.5, 1.02),
+                    fontsize=7,
+                    ncol=min(4, len(groups) * 2),
+                )
+            else:
+                ax6b[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+        ax6b[1].text(
+            0.01,
+            0.03,
+            "solid = mean(direction * |delta_abs| / global_mean_abs_delta[action,outcome,step]);"
+            " dotted = mean(|delta_abs| / global_mean_abs_delta[action,outcome,step])",
+            transform=ax6b[1].transAxes,
+            fontsize=7,
+            ha="left",
+            va="bottom",
+            alpha=0.85,
+        )
+    else:
+        ax6b[1].text(0.5, 0.5, "Learning pressure unavailable", ha="center", va="center")
+        ax6b[1].set_yticks([])
+    for a in ax6b:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+    fig6b.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
+    fig6b.tight_layout()
+    pdf.savefig(fig6b, dpi=140)
+    plt.close(fig6b)
 
     # Page 6 (Page B): learning feedback signals by group.
     fig7, ax7 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)

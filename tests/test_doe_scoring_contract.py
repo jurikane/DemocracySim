@@ -57,6 +57,9 @@ def test_compute_run_features_from_tables_contract() -> None:
     assert f["turnout_decline_slope_norm"] >= 0.0
     assert f["group_participation_std"] > 0.0
     assert f["participant_abstainer_delta_rel_gap_abs"] > 0.0
+    assert f["participant_share_max_abs_drift_20"] >= 0.0
+    assert f["participant_share_mean_abs_drift_20_w"] >= 0.0
+    assert f["participant_share_turnover_rate_w"] >= 0.0
 
 
 def test_turnout_shape_score_helpers_are_not_limited_to_unit_scale() -> None:

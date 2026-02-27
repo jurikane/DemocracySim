@@ -43,8 +43,8 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "puzzle_dominance_share_score_low": 0.65,
     "puzzle_dominance_share_score_high": 0.90,
     # Turnout shape soft score (step-count independent; avoids deceptive mean-only scoring).
-    "turnout_start_score_low": 20.0,
-    "turnout_start_score_high": 80.0,
+    "turnout_start_score_low": 30.0,
+    "turnout_start_score_high": 70.0,
     "turnout_end_score_low": 20.0,
     "turnout_end_score_high": 80.0,
     "turnout_drop_score_good_max": 15.0,
@@ -53,6 +53,11 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "turnout_decline_score_zero_at": 0.50,
     "turnout_outside_band_share_good_max": 0.20,
     "turnout_outside_band_share_zero_at": 0.80,
+    # Participation learning stabilization soft scores (exact q deltas from q snapshots where available).
+    "participation_q_delta_mean_abs_good_max": 0.0015,
+    "participation_q_delta_mean_abs_zero_at": 0.0120,
+    "participation_q_delta_late_mean_abs_good_max": 0.0010,
+    "participation_q_delta_late_mean_abs_zero_at": 0.0080,
 }
 
 DEFAULT_SCORING_WEIGHTS: dict[str, float] = {
@@ -476,6 +481,7 @@ def compute_run_features_from_tables(
     turnout_start_window_mean = float(turnout_series.iloc[:win].mean())
     turnout_end_window_mean = float(turnout_series.iloc[-win:].mean())
     turnout_drop_start_end = float(turnout_start_window_mean - turnout_end_window_mean)
+    late_steps = set(pd.to_numeric(per_step["step"].iloc[-win:], errors="coerce").astype(int).tolist())
     turnout_outside_20_80_share = float(
         np.mean((turnout_series.to_numpy(dtype=float) < 20.0) | (turnout_series.to_numpy(dtype=float) > 80.0))
     )
@@ -613,6 +619,98 @@ def compute_run_features_from_tables(
         if sync_vals:
             roll10_group_sync_index = float(np.mean(sync_vals))
 
+    # Participant-composition dynamics (participants split across groups each step).
+    # This captures temporal reallocation between groups, not just cross-sectional spread.
+    participant_share_max_abs_drift_20 = 0.0
+    participant_share_mean_abs_drift_20_w = 0.0
+    participant_share_turnover_rate_w = 0.0
+    if len(group_step) > 0:
+        group_part = (
+            agents.groupby(["step", "personality_group_idx"], as_index=False)
+            .agg(participants=("participating", "sum"))
+            .sort_values(["step", "personality_group_idx"])
+        )
+        if len(group_part) > 0:
+            totals = group_part.groupby("step", as_index=False).agg(total=("participants", "sum"))
+            group_part = group_part.merge(totals, on="step", how="left")
+            group_part["participant_share"] = np.where(
+                pd.to_numeric(group_part["total"], errors="coerce").to_numpy(dtype=float) > 0.0,
+                pd.to_numeric(group_part["participants"], errors="coerce").to_numpy(dtype=float)
+                / pd.to_numeric(group_part["total"], errors="coerce").to_numpy(dtype=float),
+                np.nan,
+            )
+            comp_piv = (
+                group_part.pivot(index="step", columns="personality_group_idx", values="participant_share")
+                .sort_index()
+            )
+            if len(comp_piv) > 0 and comp_piv.shape[1] > 0:
+                comp_arr = comp_piv.to_numpy(dtype=float)
+                n_comp_steps = int(comp_arr.shape[0])
+                win_comp = max(1, min(n_comp_steps, max(5, int(np.ceil(0.20 * n_comp_steps)))))
+
+                # Size-weights by group prevalence in agent table (stable proxy for group size).
+                g_weights = (
+                    agents.groupby("personality_group_idx", as_index=False)
+                    .agg(n=("participating", "count"))
+                    .set_index("personality_group_idx")["n"]
+                )
+                weight_vec = np.array(
+                    [
+                        float(g_weights.get(int(g), 0.0))
+                        for g in comp_piv.columns.to_numpy(dtype=int)
+                    ],
+                    dtype=float,
+                )
+                if np.isfinite(weight_vec).any() and float(np.nansum(weight_vec)) > 0.0:
+                    weight_vec = np.where(np.isfinite(weight_vec), weight_vec, 0.0)
+                    weight_vec = weight_vec / float(np.sum(weight_vec))
+                else:
+                    weight_vec = np.full(comp_arr.shape[1], 1.0 / float(comp_arr.shape[1]), dtype=float)
+
+                drift_vals: list[float] = []
+                turnover_vals: list[float] = []
+                for gi in range(comp_arr.shape[1]):
+                    s = comp_arr[:, gi]
+                    finite = np.isfinite(s)
+                    if finite.sum() <= 1:
+                        continue
+                    sf = s[finite]
+                    w = min(win_comp, int(sf.size))
+                    early = float(np.nanmean(sf[:w]))
+                    late = float(np.nanmean(sf[-w:]))
+                    drift_vals.append(abs(late - early))
+
+                    dif = np.abs(np.diff(sf))
+                    if dif.size > 0:
+                        turnover_vals.append(float(np.nanmean(dif)))
+                    else:
+                        turnover_vals.append(0.0)
+
+                if drift_vals:
+                    participant_share_max_abs_drift_20 = float(np.nanmax(drift_vals))
+                    # Align weights to valid groups only.
+                    valid_idx = [
+                        gi for gi in range(comp_arr.shape[1])
+                        if np.isfinite(comp_arr[:, gi]).sum() > 1
+                    ]
+                    if valid_idx:
+                        wv = weight_vec[np.asarray(valid_idx, dtype=int)]
+                        if float(np.sum(wv)) > 0.0:
+                            wv = wv / float(np.sum(wv))
+                            d = np.asarray(drift_vals, dtype=float)
+                            participant_share_mean_abs_drift_20_w = float(np.sum(wv * d))
+                if turnover_vals:
+                    valid_idx = [
+                        gi for gi in range(comp_arr.shape[1])
+                        if np.isfinite(comp_arr[:, gi]).sum() > 1
+                    ]
+                    if valid_idx:
+                        wv = weight_vec[np.asarray(valid_idx, dtype=int)]
+                        if float(np.sum(wv)) > 0.0:
+                            wv = wv / float(np.sum(wv))
+                            t = np.asarray(turnover_vals, dtype=float)
+                            participant_share_turnover_rate_w = float(np.sum(wv * t))
+
     participant_mask = agents["participating"].astype(bool)
     abstainer_mask = ~participant_mask
 
@@ -688,6 +786,61 @@ def compute_run_features_from_tables(
         "participation_signal_fee_component"
     )
 
+    participation_q_delta_mean = np.nan
+    participation_q_delta_mean_abs = np.nan
+    participation_q_delta_late_window_mean = np.nan
+    participation_q_delta_late_window_mean_abs = np.nan
+    participation_q_delta_group_dispersion_late_w = np.nan
+    if {"agent_id", "q_participation", "step", "personality_group_idx"} <= set(agents.columns):
+        qpool = agents.copy()
+        if "eligible_for_election" in qpool.columns:
+            qpool = qpool.loc[qpool["eligible_for_election"] == True]
+        qpool = qpool.loc[:, ["agent_id", "step", "personality_group_idx", "q_participation"]].copy()
+        qpool["q_participation"] = pd.to_numeric(qpool["q_participation"], errors="coerce")
+        qpool = qpool.dropna(subset=["q_participation"]).sort_values(["agent_id", "step"])
+        if len(qpool) > 0:
+            qpool["participation_q_delta_exact"] = (
+                qpool.groupby("agent_id", sort=False)["q_participation"].diff()
+            )
+            dq = pd.to_numeric(qpool["participation_q_delta_exact"], errors="coerce")
+            valid = qpool.loc[dq.notna(), ["step", "personality_group_idx", "participation_q_delta_exact"]].copy()
+            if len(valid) > 0:
+                v = pd.to_numeric(valid["participation_q_delta_exact"], errors="coerce").to_numpy(dtype=float)
+                participation_q_delta_mean = float(np.nanmean(v))
+                participation_q_delta_mean_abs = float(np.nanmean(np.abs(v)))
+                late_mask = valid["step"].astype(int).isin(late_steps).to_numpy()
+                if late_mask.any():
+                    lv = v[late_mask]
+                    if lv.size > 0:
+                        participation_q_delta_late_window_mean = float(np.nanmean(lv))
+                        participation_q_delta_late_window_mean_abs = float(np.nanmean(np.abs(lv)))
+                    gl = valid.loc[late_mask].groupby(
+                        ["step", "personality_group_idx"], as_index=False
+                    ).agg(
+                        q_mean=("participation_q_delta_exact", "mean"),
+                        n=("participation_q_delta_exact", "count"),
+                    )
+                    if len(gl) > 0:
+                        disp_vals: list[float] = []
+                        for _, gstep in gl.groupby("step", sort=False):
+                            if len(gstep) < 2:
+                                continue
+                            x = pd.to_numeric(gstep["q_mean"], errors="coerce").to_numpy(dtype=float)
+                            w = pd.to_numeric(gstep["n"], errors="coerce").to_numpy(dtype=float)
+                            mask = np.isfinite(x) & np.isfinite(w) & (w > 0.0)
+                            if mask.sum() < 2:
+                                continue
+                            x = x[mask]
+                            w = w[mask]
+                            wsum = float(w.sum())
+                            if wsum <= 0.0:
+                                continue
+                            mu = float(np.sum(w * x) / wsum)
+                            var = float(np.sum(w * (x - mu) ** 2) / wsum)
+                            disp_vals.append(float(np.sqrt(max(0.0, var))))
+                        if disp_vals:
+                            participation_q_delta_group_dispersion_late_w = float(np.mean(disp_vals))
+
     return {
         "mean_turnout": float(per_step["turnout"].mean()),
         "turnout_std": _safe_std(per_step["turnout"]),
@@ -728,6 +881,26 @@ def compute_run_features_from_tables(
         "lag1_participation_signal_fee_component_turnout_response_corr": float(
             lag1_participation_signal_fee_component_turnout_response_corr
         ),
+        "participant_share_max_abs_drift_20": float(participant_share_max_abs_drift_20),
+        "participant_share_mean_abs_drift_20_w": float(participant_share_mean_abs_drift_20_w),
+        "participant_share_turnover_rate_w": float(participant_share_turnover_rate_w),
+        "participation_q_delta_mean": float(participation_q_delta_mean)
+        if np.isfinite(participation_q_delta_mean)
+        else float("nan"),
+        "participation_q_delta_mean_abs": float(participation_q_delta_mean_abs)
+        if np.isfinite(participation_q_delta_mean_abs)
+        else float("nan"),
+        "participation_q_delta_late_window_mean": float(participation_q_delta_late_window_mean)
+        if np.isfinite(participation_q_delta_late_window_mean)
+        else float("nan"),
+        "participation_q_delta_late_window_mean_abs": float(participation_q_delta_late_window_mean_abs)
+        if np.isfinite(participation_q_delta_late_window_mean_abs)
+        else float("nan"),
+        "participation_q_delta_group_dispersion_late_w": float(
+            participation_q_delta_group_dispersion_late_w
+        )
+        if np.isfinite(participation_q_delta_group_dispersion_late_w)
+        else float("nan"),
         "group_turnout_residual_abs_mean": float(group_turnout_residual_abs_mean),
         "participant_abstainer_delta_rel_gap_abs": _gap_abs("election_delta_rel"),
         "group_participant_abstainer_delta_rel_gap_abs": float(group_pa_delta_rel_gap_abs),
@@ -912,6 +1085,10 @@ def score_designs(
     turnout_decline_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["turnout_decline_score_zero_at"],
     turnout_outside_band_share_good_max: float = DEFAULT_SCORING_THRESHOLDS["turnout_outside_band_share_good_max"],
     turnout_outside_band_share_zero_at: float = DEFAULT_SCORING_THRESHOLDS["turnout_outside_band_share_zero_at"],
+    participation_q_delta_mean_abs_good_max: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_mean_abs_good_max"],
+    participation_q_delta_mean_abs_zero_at: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_mean_abs_zero_at"],
+    participation_q_delta_late_mean_abs_good_max: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_late_mean_abs_good_max"],
+    participation_q_delta_late_mean_abs_zero_at: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_late_mean_abs_zero_at"],
     return_meta: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
@@ -940,6 +1117,18 @@ def score_designs(
         primary["turnout_decline_slope_norm"] = 0.0
     if "turnout_outside_20_80_share" not in primary.columns:
         primary["turnout_outside_20_80_share"] = 0.0
+    for col in [
+        "participation_q_delta_mean",
+        "participation_q_delta_mean_abs",
+        "participation_q_delta_late_window_mean",
+        "participation_q_delta_late_window_mean_abs",
+        "participation_q_delta_group_dispersion_late_w",
+        "participant_share_max_abs_drift_20",
+        "participant_share_mean_abs_drift_20_w",
+        "participant_share_turnover_rate_w",
+    ]:
+        if col not in primary.columns:
+            primary[col] = np.nan
     for col in [
         "roll3_group_turnout_range_mean",
         "roll3_group_turnout_range_max",
@@ -1012,12 +1201,58 @@ def score_designs(
     primary["z_turnout_shape"] = primary[
         [
             "z_turnout_start_band",
+            # Extra weight on start-window realism to avoid top buckets with very high starts.
+            "z_turnout_start_band",
             "z_turnout_end_band",
             "z_turnout_drop_stability",
             "z_turnout_decline_stability",
             "z_turnout_band_time",
         ]
     ].mean(axis=1)
+    primary["z_q_delta_mean_stability"] = _upper_bound_pref01(
+        pd.to_numeric(primary["participation_q_delta_mean_abs"], errors="coerce"),
+        good_max=float(participation_q_delta_mean_abs_good_max),
+        zero_at=float(participation_q_delta_mean_abs_zero_at),
+    )
+    primary["z_q_delta_late_stability"] = _upper_bound_pref01(
+        pd.to_numeric(primary["participation_q_delta_late_window_mean_abs"], errors="coerce"),
+        good_max=float(participation_q_delta_late_mean_abs_good_max),
+        zero_at=float(participation_q_delta_late_mean_abs_zero_at),
+    )
+    primary["z_q_delta_group_dispersion_late"] = _norm01(
+        pd.to_numeric(primary["participation_q_delta_group_dispersion_late_w"], errors="coerce"),
+        higher_better=True,
+    )
+    primary["z_participant_share_max_drift"] = _norm01(
+        pd.to_numeric(primary["participant_share_max_abs_drift_20"], errors="coerce"),
+        higher_better=True,
+    )
+    primary["z_participant_share_mean_drift"] = _norm01(
+        pd.to_numeric(primary["participant_share_mean_abs_drift_20_w"], errors="coerce"),
+        higher_better=True,
+    )
+    primary["z_participant_share_turnover"] = _norm01(
+        pd.to_numeric(primary["participant_share_turnover_rate_w"], errors="coerce"),
+        higher_better=True,
+    )
+    primary["z_participant_composition_dynamics"] = primary[
+        [
+            "z_participant_share_max_drift",
+            "z_participant_share_mean_drift",
+            "z_participant_share_turnover",
+        ]
+    ].mean(axis=1)
+    # For older runs without q snapshots/deltas, use neutral scores instead of silently dropping terms.
+    for c in [
+        "z_q_delta_mean_stability",
+        "z_q_delta_late_stability",
+        "z_q_delta_group_dispersion_late",
+        "z_participant_share_max_drift",
+        "z_participant_share_mean_drift",
+        "z_participant_share_turnover",
+        "z_participant_composition_dynamics",
+    ]:
+        primary[c] = pd.to_numeric(primary[c], errors="coerce").fillna(0.5)
     primary["z_puzzle_dom_balance_conflict"] = _band_pref01(
         primary["puzzle_dominance_share_conflict"],
         low=float(puzzle_dominance_share_score_low),
@@ -1042,10 +1277,16 @@ def score_designs(
             "z_competitive_step_share",
             "z_winner_changes",
             "z_turnout_shape",
+            "z_q_delta_mean_stability",
+            "z_q_delta_late_stability",
             # Extra emphasis on sustained turnout shape quality (drop / monotone decline),
             # beyond the aggregate turnout-shape score.
             "z_turnout_drop_stability",
             "z_turnout_decline_stability",
+            # Mild encouragement for group-differentiated participation learning drift (size-weighted, late-window).
+            "z_q_delta_group_dispersion_late",
+            # Mild encouragement for temporal reallocation in participant composition across groups.
+            "z_participant_composition_dynamics",
             "z_puzzle_dom_balance_conflict",
         ]
     ].mean(axis=1)
@@ -1276,6 +1517,10 @@ def analyze_doe_root(
         turnout_decline_score_zero_at=float(thr["turnout_decline_score_zero_at"]),
         turnout_outside_band_share_good_max=float(thr["turnout_outside_band_share_good_max"]),
         turnout_outside_band_share_zero_at=float(thr["turnout_outside_band_share_zero_at"]),
+        participation_q_delta_mean_abs_good_max=float(thr["participation_q_delta_mean_abs_good_max"]),
+        participation_q_delta_mean_abs_zero_at=float(thr["participation_q_delta_mean_abs_zero_at"]),
+        participation_q_delta_late_mean_abs_good_max=float(thr["participation_q_delta_late_mean_abs_good_max"]),
+        participation_q_delta_late_mean_abs_zero_at=float(thr["participation_q_delta_late_mean_abs_zero_at"]),
         return_meta=True,
     )
 
@@ -1334,8 +1579,14 @@ def analyze_doe_root(
                     "competitive_step_share",
                     "winner_changes_post_burnin",
                     "turnout_shape (start/end/drop/decline/band-time)",
+                    "participation_q_delta_mean_abs (stability, closer to 0)",
+                    "participation_q_delta_late_window_mean_abs (stability, closer to 0)",
                     "turnout_drop_start_end (extra weight)",
                     "turnout_decline_slope_norm (extra weight)",
+                    "participation_q_delta_group_dispersion_late_w (mild, size-weighted)",
+                    "participant_share_max_abs_drift_20 (mild)",
+                    "participant_share_mean_abs_drift_20_w (mild, size-weighted)",
+                    "participant_share_turnover_rate_w (mild, size-weighted)",
                     "puzzle_dominance_share_conflict",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",

@@ -133,6 +133,9 @@ def main() -> None:
             "phase3_puzzle_refine3",
             "phase3_turnout_focus_medium",
             "phase3_refine4",
+            "phase3_refine5_local",
+            "phase3_turnover_balance_probe_medium",
+            "phase3_turnover_balance_probe_medium_v2",
         ],
         help="DOE profile defining ranges + frozen settings.",
     )

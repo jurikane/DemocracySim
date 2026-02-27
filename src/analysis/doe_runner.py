@@ -408,6 +408,130 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 300,
         },
     },
+    "phase3_refine5_local": {
+        "name": "phase3_refine5_local",
+        # Local search around refine4 with explicit focus on restoring
+        # inter-group participation-composition dynamics.
+        "ranges": {
+            # Startup turnout constraints (keep realistic starts).
+            "participation_init_q": (0.11, 0.18),
+            "participation_beta": (3.8, 6.0),
+
+            # Participation dynamics levers.
+            "election_cost_rate": (0.010, 0.030),
+            "participation_alpha": (0.07, 0.14),
+            "reward_rate_personal": (0.12, 0.26),
+            "break_even_distance_common": (0.34, 0.62),
+
+            # Puzzle / power balance.
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.60),
+            "puzzle_local_kappa": (30.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+
+            # General dynamics.
+            "mu": (0.08, 0.35),
+            "altruism_response_gamma": (0.90, 1.00),
+
+            # Satisfaction->altruism mapping neighborhood.
+            "altruism_satisfaction_theta": (0.68, 0.74),
+            "altruism_satisfaction_slope": (1.6, 2.8),
+
+            # New local re-open: reduce fee dominance and allow stronger
+            # group-differentiated participation updates.
+            "participation_signal_fee_weight": (0.35, 1.00),
+            "participation_signal_group_shrink_k": (1.0, 10.0),
+            "participation_signal_clip": (0.20, 0.45),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_turnover_balance_probe_medium": {
+        "name": "phase3_turnover_balance_probe_medium",
+        # Focused medium probe for turnout-vs-turnover balance in the current regime.
+        # Built from robust envelopes observed in doe_20260227_030932.
+        "ranges": {
+            "participation_signal_fee_weight": (0.40, 0.76),
+            "participation_signal_group_shrink_k": (3.0, 8.9),
+            "participation_signal_clip": (0.22, 0.31),
+            "participation_alpha": (0.10, 0.13),
+            "participation_beta": (5.3, 5.9),
+            "participation_init_q": (0.14, 0.17),
+            "election_cost_rate": (0.013, 0.024),
+            "reward_rate_personal": (0.206, 0.245),
+            "known_cells": (5.0, 9.0),
+            "election_impact_on_mutation": (1.40, 2.05),
+            "break_even_distance_common": (0.34, 0.60),
+            "mu": (0.10, 0.35),
+            "puzzle_local_kappa": (30.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+            "altruism_satisfaction_theta": (0.68, 0.74),
+            "altruism_satisfaction_slope": (1.6, 2.8),
+            "altruism_response_gamma": (0.90, 1.00),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_turnover_balance_probe_medium_v2": {
+        "name": "phase3_turnover_balance_probe_medium_v2",
+        # Re-opened medium probe:
+        # keep realistic startup turnout, but re-open key levers that can restore
+        # stronger inter-group turnover dynamics beyond what refine5 already explored.
+        "ranges": {
+            # Participation-signal structure (main re-open).
+            "participation_signal_fee_weight": (0.15, 0.95),
+            "participation_signal_group_shrink_k": (0.0, 10.0),
+            "participation_signal_clip": (0.18, 0.45),
+
+            # Participation learning response shape.
+            "participation_alpha": (0.08, 0.18),
+            "participation_beta": (4.0, 7.0),
+            "participation_init_q": (0.12, 0.18),
+
+            # Incentive and gate balance.
+            "election_cost_rate": (0.010, 0.035),
+            "reward_rate_personal": (0.15, 0.28),
+            "break_even_distance_common": (0.32, 0.65),
+
+            # Puzzle/power interaction.
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.80),
+            "puzzle_local_kappa": (20.0, 90.0),
+            "puzzle_shock_prob": (0.00, 0.05),
+            "mu": (0.08, 0.40),
+
+            # Altruism mapping local re-open.
+            "altruism_satisfaction_theta": (0.66, 0.76),
+            "altruism_satisfaction_slope": (1.4, 3.4),
+            "altruism_response_gamma": (0.85, 1.00),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_centered_delta_rel_plus_fee",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
 
 }
 
