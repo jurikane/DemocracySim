@@ -72,6 +72,88 @@ DEFAULT_STAGE_WEIGHTS: dict[str, float] = {
 }
 
 
+REQUIRED_HARD_GATE_COLUMNS: tuple[str, ...] = (
+    "max_all_abstain_stretch",
+    "winner_changes_post_burnin",
+    "winner_change_rate_post_burnin",
+    "group_turnout_range_mean",
+    "roll3_group_turnout_range_max",
+    "roll20_group_turnout_range_max",
+    "winner_entropy_norm",
+    "dist_nonzero_share",
+    "competitive_step_share",
+    "mean_turnout",
+    "turnout_std",
+    "gini_std",
+    "dist_std",
+)
+
+REQUIRED_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
+    "design_id",
+    "seed",
+    "passes_hard_gates",
+    "turnout_std",
+    "gini_std",
+    "dist_std",
+    "group_participation_std",
+    "group_turnout_range_mean",
+    "roll3_group_turnout_range_mean",
+    "roll3_group_turnout_range_max",
+    "roll20_group_turnout_range_mean",
+    "roll20_group_turnout_range_max",
+    "group_turnout_residual_abs_mean",
+    "participant_abstainer_delta_rel_gap_abs",
+    "group_participant_abstainer_delta_rel_gap_abs",
+    "winner_entropy_norm",
+    "dist_nonzero_share",
+    "competitive_step_share",
+    "winner_change_rate_post_burnin",
+    "mean_turnout",
+    "turnout_start_window_mean",
+    "turnout_end_window_mean",
+    "turnout_drop_start_end",
+    "turnout_decline_slope_norm",
+    "turnout_outside_20_80_share",
+)
+
+OPTIONAL_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
+    "participation_q_delta_mean_abs",
+    "participation_q_delta_late_window_mean_abs",
+    "participation_q_delta_group_dispersion_late_w",
+    "participant_share_max_abs_drift_20",
+    "participant_share_mean_abs_drift_20_w",
+    "participant_share_turnover_rate_w",
+    "puzzle_dominance_share_conflict",
+)
+
+REQUIRED_ROBUST_SCORING_COLUMNS: tuple[str, ...] = (
+    "design_id",
+    "seed",
+    "mean_turnout",
+    "mean_gini",
+    "mean_dist",
+    "group_participation_std",
+)
+
+
+def _require_columns(df: pd.DataFrame, required: tuple[str, ...], *, context: str) -> None:
+    missing = sorted(col for col in required if col not in df.columns)
+    if missing:
+        raise ValueError(f"{context} missing required columns: {missing}")
+
+
+def _require_numeric_notna(df: pd.DataFrame, required: tuple[str, ...], *, context: str) -> None:
+    bad: dict[str, int] = {}
+    for col in required:
+        s = pd.to_numeric(df[col], errors="coerce")
+        n_bad = int(s.isna().sum())
+        if n_bad > 0:
+            bad[col] = n_bad
+    if bad:
+        details = ", ".join(f"{col}: {count}" for col, count in sorted(bad.items()))
+        raise ValueError(f"{context} has NA/non-numeric values in required columns: {details}")
+
+
 def load_selection_objective(path: Path | str) -> dict[str, Any]:
     p = Path(path)
     payload = json.loads(p.read_text(encoding="utf-8"))
@@ -999,29 +1081,12 @@ def apply_hard_gates(
     min_power_recovery_share_conflict: float = DEFAULT_SCORING_THRESHOLDS["min_power_recovery_share_conflict"],
 ) -> pd.DataFrame:
     df = run_features.copy()
-    if "group_turnout_range_mean" not in df.columns:
-        df["group_turnout_range_mean"] = 0.0
-    if "roll3_group_turnout_range_max" not in df.columns:
-        df["roll3_group_turnout_range_max"] = 0.0
-    if "roll20_group_turnout_range_max" not in df.columns:
-        df["roll20_group_turnout_range_max"] = 0.0
-    if "winner_entropy_norm" not in df.columns:
-        df["winner_entropy_norm"] = 0.0
-    if "dist_nonzero_share" not in df.columns:
-        df["dist_nonzero_share"] = 0.0
-    if "competitive_step_share" not in df.columns:
-        df["competitive_step_share"] = 0.0
-    if "mean_turnout" not in df.columns:
-        df["mean_turnout"] = 0.0
-    if "winner_change_rate_post_burnin" not in df.columns:
-        # Fallback for legacy run_features (still allows scoring but keeps old distortion).
-        # Use a coarse normalization so small toy tests / legacy tables do not all look
-        # maximally chaotic when only absolute winner-change counts are present.
-        denom = np.full(len(df), 100.0, dtype=float)
-        df["winner_change_rate_post_burnin"] = np.asarray(
-            df.get("winner_changes_post_burnin", pd.Series(0.0, index=df.index)).to_numpy(dtype=float) / denom,
-            dtype=float,
-        )
+    _require_columns(df, REQUIRED_HARD_GATE_COLUMNS, context="apply_hard_gates(run_features)")
+    _require_numeric_notna(
+        df,
+        REQUIRED_HARD_GATE_COLUMNS,
+        context="apply_hard_gates(run_features)",
+    )
     for col in [
         "puzzle_conflict_step_share",
         "puzzle_dominance_share_conflict",
@@ -1128,49 +1193,23 @@ def score_designs(
     primary = df.loc[df["rule_name"] == str(primary_rule_name)].copy()
     if len(primary) == 0:
         raise ValueError(f"No primary-rule rows found for rule_name={primary_rule_name!r}.")
-    if "winner_change_rate_post_burnin" not in primary.columns:
-        primary["winner_change_rate_post_burnin"] = 0.0
-    if "puzzle_dominance_share_conflict" not in primary.columns:
-        primary["puzzle_dominance_share_conflict"] = np.nan
-    if "turnout_start_window_mean" not in primary.columns:
-        primary["turnout_start_window_mean"] = pd.to_numeric(primary.get("mean_turnout", 0.0), errors="coerce").fillna(0.0)
-    if "turnout_end_window_mean" not in primary.columns:
-        primary["turnout_end_window_mean"] = pd.to_numeric(primary.get("mean_turnout", 0.0), errors="coerce").fillna(0.0)
-    if "turnout_drop_start_end" not in primary.columns:
-        primary["turnout_drop_start_end"] = (
-            pd.to_numeric(primary["turnout_start_window_mean"], errors="coerce").fillna(0.0)
-            - pd.to_numeric(primary["turnout_end_window_mean"], errors="coerce").fillna(0.0)
-        )
-    if "turnout_decline_slope_norm" not in primary.columns:
-        primary["turnout_decline_slope_norm"] = 0.0
-    if "turnout_outside_20_80_share" not in primary.columns:
-        primary["turnout_outside_20_80_share"] = 0.0
-    for col in [
-        "participation_q_delta_mean",
-        "participation_q_delta_mean_abs",
-        "participation_q_delta_late_window_mean",
-        "participation_q_delta_late_window_mean_abs",
-        "participation_q_delta_group_dispersion_late_w",
-        "participant_share_max_abs_drift_20",
-        "participant_share_mean_abs_drift_20_w",
-        "participant_share_turnover_rate_w",
-    ]:
+    _require_columns(primary, REQUIRED_PRIMARY_SCORING_COLUMNS, context="score_designs(primary)")
+    _require_numeric_notna(
+        primary,
+        REQUIRED_PRIMARY_SCORING_COLUMNS,
+        context="score_designs(primary)",
+    )
+    primary["passes_hard_gates"] = pd.to_numeric(primary["passes_hard_gates"], errors="coerce").astype(bool)
+
+    missing_optional_columns: list[str] = []
+    for col in OPTIONAL_PRIMARY_SCORING_COLUMNS:
         if col not in primary.columns:
             primary[col] = np.nan
-    for col in [
-        "roll3_group_turnout_range_mean",
-        "roll3_group_turnout_range_max",
-        "roll20_group_turnout_range_mean",
-        "roll20_group_turnout_range_max",
-    ]:
-        if col not in primary.columns:
-            primary[col] = 0.0
-    if "winner_change_rate_post_burnin" in primary.columns:
-        if "winner_changes_post_burnin" in primary.columns:
-            missing_rate = ~np.isfinite(pd.to_numeric(primary["winner_change_rate_post_burnin"], errors="coerce"))
-            if bool(missing_rate.any()):
-                wc = pd.to_numeric(primary.loc[missing_rate, "winner_changes_post_burnin"], errors="coerce").fillna(0.0)
-                primary.loc[missing_rate, "winner_change_rate_post_burnin"] = np.clip(wc / 100.0, 0.0, 1.0)
+            missing_optional_columns.append(col)
+    optional_na_counts = {
+        col: int(pd.to_numeric(primary[col], errors="coerce").isna().sum())
+        for col in OPTIONAL_PRIMARY_SCORING_COLUMNS
+    }
 
     primary["z_turnout_std"] = _norm01(primary["turnout_std"], higher_better=True)
     primary["z_gini_std"] = _norm01(primary["gini_std"], higher_better=True)
@@ -1297,17 +1336,6 @@ def score_designs(
             "z_participant_share_turnover",
         ]
     ].mean(axis=1)
-    # For older runs without q snapshots/deltas, use neutral scores instead of silently dropping terms.
-    for c in [
-        "z_q_delta_mean_stability",
-        "z_q_delta_late_stability",
-        "z_q_delta_group_dispersion_late",
-        "z_participant_share_max_drift",
-        "z_participant_share_mean_drift",
-        "z_participant_share_turnover",
-        "z_participant_composition_dynamics",
-    ]:
-        primary[c] = pd.to_numeric(primary[c], errors="coerce").fillna(0.5)
     primary["z_puzzle_dom_balance_conflict"] = _band_pref01(
         primary["puzzle_dominance_share_conflict"],
         low=float(puzzle_dominance_share_score_low),
@@ -1364,6 +1392,12 @@ def score_designs(
     robust = df.loc[df["rule_name"] == str(robust_rule_name)].copy()
     disc_active = False
     if len(robust) > 0:
+        _require_columns(robust, REQUIRED_ROBUST_SCORING_COLUMNS, context="score_designs(robust)")
+        _require_numeric_notna(
+            robust,
+            REQUIRED_ROBUST_SCORING_COLUMNS,
+            context="score_designs(robust)",
+        )
         m = primary.merge(
             robust,
             on=["design_id", "seed"],
@@ -1458,6 +1492,10 @@ def score_designs(
                 None if required_matched_seed_pairs is None else int(required_matched_seed_pairs)
             ),
             "dropped_incomplete_designs": int(dropped_n),
+            "optional_metric_diagnostics": {
+                "missing_optional_columns": sorted(missing_optional_columns),
+                "optional_na_counts": optional_na_counts,
+            },
         }
     return out
 
@@ -1614,6 +1652,7 @@ def analyze_doe_root(
                 "required_primary_runs": score_meta["required_primary_runs"],
                 "required_matched_seed_pairs": score_meta["required_matched_seed_pairs"],
                 "dropped_incomplete_designs": int(score_meta["dropped_incomplete_designs"]),
+                "optional_metric_diagnostics": score_meta["optional_metric_diagnostics"],
                 "score_formula": (
                     "score_total = s_v*pass_rate + s_q*(w_q*quality_mean + "
                     "w_d*discriminability + w_r*seed_robustness)"

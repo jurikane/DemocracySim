@@ -6,6 +6,7 @@ import sys
 import json
 
 import pandas as pd
+import pytest
 
 from src.analysis.doe_scoring import (
     _band_pref01,
@@ -85,6 +86,7 @@ def test_apply_hard_gates_contract() -> None:
                 "seed": 101,
                 "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 5,
+                "winner_change_rate_post_burnin": 0.05,
                 "turnout_std": 2.0,
                 "gini_std": 4.0,
                 "dist_std": 0.1,
@@ -102,6 +104,7 @@ def test_apply_hard_gates_contract() -> None:
                 "seed": 101,
                 "max_all_abstain_stretch": 40,
                 "winner_changes_post_burnin": 0,
+                "winner_change_rate_post_burnin": 0.0,
                 "turnout_std": 0.0,
                 "gini_std": 0.0,
                 "dist_std": 0.0,
@@ -119,6 +122,7 @@ def test_apply_hard_gates_contract() -> None:
                 "seed": 101,
                 "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 500,
+                "winner_change_rate_post_burnin": 0.90,
                 "turnout_std": 1.0,
                 "gini_std": 2.0,
                 "dist_std": 0.2,
@@ -163,6 +167,7 @@ def test_apply_hard_gates_lockin_is_hard_blocker() -> None:
                 "seed": 101,
                 "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 1,  # below lock-in threshold
+                "winner_change_rate_post_burnin": 0.05,
                 "turnout_std": 2.0,
                 "gini_std": 4.0,
                 "dist_std": 0.1,
@@ -206,6 +211,7 @@ def test_apply_hard_gates_requires_roll3_and_roll20() -> None:
                 "seed": 101,
                 "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 6,
+                "winner_change_rate_post_burnin": 0.06,
                 "turnout_std": 2.0,
                 "gini_std": 4.0,
                 "dist_std": 0.1,
@@ -239,6 +245,137 @@ def test_apply_hard_gates_requires_roll3_and_roll20() -> None:
     assert bool(out.loc[0, "gate_roll3_divergence"]) is True
     assert bool(out.loc[0, "gate_roll20_divergence"]) is False
     assert bool(out.loc[0, "passes_hard_gates"]) is False
+
+
+def test_apply_hard_gates_fails_fast_on_missing_required_columns() -> None:
+    runs = pd.DataFrame(
+        [
+            {
+                "design_id": 0,
+                "rule_name": "approval",
+                "seed": 101,
+                "max_all_abstain_stretch": 0,
+                "winner_changes_post_burnin": 5,
+                "turnout_std": 2.0,
+                "gini_std": 4.0,
+                "dist_std": 0.1,
+                "group_turnout_range_mean": 0.08,
+                "roll3_group_turnout_range_max": 0.35,
+                "roll20_group_turnout_range_max": 0.60,
+                "winner_entropy_norm": 0.6,
+                "dist_nonzero_share": 0.3,
+                "competitive_step_share": 0.2,
+                "mean_turnout": 60.0,
+            },
+        ]
+    )
+    with pytest.raises(ValueError, match="missing required columns"):
+        apply_hard_gates(runs)
+
+
+def test_score_designs_fails_fast_on_missing_required_columns() -> None:
+    runs = pd.DataFrame(
+        [
+            {
+                "design_id": 0,
+                "rule_name": "approval",
+                "seed": 101,
+                "passes_hard_gates": True,
+                "turnout_std": 1.0,
+                "gini_std": 1.0,
+                "dist_std": 0.1,
+                "group_participation_std": 0.1,
+                "group_turnout_range_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1,
+                "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1,
+                "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
+                "participant_abstainer_delta_rel_gap_abs": 0.1,
+                "group_participant_abstainer_delta_rel_gap_abs": 0.1,
+                "winner_entropy_norm": 0.4,
+                "dist_nonzero_share": 0.2,
+                "competitive_step_share": 0.2,
+                "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 50.0,
+                "turnout_start_window_mean": 52.0,
+                # turnout_end_window_mean intentionally missing
+                "turnout_drop_start_end": 3.0,
+                "turnout_decline_slope_norm": 0.05,
+                "turnout_outside_20_80_share": 0.04,
+            },
+        ]
+    )
+    with pytest.raises(ValueError, match="missing required columns"):
+        score_designs(runs)
+
+
+def test_score_designs_optional_metric_diagnostics_are_explicit() -> None:
+    runs = pd.DataFrame(
+        [
+            {
+                "design_id": 0,
+                "rule_name": "approval",
+                "seed": 101,
+                "passes_hard_gates": True,
+                "turnout_std": 1.0,
+                "gini_std": 1.0,
+                "dist_std": 0.1,
+                "group_participation_std": 0.1,
+                "group_turnout_range_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1,
+                "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1,
+                "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
+                "participant_abstainer_delta_rel_gap_abs": 0.1,
+                "group_participant_abstainer_delta_rel_gap_abs": 0.1,
+                "winner_entropy_norm": 0.4,
+                "dist_nonzero_share": 0.2,
+                "competitive_step_share": 0.2,
+                "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 50.0,
+                "turnout_start_window_mean": 52.0,
+                "turnout_end_window_mean": 49.0,
+                "turnout_drop_start_end": 3.0,
+                "turnout_decline_slope_norm": 0.05,
+                "turnout_outside_20_80_share": 0.04,
+            },
+            {
+                "design_id": 0,
+                "rule_name": "approval",
+                "seed": 102,
+                "passes_hard_gates": True,
+                "turnout_std": 1.1,
+                "gini_std": 1.1,
+                "dist_std": 0.11,
+                "group_participation_std": 0.11,
+                "group_turnout_range_mean": 0.11,
+                "roll3_group_turnout_range_mean": 0.11,
+                "roll3_group_turnout_range_max": 0.21,
+                "roll20_group_turnout_range_mean": 0.11,
+                "roll20_group_turnout_range_max": 0.21,
+                "group_turnout_residual_abs_mean": 0.11,
+                "participant_abstainer_delta_rel_gap_abs": 0.11,
+                "group_participant_abstainer_delta_rel_gap_abs": 0.11,
+                "winner_entropy_norm": 0.41,
+                "dist_nonzero_share": 0.21,
+                "competitive_step_share": 0.21,
+                "winner_change_rate_post_burnin": 0.06,
+                "mean_turnout": 51.0,
+                "turnout_start_window_mean": 53.0,
+                "turnout_end_window_mean": 50.0,
+                "turnout_drop_start_end": 3.0,
+                "turnout_decline_slope_norm": 0.05,
+                "turnout_outside_20_80_share": 0.04,
+            },
+        ]
+    )
+
+    _, meta = score_designs(runs, return_meta=True)
+    diag = meta["optional_metric_diagnostics"]
+    assert "participation_q_delta_mean_abs" in diag["missing_optional_columns"]
+    assert int(diag["optional_na_counts"]["participation_q_delta_mean_abs"]) == 2
 
 
 def _write_run_tables(run_dir: Path, *, participants_scale: float, dist_scale: float, delta_rel_amp: float = 0.2) -> None:
@@ -399,37 +536,57 @@ def test_score_designs_reports_selection_score_only() -> None:
                 "design_id": 0, "rule_name": "approval", "seed": 101, "passes_hard_gates": True,
                 "turnout_std": 2.0, "gini_std": 2.0, "dist_std": 0.2,
                 "group_participation_std": 0.2, "group_turnout_range_mean": 0.2,
-                "roll20_group_turnout_range_mean": 0.2, "group_turnout_residual_abs_mean": 0.2,
+                "roll3_group_turnout_range_mean": 0.2, "roll3_group_turnout_range_max": 0.3,
+                "roll20_group_turnout_range_mean": 0.2, "roll20_group_turnout_range_max": 0.3,
+                "group_turnout_residual_abs_mean": 0.2,
                 "participant_abstainer_delta_rel_gap_abs": 0.2, "group_participant_abstainer_delta_rel_gap_abs": 0.2,
                 "winner_entropy_norm": 0.5, "dist_nonzero_share": 0.3, "competitive_step_share": 0.3,
-                "winner_changes_post_burnin": 8.0, "mean_turnout": 55.0, "mean_gini": 20.0, "mean_dist": 0.2,
+                "winner_changes_post_burnin": 8.0, "winner_change_rate_post_burnin": 0.08,
+                "mean_turnout": 55.0, "turnout_start_window_mean": 58.0, "turnout_end_window_mean": 52.0,
+                "turnout_drop_start_end": 6.0, "turnout_decline_slope_norm": 0.08, "turnout_outside_20_80_share": 0.10,
+                "mean_gini": 20.0, "mean_dist": 0.2,
             },
             {
                 "design_id": 0, "rule_name": "approval", "seed": 102, "passes_hard_gates": False,
                 "turnout_std": 1.0, "gini_std": 1.0, "dist_std": 0.1,
                 "group_participation_std": 0.1, "group_turnout_range_mean": 0.1,
-                "roll20_group_turnout_range_mean": 0.1, "group_turnout_residual_abs_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1, "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1, "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
                 "participant_abstainer_delta_rel_gap_abs": 0.1, "group_participant_abstainer_delta_rel_gap_abs": 0.1,
                 "winner_entropy_norm": 0.3, "dist_nonzero_share": 0.2, "competitive_step_share": 0.2,
-                "winner_changes_post_burnin": 5.0, "mean_turnout": 65.0, "mean_gini": 21.0, "mean_dist": 0.25,
+                "winner_changes_post_burnin": 5.0, "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 65.0, "turnout_start_window_mean": 67.0, "turnout_end_window_mean": 63.0,
+                "turnout_drop_start_end": 4.0, "turnout_decline_slope_norm": 0.06, "turnout_outside_20_80_share": 0.08,
+                "mean_gini": 21.0, "mean_dist": 0.25,
             },
             {
                 "design_id": 1, "rule_name": "approval", "seed": 101, "passes_hard_gates": True,
                 "turnout_std": 1.5, "gini_std": 1.5, "dist_std": 0.15,
                 "group_participation_std": 0.15, "group_turnout_range_mean": 0.15,
-                "roll20_group_turnout_range_mean": 0.15, "group_turnout_residual_abs_mean": 0.15,
+                "roll3_group_turnout_range_mean": 0.15, "roll3_group_turnout_range_max": 0.25,
+                "roll20_group_turnout_range_mean": 0.15, "roll20_group_turnout_range_max": 0.25,
+                "group_turnout_residual_abs_mean": 0.15,
                 "participant_abstainer_delta_rel_gap_abs": 0.15, "group_participant_abstainer_delta_rel_gap_abs": 0.15,
                 "winner_entropy_norm": 0.4, "dist_nonzero_share": 0.25, "competitive_step_share": 0.25,
-                "winner_changes_post_burnin": 6.0, "mean_turnout": 50.0, "mean_gini": 19.0, "mean_dist": 0.18,
+                "winner_changes_post_burnin": 6.0, "winner_change_rate_post_burnin": 0.06,
+                "mean_turnout": 50.0, "turnout_start_window_mean": 52.0, "turnout_end_window_mean": 48.0,
+                "turnout_drop_start_end": 4.0, "turnout_decline_slope_norm": 0.06, "turnout_outside_20_80_share": 0.06,
+                "mean_gini": 19.0, "mean_dist": 0.18,
             },
             {
                 "design_id": 1, "rule_name": "approval", "seed": 102, "passes_hard_gates": True,
                 "turnout_std": 1.4, "gini_std": 1.4, "dist_std": 0.14,
                 "group_participation_std": 0.14, "group_turnout_range_mean": 0.14,
-                "roll20_group_turnout_range_mean": 0.14, "group_turnout_residual_abs_mean": 0.14,
+                "roll3_group_turnout_range_mean": 0.14, "roll3_group_turnout_range_max": 0.24,
+                "roll20_group_turnout_range_mean": 0.14, "roll20_group_turnout_range_max": 0.24,
+                "group_turnout_residual_abs_mean": 0.14,
                 "participant_abstainer_delta_rel_gap_abs": 0.14, "group_participant_abstainer_delta_rel_gap_abs": 0.14,
                 "winner_entropy_norm": 0.35, "dist_nonzero_share": 0.24, "competitive_step_share": 0.24,
-                "winner_changes_post_burnin": 5.5, "mean_turnout": 52.0, "mean_gini": 19.5, "mean_dist": 0.19,
+                "winner_changes_post_burnin": 5.5, "winner_change_rate_post_burnin": 0.055,
+                "mean_turnout": 52.0, "turnout_start_window_mean": 54.0, "turnout_end_window_mean": 50.0,
+                "turnout_drop_start_end": 4.0, "turnout_decline_slope_norm": 0.06, "turnout_outside_20_80_share": 0.06,
+                "mean_gini": 19.5, "mean_dist": 0.19,
             },
         ]
     )
@@ -446,29 +603,44 @@ def test_score_designs_required_primary_runs_filters_incomplete_designs() -> Non
                 "design_id": 0, "rule_name": "approval", "seed": 101, "passes_hard_gates": True,
                 "turnout_std": 1.0, "gini_std": 1.0, "dist_std": 0.1,
                 "group_participation_std": 0.1, "group_turnout_range_mean": 0.1,
-                "roll20_group_turnout_range_mean": 0.1, "group_turnout_residual_abs_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1, "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1, "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
                 "participant_abstainer_delta_rel_gap_abs": 0.1, "group_participant_abstainer_delta_rel_gap_abs": 0.1,
                 "winner_entropy_norm": 0.4, "dist_nonzero_share": 0.2, "competitive_step_share": 0.2,
-                "winner_changes_post_burnin": 5.0, "mean_turnout": 50.0, "mean_gini": 20.0, "mean_dist": 0.2,
+                "winner_changes_post_burnin": 5.0, "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 50.0, "turnout_start_window_mean": 52.0, "turnout_end_window_mean": 49.0,
+                "turnout_drop_start_end": 3.0, "turnout_decline_slope_norm": 0.05, "turnout_outside_20_80_share": 0.04,
+                "mean_gini": 20.0, "mean_dist": 0.2,
             },
             {
                 "design_id": 0, "rule_name": "approval", "seed": 102, "passes_hard_gates": True,
                 "turnout_std": 1.0, "gini_std": 1.0, "dist_std": 0.1,
                 "group_participation_std": 0.1, "group_turnout_range_mean": 0.1,
-                "roll20_group_turnout_range_mean": 0.1, "group_turnout_residual_abs_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1, "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1, "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
                 "participant_abstainer_delta_rel_gap_abs": 0.1, "group_participant_abstainer_delta_rel_gap_abs": 0.1,
                 "winner_entropy_norm": 0.4, "dist_nonzero_share": 0.2, "competitive_step_share": 0.2,
-                "winner_changes_post_burnin": 5.0, "mean_turnout": 50.0, "mean_gini": 20.0, "mean_dist": 0.2,
+                "winner_changes_post_burnin": 5.0, "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 50.0, "turnout_start_window_mean": 52.0, "turnout_end_window_mean": 49.0,
+                "turnout_drop_start_end": 3.0, "turnout_decline_slope_norm": 0.05, "turnout_outside_20_80_share": 0.04,
+                "mean_gini": 20.0, "mean_dist": 0.2,
             },
             # design 1 incomplete primary coverage (1 seed)
             {
                 "design_id": 1, "rule_name": "approval", "seed": 101, "passes_hard_gates": True,
                 "turnout_std": 1.0, "gini_std": 1.0, "dist_std": 0.1,
                 "group_participation_std": 0.1, "group_turnout_range_mean": 0.1,
-                "roll20_group_turnout_range_mean": 0.1, "group_turnout_residual_abs_mean": 0.1,
+                "roll3_group_turnout_range_mean": 0.1, "roll3_group_turnout_range_max": 0.2,
+                "roll20_group_turnout_range_mean": 0.1, "roll20_group_turnout_range_max": 0.2,
+                "group_turnout_residual_abs_mean": 0.1,
                 "participant_abstainer_delta_rel_gap_abs": 0.1, "group_participant_abstainer_delta_rel_gap_abs": 0.1,
                 "winner_entropy_norm": 0.4, "dist_nonzero_share": 0.2, "competitive_step_share": 0.2,
-                "winner_changes_post_burnin": 5.0, "mean_turnout": 50.0, "mean_gini": 20.0, "mean_dist": 0.2,
+                "winner_changes_post_burnin": 5.0, "winner_change_rate_post_burnin": 0.05,
+                "mean_turnout": 50.0, "turnout_start_window_mean": 52.0, "turnout_end_window_mean": 49.0,
+                "turnout_drop_start_end": 3.0, "turnout_decline_slope_norm": 0.05, "turnout_outside_20_80_share": 0.04,
+                "mean_gini": 20.0, "mean_dist": 0.2,
             },
         ]
     )
