@@ -48,6 +48,7 @@ logs/
 *.tmp
 tmp/
 temp/
+tmp_check_smoke/
 
 # Jupyter
 *.ipynb
@@ -71,6 +72,10 @@ docs/images/
 # Project data and artifacts
 data/
 !data/.gitkeep
+
+# Generated simulation/analysis artifacts must stay untracked.
+# Use data/simulation_output/ for persistent local runs.
+# Use tmp_check_smoke/ only for ephemeral smoke checks.
 
 # Configs
 configs/**/*.yaml
