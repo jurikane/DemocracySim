@@ -1,39 +1,57 @@
 from __future__ import annotations
 
-import warnings
-
 from src.replay.replay_server import _resolve_num_voters_per_area
 
 
-def test_replay_static_uses_canonical_num_voters_per_area_without_warning() -> None:
+def test_replay_static_uses_canonical_num_voters_per_area() -> None:
     static = {"num_voters_per_area": {"0": 10, "1": 12}}
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        out = _resolve_num_voters_per_area(static)
+    out = _resolve_num_voters_per_area(static)
     assert out == {"0": 10, "1": 12}
-    assert len(caught) == 0
 
 
-def test_replay_static_accepts_legacy_voters_per_area_with_deprecation_warning() -> None:
+def test_replay_static_missing_voter_counts_returns_empty_mapping() -> None:
+    out = _resolve_num_voters_per_area({})
+    assert out == {}
+
+
+def test_replay_static_rejects_legacy_voters_per_area_key() -> None:
     static = {"voters_per_area": {"0": 11}}
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        out = _resolve_num_voters_per_area(static)
-    assert out == {"0": 11}
-    assert len(caught) == 1
-    assert issubclass(caught[0].category, DeprecationWarning)
-    assert "voters_per_area" in str(caught[0].message)
+    try:
+        _resolve_num_voters_per_area(static)
+    except ValueError as exc:
+        assert "voters_per_area" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for removed legacy key")
 
 
-def test_replay_static_prefers_canonical_key_when_both_present_and_warns() -> None:
+def test_replay_static_rejects_payloads_that_still_contain_legacy_key_even_with_canonical() -> None:
     static = {
         "num_voters_per_area": {"0": 7},
         "voters_per_area": {"0": 99},
     }
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        out = _resolve_num_voters_per_area(static)
-    assert out == {"0": 7}
-    assert any(issubclass(w.category, DeprecationWarning) for w in caught)
-    assert any(issubclass(w.category, UserWarning) for w in caught)
+    try:
+        _resolve_num_voters_per_area(static)
+    except ValueError as exc:
+        assert "voters_per_area" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError when removed legacy key is present")
 
+
+def test_replay_static_rejects_non_object_canonical_value() -> None:
+    static = {"num_voters_per_area": 123}
+    try:
+        _resolve_num_voters_per_area(static)
+    except ValueError as exc:
+        assert "num_voters_per_area" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for non-object canonical key")
+
+
+def test_replay_static_rejects_non_object_legacy_value() -> None:
+    static = {"voters_per_area": 123}
+    try:
+        _resolve_num_voters_per_area(static)
+    except ValueError as exc:
+        assert "voters_per_area" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for non-object legacy key")

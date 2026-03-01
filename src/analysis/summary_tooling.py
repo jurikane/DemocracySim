@@ -1373,53 +1373,123 @@ def _validate_summary_mode(mode: str) -> None:
         raise ValueError(f"Invalid summary mode '{mode}'. Allowed: {allowed}")
 
 
-def _load_model_cfg_for_run(*, run_dir: Path) -> dict[str, Any]:
-    """Load model section from config_used.yaml if available."""
+@dataclass(frozen=True)
+class _ModelCfgParseResult:
+    ok: bool
+    model_cfg: dict[str, Any] | None
+    source: Path | None
+    error: str | None
+
+
+def _parse_model_cfg_for_run(*, run_dir: Path) -> _ModelCfgParseResult:
+    """Typed parse result for model section in config_used.yaml."""
     candidates = [
         run_dir / "config_used.yaml",
         run_dir.parent / "config_used.yaml",
     ]
-    for p in candidates:
-        if not p.exists():
-            continue
-        try:
-            cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            model_cfg = cfg.get("model", {}) or {}
-            if isinstance(model_cfg, dict):
-                return dict(model_cfg)
-        except Exception:
-            continue
-    return {}
+    existing = [p for p in candidates if p.exists()]
+    if not existing:
+        tried = ", ".join(str(p) for p in candidates)
+        return _ModelCfgParseResult(
+            ok=False,
+            model_cfg=None,
+            source=None,
+            error=f"Missing config_used.yaml (tried: {tried})",
+        )
+
+    cfg_path = existing[0]
+    try:
+        raw_text = cfg_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return _ModelCfgParseResult(
+            ok=False,
+            model_cfg=None,
+            source=cfg_path,
+            error=f"Failed to read config file {cfg_path}: {e}",
+        )
+
+    try:
+        cfg = yaml.safe_load(raw_text)
+    except yaml.YAMLError as e:
+        return _ModelCfgParseResult(
+            ok=False,
+            model_cfg=None,
+            source=cfg_path,
+            error=f"Failed to parse YAML in {cfg_path}: {e}",
+        )
+
+    if not isinstance(cfg, dict):
+        return _ModelCfgParseResult(
+            ok=False,
+            model_cfg=None,
+            source=cfg_path,
+            error=f"Invalid config root in {cfg_path}: expected mapping",
+        )
+
+    model_cfg = cfg.get("model")
+    if not isinstance(model_cfg, dict):
+        return _ModelCfgParseResult(
+            ok=False,
+            model_cfg=None,
+            source=cfg_path,
+            error=f"Invalid or missing 'model' section in {cfg_path}",
+        )
+
+    return _ModelCfgParseResult(
+        ok=True,
+        model_cfg=dict(model_cfg),
+        source=cfg_path,
+        error=None,
+    )
+
+
+def _load_model_cfg_for_run(*, run_dir: Path) -> dict[str, Any]:
+    """Load model section from config_used.yaml (strict fail-fast)."""
+    parsed = _parse_model_cfg_for_run(run_dir=run_dir)
+    if not parsed.ok or parsed.model_cfg is None:
+        raise RuntimeError(parsed.error or "Failed to parse model config")
+    return parsed.model_cfg
+
+
+def _load_required_finite_float_for_run(*, run_dir: Path, field: str) -> float:
+    """Load required model float field from config_used.yaml (strict)."""
+    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
+    if field not in model_cfg:
+        raise RuntimeError(f"Missing required model config field '{field}' in config_used.yaml")
+    raw = model_cfg[field]
+    try:
+        val = float(raw)
+    except (TypeError, ValueError) as e:
+        raise RuntimeError(f"Invalid model config field '{field}': {raw!r}") from e
+    if not np.isfinite(val):
+        raise RuntimeError(f"Invalid non-finite model config field '{field}': {raw!r}")
+    return val
+
+
+def _load_required_bool_for_run(*, run_dir: Path, field: str) -> bool:
+    """Load required model bool field from config_used.yaml (strict)."""
+    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
+    if field not in model_cfg:
+        raise RuntimeError(f"Missing required model config field '{field}' in config_used.yaml")
+    raw = model_cfg[field]
+    if not isinstance(raw, bool):
+        raise RuntimeError(f"Invalid model config field '{field}': expected bool, got {type(raw).__name__}")
+    return raw
 
 
 def _load_participation_alpha_for_run(*, run_dir: Path) -> float:
-    """Load model.participation_alpha from config_used.yaml if present."""
-    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
-    try:
-        alpha = float(model_cfg.get("participation_alpha", 1.0))
-        if np.isfinite(alpha):
-            return alpha
-    except Exception:
-        pass
-    return 1.0
+    """Load model.participation_alpha from config_used.yaml (strict)."""
+    return _load_required_finite_float_for_run(run_dir=run_dir, field="participation_alpha")
 
 
 def _load_altruism_alpha_for_run(*, run_dir: Path) -> float:
-    """Load model.altruism_alpha from config_used.yaml if present."""
-    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
-    try:
-        alpha = float(model_cfg.get("altruism_alpha", 1.0))
-        if np.isfinite(alpha):
-            return alpha
-    except Exception:
-        pass
-    return 1.0
+    """Load model.altruism_alpha from config_used.yaml (strict)."""
+    return _load_required_finite_float_for_run(run_dir=run_dir, field="altruism_alpha")
 
 
 def _load_altruism_learning_for_run(*, run_dir: Path) -> bool:
-    """Load model.altruism_learning from config_used.yaml if present."""
-    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
-    return bool(model_cfg.get("altruism_learning", True))
+    """Load model.altruism_learning from config_used.yaml (strict)."""
+    return _load_required_bool_for_run(run_dir=run_dir, field="altruism_learning")
 
 
 def _ref_cache_path(out_dir: Path, mode: str) -> Path:
@@ -2099,13 +2169,10 @@ def _render_area_detail_pdf(
 ) -> None:
     with PdfPages(out_pdf) as pdf:
         run_dir = out_pdf.parent.parent
-        model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
-        try:
-            puzzle_threshold = float(model_cfg.get("break_even_distance_common", np.nan))
-            if not np.isfinite(puzzle_threshold):
-                puzzle_threshold = float("nan")
-        except Exception:
-            puzzle_threshold = float("nan")
+        puzzle_threshold = _load_required_finite_float_for_run(
+            run_dir=run_dir,
+            field="break_even_distance_common",
+        )
 
         x = area_series["step"].to_numpy(dtype=float)
         participants = area_series["participants"].to_numpy(dtype=float)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.run_headless import run_once
 from src.analysis.summary_tooling import generate_run_summary_batch2
 from src.config.loader import load_config
@@ -41,3 +43,24 @@ def test_batch2_global_pdf_generation_is_stable_without_grids(tmp_path: Path) ->
     assert artifacts.global_summary_pdf is not None
     assert artifacts.global_summary_pdf.exists()
     assert artifacts.global_summary_pdf.stat().st_size > 0
+
+
+def test_batch2_fails_loud_when_config_used_is_missing(tmp_path: Path) -> None:
+    run_dir = _make_run(tmp_path, store_grid=False)
+    cfg_path = run_dir.parent / "config_used.yaml"
+    assert cfg_path.exists()
+    cfg_path.unlink()
+
+    with pytest.raises(RuntimeError, match="config_used.yaml"):
+        generate_run_summary_batch2(run_dir=run_dir)
+
+
+def test_batch2_fails_loud_when_required_model_field_is_missing(tmp_path: Path) -> None:
+    run_dir = _make_run(tmp_path, store_grid=False)
+    cfg_path = run_dir.parent / "config_used.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    text = text.replace("participation_alpha:", "participation_alpha_removed:")
+    cfg_path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="participation_alpha"):
+        generate_run_summary_batch2(run_dir=run_dir)
