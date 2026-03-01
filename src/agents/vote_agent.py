@@ -412,25 +412,28 @@ class VoteAgent(Agent):
         q = self.q_participation
         return _sigmoid(beta * q)
 
-    def apply_participation_update(self, participation_signal: float) -> None:
-        """Naive action reinforcement update for q_participation.
+    def apply_participation_q_push(self, q_push: float) -> None:
+        """Apply a direct q-space participation update payload.
 
-        Contract (thesis baseline): reinforce last action.
-        - participating + positive signal => q up (p up)
-        - abstained     + positive signal => q down (p down)
-        - participating + negative signal => q down
-        - abstained     + negative signal => q up
-
-        Note: participation_signal is the realized level signal (delta_rel).
-        The EMA baseline is tracked for diagnostics only.
+        Contract:
+        q_participation <- q_participation + participation_alpha * q_push
+        with optional symmetric clipping by participation_q_max.
         """
         alpha = self.model.participation_alpha
-        sign = 1.0 if self._participating else -1.0
-        q = self.q_participation + alpha * sign * participation_signal
+        q = self.q_participation + alpha * float(q_push)
         q_max = self.model.participation_q_max
         if q_max > 0:
             q = float(np.clip(q, -q_max, q_max))
         self.q_participation = q
+
+    def apply_participation_update(self, participation_signal: float) -> None:
+        """Legacy action-reinforcement wrapper for direct signal updates.
+
+        This wrapper preserves test and compatibility behavior for callers
+        that still pass a raw participation signal.
+        """
+        sign = 1.0 if self._participating else -1.0
+        self.apply_participation_q_push(sign * float(participation_signal))
 
     def apply_altruism_update(self, dissatisfaction_signal: float) -> None:
         """Participant-only learning of altruism_factor (reality-weight).

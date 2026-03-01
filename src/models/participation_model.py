@@ -261,7 +261,11 @@ class ParticipationModel(mesa.Model):
         self.participation_signal_mode = ensure_choice(
             "participation_signal_mode",
             participation_signal_mode,
-            ("raw_delta_rel", "group_centered_delta_rel_plus_fee"),
+            (
+                "raw_delta_rel",
+                "group_centered_delta_rel_plus_fee",
+                "group_relative_delta_rel_party",
+            ),
         )
         self.participation_signal_fee_weight = ensure_finite_ge_0(
             "participation_signal_fee_weight", participation_signal_fee_weight

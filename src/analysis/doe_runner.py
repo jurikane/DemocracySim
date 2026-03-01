@@ -532,6 +532,254 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 300,
         },
     },
+    "phase3_refine5_party_relative_probe": {
+        "name": "phase3_refine5_party_relative_probe",
+        # Probe around refine5 envelope with party-relative participation signal mode.
+        # Purpose: test whether stronger group-level competition emerges without
+        # destabilizing viability/quality metrics.
+        "ranges": {
+            # Startup turnout constraints (keep realistic starts).
+            "participation_init_q": (0.11, 0.18),
+            "participation_beta": (3.8, 6.0),
+
+            # Participation dynamics levers.
+            "election_cost_rate": (0.010, 0.030),
+            "participation_alpha": (0.07, 0.14),
+            "reward_rate_personal": (0.12, 0.26),
+            "break_even_distance_common": (0.34, 0.62),
+
+            # Puzzle / power balance.
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.60),
+            "puzzle_local_kappa": (30.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+
+            # General dynamics.
+            "mu": (0.08, 0.35),
+            "altruism_response_gamma": (0.90, 1.00),
+
+            # Satisfaction->altruism mapping neighborhood.
+            "altruism_satisfaction_theta": (0.68, 0.74),
+            "altruism_satisfaction_slope": (1.6, 2.8),
+
+            # Group-relative signal shaping.
+            "participation_signal_group_shrink_k": (1.0, 10.0),
+            "participation_signal_clip": (0.20, 0.45),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            # Participant fee salience in party mode; keep fixed for comparability.
+            "participation_signal_fee_weight": 1.0,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_refine6_party_relative_tuned": {
+        "name": "phase3_refine6_party_relative_tuned",
+        # Tuned follow-up to phase3_refine5_party_relative_probe
+        # (data/simulation_output/doe_party_probe_20260227_194026).
+        # Built around high-score/high-robustness neighborhoods, but with
+        # deliberate re-widening on incentive knobs to test pressure regimes.
+        "ranges": {
+            # Startup turnout / response shape.
+            "participation_init_q": (0.11, 0.18),
+            "participation_alpha": (0.09, 0.14),
+            "participation_beta": (4.1, 6.0),
+
+            # Incentive knobs (intentionally widened vs party-probe robust core).
+            "election_cost_rate": (0.008, 0.035),
+            "reward_rate_personal": (0.13, 0.285),
+            "break_even_distance_common": (0.32, 0.64),
+
+            # Puzzle / power balance.
+            "known_cells": (4.0, 12.0),
+            "election_impact_on_mutation": (1.20, 2.60),
+            "puzzle_local_kappa": (30.0, 80.0),
+            "puzzle_shock_prob": (0.00, 0.03),
+            "mu": (0.08, 0.35),
+
+            # Satisfaction -> altruism mapping.
+            "altruism_satisfaction_theta": (0.68, 0.74),
+            "altruism_satisfaction_slope": (1.6, 2.8),
+            "altruism_response_gamma": (0.90, 1.00),
+
+            # Party-relative signal shaping (bounded to robustness-friendly area).
+            "participation_signal_group_shrink_k": (1.2, 4.0),
+            "participation_signal_clip": (0.20, 0.40),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            # Participant fee salience in party mode; keep fixed for comparability.
+            "participation_signal_fee_weight": 1.0,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_party_broad_global_retune": {
+        "name": "phase3_party_broad_global_retune",
+        # Broad/global retune profile for the party learning regime (fee variant).
+        # Purpose: one large DOE for validation + global optimization before final local refine/freeze.
+        "ranges": {
+            # Participation dynamics (re-opened globally, still centered around viable region).
+            "participation_init_q": (0.10, 0.20),
+            "participation_alpha": (0.07, 0.16),
+            "participation_beta": (3.5, 6.5),
+            "election_cost_rate": (0.006, 0.040),
+            "reward_rate_personal": (0.10, 0.30),
+            "break_even_distance_common": (0.28, 0.70),
+
+            # Puzzle / power balance (explicitly widened for seed-regime robustness).
+            "known_cells": (3.0, 16.0),
+            "election_impact_on_mutation": (0.90, 3.20),
+            "puzzle_local_kappa": (10.0, 110.0),
+            "puzzle_shock_prob": (0.00, 0.08),
+            "mu": (0.06, 0.45),
+
+            # Satisfaction -> altruism mapping (moderately re-opened).
+            "altruism_satisfaction_theta": (0.64, 0.78),
+            "altruism_satisfaction_slope": (1.2, 3.6),
+            "altruism_response_gamma": (0.85, 1.00),
+
+            # Party-signal shaping.
+            "participation_signal_fee_weight": (0.35, 1.0),
+            "participation_signal_group_shrink_k": (0.5, 8.0),
+            "participation_signal_clip": (0.18, 0.50),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_party_local_search_balanced_v1": {
+        "name": "phase3_party_local_search_balanced_v1",
+        # Local exploit around high-score + robust neighborhood from
+        # doe_party_broad_global_retune_20260228_022651.
+        "ranges": {
+            "participation_init_q": (0.11, 0.19),
+            "participation_alpha": (0.082, 0.155),
+            "participation_beta": (3.80, 6.25),
+            "election_cost_rate": (0.007, 0.034),
+            "reward_rate_personal": (0.16, 0.29),
+            "break_even_distance_common": (0.31, 0.66),
+            "known_cells": (8.0, 16.0),
+            "election_impact_on_mutation": (1.05, 3.05),
+            "puzzle_local_kappa": (22.0, 105.0),
+            "puzzle_shock_prob": (0.004, 0.075),
+            "mu": (0.10, 0.42),
+            "altruism_satisfaction_theta": (0.65, 0.765),
+            "altruism_satisfaction_slope": (1.35, 3.50),
+            "altruism_response_gamma": (0.865, 0.985),
+            "participation_signal_fee_weight": (0.40, 0.90),
+            "participation_signal_group_shrink_k": (1.0, 6.5),
+            "participation_signal_clip": (0.21, 0.47),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_party_local_search_robust_v1": {
+        "name": "phase3_party_local_search_robust_v1",
+        # Robustness-tilted local exploit:
+        # lower fee/cost pressure and avoid extreme known_cells upper tail.
+        "ranges": {
+            "participation_init_q": (0.11, 0.185),
+            "participation_alpha": (0.09, 0.16),
+            "participation_beta": (3.8, 6.2),
+            "election_cost_rate": (0.007, 0.024),
+            "reward_rate_personal": (0.20, 0.30),
+            "break_even_distance_common": (0.34, 0.64),
+            "known_cells": (7.0, 13.0),
+            "election_impact_on_mutation": (1.10, 2.90),
+            "puzzle_local_kappa": (24.0, 95.0),
+            "puzzle_shock_prob": (0.005, 0.065),
+            "mu": (0.10, 0.42),
+            "altruism_satisfaction_theta": (0.65, 0.765),
+            "altruism_satisfaction_slope": (1.35, 3.50),
+            "altruism_response_gamma": (0.87, 0.99),
+            "participation_signal_fee_weight": (0.35, 0.70),
+            "participation_signal_group_shrink_k": (1.0, 4.5),
+            "participation_signal_clip": (0.20, 0.45),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 300,
+        },
+    },
+    "phase3_party_final_supersearch_v1": {
+        "name": "phase3_party_final_supersearch_v1",
+        # Final global search profile before thesis freeze.
+        # Built from:
+        # - broad + local DOE re-score comparison under contextual turnout-drop scoring
+        # - HIL findings (keep competitive asymmetry, avoid boring lock-ish regimes,
+        #   reduce over-penalization of asymmetric takeover with healthy entropy/competition)
+        "ranges": {
+            # Participation dynamics: centered on top-neighborhood with room for stress.
+            "participation_init_q": (0.11, 0.18),
+            "participation_alpha": (0.09, 0.155),
+            "participation_beta": (3.9, 6.1),
+            "election_cost_rate": (0.008, 0.032),
+            "reward_rate_personal": (0.18, 0.29),
+            "break_even_distance_common": (0.34, 0.62),
+
+            # Puzzle/power regime knobs:
+            # keep enough spread for seed-heterogeneous majority structure.
+            "known_cells": (8.0, 16.0),
+            "election_impact_on_mutation": (1.10, 2.95),
+            "puzzle_local_kappa": (28.0, 100.0),
+            "puzzle_shock_prob": (0.008, 0.070),
+            "mu": (0.10, 0.41),
+
+            # Satisfaction -> altruism mapping:
+            # slightly sharper upper-slope region to test HIL "too dull" finding.
+            "altruism_satisfaction_theta": (0.655, 0.755),
+            "altruism_satisfaction_slope": (1.55, 3.45),
+            "altruism_response_gamma": (0.88, 0.985),
+
+            # Party learning signal shaping.
+            "participation_signal_fee_weight": (0.42, 0.85),
+            "participation_signal_group_shrink_k": (1.10, 5.80),
+            "participation_signal_clip": (0.22, 0.45),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
 
 }
 

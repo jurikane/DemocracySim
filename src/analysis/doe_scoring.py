@@ -250,6 +250,30 @@ def _upper_bound_pref01(series: pd.Series, *, good_max: float, zero_at: float) -
     return out
 
 
+def _lower_bound_pref01(series: pd.Series, *, zero_at: float, good_min: float) -> pd.Series:
+    s = pd.to_numeric(series, errors="coerce").astype(float)
+    out = pd.Series(np.nan, index=s.index, dtype=float)
+    if good_min < zero_at:
+        zero_at, good_min = good_min, zero_at
+    mask = s.notna()
+    if not mask.any():
+        return out
+    vals = s[mask]
+    score = pd.Series(np.zeros(len(vals), dtype=float), index=vals.index)
+    if good_min <= zero_at + 1e-12:
+        score.loc[vals >= good_min] = 1.0
+        out.loc[mask] = score
+        return out
+    above = vals >= good_min
+    if bool(above.any()):
+        score.loc[above] = 1.0
+    mid = (vals > zero_at) & (vals < good_min)
+    if bool(mid.any()):
+        score.loc[mid] = ((vals.loc[mid] - zero_at) / (good_min - zero_at)).clip(0.0, 1.0)
+    out.loc[mask] = score.clip(0.0, 1.0)
+    return out
+
+
 def _ordering_distance_func_from_meta(meta: dict[str, Any]):
     run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
     name = str(run_meta.get("distance_impl_name", "") or "").strip()
@@ -1073,6 +1097,8 @@ def score_designs(
     stage_weights: dict[str, float] | None = None,
     required_primary_runs: int | None = None,
     required_matched_seed_pairs: int | None = None,
+    min_winner_entropy_norm: float = DEFAULT_SCORING_THRESHOLDS["min_winner_entropy_norm"],
+    min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
     puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
     puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
     turnout_start_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_low"],
@@ -1089,6 +1115,8 @@ def score_designs(
     participation_q_delta_mean_abs_zero_at: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_mean_abs_zero_at"],
     participation_q_delta_late_mean_abs_good_max: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_late_mean_abs_good_max"],
     participation_q_delta_late_mean_abs_zero_at: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_late_mean_abs_zero_at"],
+    turnout_drop_context_relief_strength: float = 0.60,
+    turnout_decline_context_relief_strength: float = 0.60,
     return_meta: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
@@ -1183,16 +1211,43 @@ def score_designs(
         low=float(turnout_end_score_low),
         high=float(turnout_end_score_high),
     )
-    primary["z_turnout_drop_stability"] = _upper_bound_pref01(
+    primary["z_turnout_drop_stability_base"] = _upper_bound_pref01(
         primary["turnout_drop_start_end"],
         good_max=float(turnout_drop_score_good_max),
         zero_at=float(turnout_drop_score_zero_at),
     )
-    primary["z_turnout_decline_stability"] = _upper_bound_pref01(
+    primary["z_turnout_decline_stability_base"] = _upper_bound_pref01(
         primary["turnout_decline_slope_norm"],
         good_max=float(turnout_decline_score_good_max),
         zero_at=float(turnout_decline_score_zero_at),
     )
+    entropy_good_min = float(np.clip(float(min_winner_entropy_norm) + 0.35, 0.0, 1.0))
+    competitive_good_min = float(np.clip(float(min_competitive_step_share) + 0.25, 0.0, 1.0))
+    primary["z_entropy_context"] = _lower_bound_pref01(
+        primary["winner_entropy_norm"],
+        zero_at=float(min_winner_entropy_norm),
+        good_min=entropy_good_min,
+    )
+    primary["z_competitive_context"] = _lower_bound_pref01(
+        primary["competitive_step_share"],
+        zero_at=float(min_competitive_step_share),
+        good_min=competitive_good_min,
+    )
+    primary["z_turnout_drop_context"] = primary[["z_entropy_context", "z_competitive_context"]].mean(axis=1)
+    drop_relief = float(np.clip(turnout_drop_context_relief_strength, 0.0, 1.0))
+    decline_relief = float(np.clip(turnout_decline_context_relief_strength, 0.0, 1.0))
+    primary["z_turnout_drop_stability"] = (
+        primary["z_turnout_drop_stability_base"]
+        + drop_relief
+        * primary["z_turnout_drop_context"]
+        * (1.0 - primary["z_turnout_drop_stability_base"])
+    ).clip(0.0, 1.0)
+    primary["z_turnout_decline_stability"] = (
+        primary["z_turnout_decline_stability_base"]
+        + decline_relief
+        * primary["z_turnout_drop_context"]
+        * (1.0 - primary["z_turnout_decline_stability_base"])
+    ).clip(0.0, 1.0)
     primary["z_turnout_band_time"] = _upper_bound_pref01(
         primary["turnout_outside_20_80_share"],
         good_max=float(turnout_outside_band_share_good_max),
@@ -1505,6 +1560,8 @@ def analyze_doe_root(
         stage_weights=sw,
         required_primary_runs=required_primary_runs,
         required_matched_seed_pairs=required_matched_seed_pairs,
+        min_winner_entropy_norm=float(thr["min_winner_entropy_norm"]),
+        min_competitive_step_share=float(thr["min_competitive_step_share"]),
         puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
         puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
         turnout_start_score_low=float(thr["turnout_start_score_low"]),
@@ -1578,11 +1635,11 @@ def analyze_doe_root(
                     "dist_nonzero_share",
                     "competitive_step_share",
                     "winner_changes_post_burnin",
-                    "turnout_shape (start/end/drop/decline/band-time)",
+                    "turnout_shape (start/end/contextual-drop/contextual-decline/band-time)",
                     "participation_q_delta_mean_abs (stability, closer to 0)",
                     "participation_q_delta_late_window_mean_abs (stability, closer to 0)",
-                    "turnout_drop_start_end (extra weight)",
-                    "turnout_decline_slope_norm (extra weight)",
+                    "turnout_drop_start_end (context-relieved by entropy+competition; extra weight)",
+                    "turnout_decline_slope_norm (context-relieved by entropy+competition; extra weight)",
                     "participation_q_delta_group_dispersion_late_w (mild, size-weighted)",
                     "participant_share_max_abs_drift_20 (mild)",
                     "participant_share_mean_abs_drift_20_w (mild, size-weighted)",

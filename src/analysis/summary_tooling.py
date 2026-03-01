@@ -3396,7 +3396,7 @@ def _render_area_group_pages(
             ax9[1].add_artist(group_leg)
             style_handles = [
                 Line2D([0], [0], color="black", linestyle="-", linewidth=0.9, label="from altruistic"),
-                Line2D([0], [0], color="black", linestyle="--", linewidth=1.35, label="from non-altruistic"),
+                Line2D([0], [0], color="black", linestyle=":", linewidth=1.35, label="from non-altruistic"),
             ]
             ax9[1].legend(
                 handles=style_handles,

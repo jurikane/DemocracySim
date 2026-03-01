@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from datetime import datetime
+import json
 from pathlib import Path
 import traceback
+from typing import Any
 import numpy as np
 from tqdm import tqdm
 
@@ -37,12 +40,17 @@ def execute_run_plan(
     plan,
     run_once_fn=run_once,
     continue_on_error: bool = False,
+    resume: bool = False,
     frozen_model: dict | None = None,
     frozen_simulation: dict | None = None,
 ) -> dict[str, int]:
     succeeded = 0
     failed = 0
+    skipped = 0
     for task in tqdm(plan, desc="DOE runs"):
+        if resume and _run_outputs_complete(task.out_dir):
+            skipped += 1
+            continue
         cfg_run = apply_doe_overrides(
             cfg,
             params=task.params,
@@ -62,7 +70,67 @@ def execute_run_plan(
                 raise
             print(f"[DOE][WARN] run failed: design={task.design_id} seed={task.seed} rule={task.rule_idx}")
             print(traceback.format_exc())
-    return {"succeeded": int(succeeded), "failed": int(failed)}
+    return {"succeeded": int(succeeded), "failed": int(failed), "skipped": int(skipped)}
+
+
+def _run_outputs_complete(run_dir: Path) -> bool:
+    required = [
+        run_dir / "meta.yaml",
+        run_dir / "static.json",
+        run_dir / "steps.parquet",
+        run_dir / "area_steps.parquet",
+        run_dir / "agents.parquet",
+    ]
+    for p in required:
+        if (not p.exists()) or (not p.is_file()):
+            return False
+        try:
+            if p.stat().st_size <= 0:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def _read_design_points(points_path: Path) -> list[dict[str, float]]:
+    by_design_id: dict[int, dict[str, float]] = {}
+    with points_path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None or "design_id" not in reader.fieldnames:
+            raise ValueError(f"Invalid DOE points manifest (missing design_id): {points_path}")
+        for row in reader:
+            did = int(row["design_id"])
+            params: dict[str, float] = {}
+            for k, v in row.items():
+                if k == "design_id":
+                    continue
+                params[str(k)] = float(v)
+            by_design_id[did] = params
+    return [by_design_id[i] for i in sorted(by_design_id.keys())]
+
+
+def _load_resume_context(out_root: Path) -> dict[str, Any] | None:
+    spec_path = out_root / "doe_spec.json"
+    points_path = out_root / "doe_design_points.csv"
+    if not (spec_path.exists() and points_path.exists()):
+        return None
+
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    design_points = _read_design_points(points_path)
+    ranges_raw = dict(spec.get("ranges", {}))
+    ranges = {str(k): (float(v[0]), float(v[1])) for k, v in ranges_raw.items()}
+    return {
+        "profile_name": str(spec.get("profile", "")),
+        "design_points": design_points,
+        "seeds": [int(s) for s in list(spec["seeds"])],
+        "primary_rule_idx": int(spec["primary_rule_idx"]),
+        "robust_rule_idx": int(spec["robust_rule_idx"]),
+        "include_robustness": bool(spec["include_robustness"]),
+        "robust_every": int(spec["robust_every"]),
+        "ranges": ranges,
+        "frozen_model": dict(spec.get("frozen_model", {})),
+        "frozen_simulation": dict(spec.get("frozen_simulation", {})),
+    }
 
 
 def main() -> None:
@@ -136,6 +204,12 @@ def main() -> None:
             "phase3_refine5_local",
             "phase3_turnover_balance_probe_medium",
             "phase3_turnover_balance_probe_medium_v2",
+            "phase3_refine5_party_relative_probe",
+            "phase3_refine6_party_relative_tuned",
+            "phase3_party_broad_global_retune",
+            "phase3_party_local_search_balanced_v1",
+            "phase3_party_local_search_robust_v1",
+            "phase3_party_final_supersearch_v1",
         ],
         help="DOE profile defining ranges + frozen settings.",
     )
@@ -150,6 +224,11 @@ def main() -> None:
         action="store_true",
         help="Continue remaining DOE runs if a run fails (warnings printed).",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip runs that already look complete in --out-root (resume interrupted DOE).",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -157,27 +236,6 @@ def main() -> None:
     ranges = dict(profile["ranges"])
     frozen_model = dict(profile["frozen_model"])
     frozen_simulation = dict(profile["frozen_simulation"])
-    if args.seed_mode == "fixed":
-        seeds = _parse_seed_list(args.seeds)
-    else:
-        if args.seed_candidates.strip():
-            candidate_seeds = _parse_seed_list(args.seed_candidates)
-        else:
-            start = int(args.seed_candidate_start)
-            count = int(args.seed_candidate_count)
-            if count <= 0:
-                raise ValueError("--seed-candidate-count must be >= 1")
-            candidate_seeds = list(range(start, start + count))
-        probe_rule_idx = int(args.seed_probe_rule_idx) if args.seed_probe_rule_idx is not None else int(args.primary_rule_idx)
-        seeds = select_stratified_seeds(
-            cfg,
-            target_count=int(args.seed_target),
-            candidate_seeds=candidate_seeds,
-            probe_rule_idx=probe_rule_idx,
-            ranges=ranges,
-            frozen_model=frozen_model,
-            frozen_simulation=frozen_simulation,
-        )
 
     if args.out_root is None:
         base = resolve_output_dir(cfg)
@@ -187,49 +245,97 @@ def main() -> None:
         out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    if args.seed_mode == "fixed":
-        write_seed_selection_manifest(
-            out_root=out_root,
-            mode="fixed",
-            selected_seeds=seeds,
-            candidate_seeds=seeds,
-            probe_rule_idx=None,
-        )
+    resume_context = _load_resume_context(out_root) if bool(args.resume) else None
+    using_existing_manifests = resume_context is not None
+    if using_existing_manifests:
+        design_points = list(resume_context["design_points"])
+        seeds = list(resume_context["seeds"])
+        primary_rule_idx = int(resume_context["primary_rule_idx"])
+        robust_rule_idx = int(resume_context["robust_rule_idx"])
+        include_robustness = bool(resume_context["include_robustness"])
+        robust_every = int(resume_context["robust_every"])
+        ranges = dict(resume_context["ranges"])
+        frozen_model = dict(resume_context["frozen_model"])
+        frozen_simulation = dict(resume_context["frozen_simulation"])
+        print(f"[DOE][RESUME] Reusing existing manifests from {out_root}")
+        prev_profile = str(resume_context.get("profile_name", ""))
+        if prev_profile and prev_profile != str(args.doe_profile):
+            print(
+                f"[DOE][RESUME][WARN] Existing profile '{prev_profile}' differs from "
+                f"CLI '--doe-profile {args.doe_profile}'. Existing manifest wins."
+            )
     else:
-        write_seed_selection_manifest(
-            out_root=out_root,
-            mode="stratified",
-            selected_seeds=seeds,
-            candidate_seeds=candidate_seeds,
-            probe_rule_idx=probe_rule_idx,
-        )
+        if args.seed_mode == "fixed":
+            seeds = _parse_seed_list(args.seeds)
+        else:
+            if args.seed_candidates.strip():
+                candidate_seeds = _parse_seed_list(args.seed_candidates)
+            else:
+                start = int(args.seed_candidate_start)
+                count = int(args.seed_candidate_count)
+                if count <= 0:
+                    raise ValueError("--seed-candidate-count must be >= 1")
+                candidate_seeds = list(range(start, start + count))
+            probe_rule_idx = int(args.seed_probe_rule_idx) if args.seed_probe_rule_idx is not None else int(args.primary_rule_idx)
+            seeds = select_stratified_seeds(
+                cfg,
+                target_count=int(args.seed_target),
+                candidate_seeds=candidate_seeds,
+                probe_rule_idx=probe_rule_idx,
+                ranges=ranges,
+                frozen_model=frozen_model,
+                frozen_simulation=frozen_simulation,
+            )
 
-    rng = np.random.default_rng(int(args.doe_seed))
-    design_points = sample_design_points(num_points=int(args.points), rng=rng, ranges=ranges)
-    write_design_manifest(
-        out_root=out_root,
-        design_points=design_points,
-        seeds=seeds,
-        primary_rule_idx=int(args.primary_rule_idx),
-        robust_rule_idx=int(args.robust_rule_idx),
-        include_robustness=not bool(args.no_robustness),
-        robust_every=int(args.robust_every),
-        ranges=ranges,
-        frozen_model=frozen_model,
-        frozen_simulation=frozen_simulation,
-        profile_name=str(args.doe_profile),
-    )
+        primary_rule_idx = int(args.primary_rule_idx)
+        robust_rule_idx = int(args.robust_rule_idx)
+        include_robustness = not bool(args.no_robustness)
+        robust_every = int(args.robust_every)
+
+        if args.seed_mode == "fixed":
+            write_seed_selection_manifest(
+                out_root=out_root,
+                mode="fixed",
+                selected_seeds=seeds,
+                candidate_seeds=seeds,
+                probe_rule_idx=None,
+            )
+        else:
+            write_seed_selection_manifest(
+                out_root=out_root,
+                mode="stratified",
+                selected_seeds=seeds,
+                candidate_seeds=candidate_seeds,
+                probe_rule_idx=probe_rule_idx,
+            )
+
+        rng = np.random.default_rng(int(args.doe_seed))
+        design_points = sample_design_points(num_points=int(args.points), rng=rng, ranges=ranges)
+        write_design_manifest(
+            out_root=out_root,
+            design_points=design_points,
+            seeds=seeds,
+            primary_rule_idx=primary_rule_idx,
+            robust_rule_idx=robust_rule_idx,
+            include_robustness=include_robustness,
+            robust_every=robust_every,
+            ranges=ranges,
+            frozen_model=frozen_model,
+            frozen_simulation=frozen_simulation,
+            profile_name=str(args.doe_profile),
+        )
 
     plan = build_run_plan(
         out_root=out_root,
         design_points=design_points,
         seeds=seeds,
-        primary_rule_idx=int(args.primary_rule_idx),
-        robust_rule_idx=int(args.robust_rule_idx),
-        include_robustness=not bool(args.no_robustness),
-        robust_every=int(args.robust_every),
+        primary_rule_idx=primary_rule_idx,
+        robust_rule_idx=robust_rule_idx,
+        include_robustness=include_robustness,
+        robust_every=robust_every,
     )
-    write_run_manifest(out_root=out_root, plan=plan)
+    if not using_existing_manifests:
+        write_run_manifest(out_root=out_root, plan=plan)
 
     started_at = datetime.now()
     print(f"DOE root: {out_root}")
@@ -245,10 +351,14 @@ def main() -> None:
         plan=plan,
         run_once_fn=run_once,
         continue_on_error=bool(args.continue_on_error),
+        resume=bool(args.resume),
         frozen_model=frozen_model,
         frozen_simulation=frozen_simulation,
     )
-    print(f"DOE summary: succeeded={summary['succeeded']} failed={summary['failed']}")
+    print(
+        f"DOE summary: succeeded={summary['succeeded']} "
+        f"skipped={summary.get('skipped', 0)} failed={summary['failed']}"
+    )
     if summary["failed"] > 0 and bool(args.continue_on_error):
         print("[DOE][WARN] Some runs failed; inspect logs above.")
 

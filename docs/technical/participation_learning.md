@@ -73,7 +73,7 @@ allows a broader conceptual range (e.g. `[-1, 1]`) for controlled baselines.
 
 ## Learning Signal Modes
 
-The participation learner now supports two signal modes:
+The participation learner supports three signal modes:
 
 ### `raw_delta_rel` (legacy)
 
@@ -98,6 +98,20 @@ signal_i          = clip(group_component_g + fee_component_i, ±participation_si
 This mode is intended to reduce step-wide common shock dominance (e.g. puzzle gate good/bad)
 while preserving fee/free-rider tension in the learning signal.
 
+### `group_relative_delta_rel_party` (party-relative alternative)
+
+Let `mu_g` be the mean `delta_rel` of eligible agents in group `g` for the current step,
+and `mu_groups` the mean of those group means (equal-weighted across groups).
+
+```text
+group_component_g = (mu_g - mu_groups) * n_g / (n_g + participation_signal_group_shrink_k)
+fee_component_i   = - participation_signal_fee_weight * fee_rel_i   (participants only; else 0)
+signal_i          = clip(group_component_g + fee_component_i, ±participation_signal_clip)
+```
+
+This keeps party-relative directionality (group outperforms/underperforms) while adding
+explicit participant private-cost salience.
+
 ### Baseline trace (diagnostic)
 
 `participation_baseline_alpha` is an EMA step size applied to the **actual participation signal**:
@@ -117,30 +131,30 @@ else:
 
 `participation_baseline` does not change learning behavior; it is an explanatory trace.
 
-## Participation Update Rule (Reinforce Last Action)
+## Participation Update Rule (Mode-Specific q-Push)
 
-The participation learning update is *action-reinforcement*, not counterfactual learning.
-Agents reinforce whatever they just did, based on whether the experienced outcome was better/worse
-than their recent baseline.
-
-Define:
+The model now computes an explicit per-agent q-space payload (`q_push`) in `Area`,
+then applies:
 
 ```text
-sign = +1 if participating else -1
-```
-
-Then:
-
-```text
-q_participation <- q_participation + participation_alpha * sign * participation_signal
+q_participation <- q_participation + participation_alpha * q_push
 q_participation <- clip(q_participation, -participation_q_max, +participation_q_max)  (if q_max > 0)
 ```
 
-Consequences (important for interpretation):
+By signal mode:
 
-- If an agent participated and the signal is positive, `q` increases ⇒ the agent is more likely to participate again.
-- If an agent abstained and the signal is positive, `q` decreases ⇒ the agent is less likely to participate again.
-- This deliberately supports free-riding dynamics: abstention can be reinforced by good collective outcomes.
+```text
+raw_delta_rel:
+  q_push_i = action_sign_i * signal_i
+
+group_centered_delta_rel_plus_fee:
+  q_push_i = action_sign_i * signal_i
+
+group_relative_delta_rel_party:
+  q_push_i = signal_i
+```
+
+with `action_sign_i = +1` for participants and `-1` for abstainers.
 
 ## Eligibility and “No Participation” Steps
 

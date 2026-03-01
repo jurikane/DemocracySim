@@ -322,8 +322,10 @@ class Area(Agent):
         self._distribute_rewards()
 
         # Adaptive participation learning update (eligible agents only)
-        signals = self._compute_participation_learning_signals(self.agents, self.model)
-        for a, signal in zip(self.agents, signals):
+        signals, q_pushes = self._compute_participation_learning_signals_and_q_pushes(
+            self.agents, self.model
+        )
+        for a, signal, q_push in zip(self.agents, signals, q_pushes):
             if not a.eligible_for_election:
                 continue
             if not np.isfinite(a.participation_baseline):
@@ -333,7 +335,7 @@ class Area(Agent):
                 alpha = float(self.model.participation_baseline_alpha)
                 a.participation_baseline = (1.0 - alpha) * baseline + alpha * signal
             a.participation_signal = float(signal)
-            a.apply_participation_update(a.participation_signal)
+            a.apply_participation_q_push(float(q_push))
         # TODO put those two loops together
         # Surprise-learning altruism update (participant-only, optional).
         if str(getattr(self.model, "altruism_mode", "static")) == "surprise_learning":
@@ -355,14 +357,32 @@ class Area(Agent):
     def _compute_participation_learning_signals(agents, model) -> list[float]:
         """Build participation-learning signals for all agents in list order.
 
+        This function returns the diagnostic signal only.
+        For the actual update payload (q-space push), see
+        `_compute_participation_learning_signals_and_q_pushes`.
+        """
+        signals, _q_pushes = Area._compute_participation_learning_signals_and_q_pushes(
+            agents, model
+        )
+        return signals
+
+    @staticmethod
+    def _compute_participation_learning_signals_and_q_pushes(agents, model) -> tuple[list[float], list[float]]:
+        """Build participation signals and direct q-update pushes in list order.
+
         Modes:
         - raw_delta_rel: legacy behavior; exact pass-through of election_delta_rel.
         - group_centered_delta_rel_plus_fee: centered group mean delta_rel signal
           (eligible agents only), shrunk by group size, plus an explicit fee penalty
           for participating agents.
+        - group_relative_delta_rel_party: group-level relative-performance signal
+          based on mean election_delta_rel (fees already included), shrunk by group size,
+          plus explicit participant fee penalty. This mode updates q directly with the
+          same group-relative direction for participants and abstainers.
         """
         mode = str(getattr(model, "participation_signal_mode", "raw_delta_rel"))
         signals = [0.0] * len(agents)
+        q_pushes = [0.0] * len(agents)
 
         def _set_components(agent, *, group_component: float, fee_component: float) -> None:
             agent.participation_signal_group_component = float(group_component)
@@ -377,10 +397,12 @@ class Area(Agent):
                     continue
                 delta_rel = float(a.election_delta_rel)
                 signals[idx] = delta_rel
+                action_sign = 1.0 if bool(a.participating) else -1.0
+                q_pushes[idx] = float(action_sign * delta_rel)
                 _set_components(a, group_component=delta_rel, fee_component=0.0)
-            return signals
+            return signals, q_pushes
 
-        if mode != "group_centered_delta_rel_plus_fee":
+        if mode not in {"group_centered_delta_rel_plus_fee", "group_relative_delta_rel_party"}:
             raise ValueError(f"Unknown participation_signal_mode: {mode}")
 
         fee_weight = float(model.participation_signal_fee_weight)
@@ -400,11 +422,11 @@ class Area(Agent):
             group_counts[g] = group_counts.get(g, 0) + 1
 
         if not eligible_indices:
-            return signals
+            return signals, q_pushes
 
         group_means = {g: float(np.mean(vals)) for g, vals in group_values.items() if vals}
         if not group_means:
-            return signals
+            return signals, q_pushes
         mu_groups = float(np.mean(list(group_means.values())))
 
         group_centered: dict[int, float] = {}
@@ -417,7 +439,6 @@ class Area(Agent):
             a = agents[idx]
             g = int(a.personality_group_idx)
             centered = float(group_centered.get(g, 0.0))
-
             fee_component = 0.0
             if a.participating:
                 fee_abs = float(a.election_fee)
@@ -432,7 +453,12 @@ class Area(Agent):
             signal = float(np.clip(signal, -signal_clip, signal_clip))
             _set_components(a, group_component=centered, fee_component=fee_component)
             signals[idx] = signal
-        return signals
+            if mode == "group_relative_delta_rel_party":
+                q_pushes[idx] = signal
+            else:
+                action_sign = 1.0 if bool(a.participating) else -1.0
+                q_pushes[idx] = float(action_sign * signal)
+        return signals, q_pushes
 
     @staticmethod
     def _snapshot_agent(agent) -> dict:
