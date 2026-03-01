@@ -37,6 +37,8 @@ def test_agents_parquet_includes_participation_baseline_columns(tmp_path: Path) 
             "gini_index": 0,
             "dist_to_reality": 0.0,
             "puzzle_distance": float("nan"),
+            "grid_ordering_id": -1,
+            "puzzle_ordering_id": -1,
         }
 
     logger._votes_rows.append(

@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+from typing import Any
+
 from tests.factory import create_test_model
+
+
+def _normalize_known_cell(x: Any) -> tuple[str, Any]:
+    if isinstance(x, int):
+        return ("color", int(x))
+    return ("cell", tuple(getattr(x, "pos")))
 
 
 def test_update_known_cells_is_deterministic_for_fixed_seed() -> None:
@@ -21,11 +29,11 @@ def test_update_known_cells_is_deterministic_for_fixed_seed() -> None:
     area2 = model2.areas[0]
     assert area1 is not None and area2 is not None
 
-    # Same seed => first sampling call should pick the same cells (by position)
+    # Same seed => first sampling call should pick the same known-cell sample.
     a1.update_known_cells(area1)
     a2.update_known_cells(area2)
 
-    pos1 = [c.pos for c in a1.known_cells]
-    pos2 = [c.pos for c in a2.known_cells]
+    k1 = [_normalize_known_cell(c) for c in a1.known_cells]
+    k2 = [_normalize_known_cell(c) for c in a2.known_cells]
 
-    assert pos1 == pos2
+    assert k1 == k2

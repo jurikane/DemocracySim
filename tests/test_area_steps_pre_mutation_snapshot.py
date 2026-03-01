@@ -39,6 +39,8 @@ def test_area_steps_use_pre_mutation_snapshot(tmp_path: Path) -> None:
         "gini_index": 13,
         "dist_to_reality": 0.123,
         "puzzle_distance": float("nan"),
+        "grid_ordering_id": -1,
+        "puzzle_ordering_id": -1,
     }
 
     logger.log_step(step=1, model=model, grid_snapshot=None)

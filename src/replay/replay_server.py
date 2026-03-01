@@ -5,11 +5,69 @@ import numpy as np
 import pandas as pd
 import mesa
 from typing import List, Dict, Any, Optional
+import warnings
 
 from src.config.schema import AppConfig
 from mesa.visualization.ModularVisualization import ModularServer
 from src.viz.factory import make_canvas, make_charts
 from src.agents.color_cell import ColorCell
+
+
+def _resolve_num_voters_per_area(static: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve voter-count mapping from static metadata with deterministic precedence.
+
+    Canonical key is `num_voters_per_area`.
+    Legacy key `voters_per_area` is still accepted for backward compatibility.
+    """
+    canonical_raw = static.get("num_voters_per_area")
+    legacy_raw = static.get("voters_per_area")
+
+    canonical = canonical_raw if isinstance(canonical_raw, dict) else None
+    legacy = legacy_raw if isinstance(legacy_raw, dict) else None
+
+    if canonical is not None:
+        if legacy is not None:
+            warnings.warn(
+                "static.json contains deprecated key 'voters_per_area'. "
+                "Using canonical 'num_voters_per_area'.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            if legacy != canonical:
+                warnings.warn(
+                    "static.json contains both 'num_voters_per_area' and "
+                    "'voters_per_area' with different values; canonical "
+                    "'num_voters_per_area' takes precedence.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+        return canonical
+
+    if legacy is not None:
+        warnings.warn(
+            "static.json key 'voters_per_area' is deprecated; use "
+            "'num_voters_per_area' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return legacy
+
+    if canonical_raw is not None:
+        warnings.warn(
+            "static.json key 'num_voters_per_area' exists but is not a JSON object; "
+            "using empty mapping.",
+            UserWarning,
+            stacklevel=3,
+        )
+    elif legacy_raw is not None:
+        warnings.warn(
+            "static.json key 'voters_per_area' exists but is not a JSON object; "
+            "using empty mapping.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    return {}
 
 
 class _DataCollectorAdapter:
@@ -324,8 +382,7 @@ class ReplayModel(mesa.Model):
 
         # Expose static voter counts for analysis/UI use
         self.total_voters = int(static.get("total_voters", 0) or 0)
-        self.num_voters_per_area = static.get("num_voters_per_area", {}) \
-            if isinstance(static.get("voters_per_area"), dict) else {}
+        self.num_voters_per_area = _resolve_num_voters_per_area(static)
 
         self.grid = mesa.space.SingleGrid(height=self._height, width=self._width, torus=True)
         self.color_cells: list[ColorCell] = []

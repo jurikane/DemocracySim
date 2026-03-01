@@ -72,7 +72,7 @@ def test_puzzle_local_dirichlet_mean_is_centered_on_previous_distribution() -> N
     area = model.areas[0]
     model.puzzle_local_kappa = 25.0
     prev = np.asarray([0.50, 0.20, 0.20, 0.10], dtype=np.float64)
-    alpha_center_pc = 8.0
+    alpha_center_pc = 2.0
 
     draws = np.asarray([area._sample_local_puzzle_distribution(prev) for _ in range(600)], dtype=np.float64)
     assert draws.shape == (600, 4)

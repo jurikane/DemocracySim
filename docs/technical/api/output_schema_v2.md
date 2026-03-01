@@ -17,8 +17,9 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `area_steps.parquet`
 - `agents.parquet`
 - `votes.parquet`
-- `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience)
-- `grids/grid_0001.npy` … `grids/grid_{S}.npy` (optional per-step snapshots, **pre-mutation**, depending on grid_interval).
+- `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience; written when `store_grid=true`)
+- `grids/grid_0001.npy` and `grids/grid_{S}.npy` (**always written**, election-time snapshots, **pre-mutation**)
+- `grids/grid_0001.npy` … `grids/grid_{S}.npy` (additional optional per-step snapshots, depending on `store_grid` + `grid_interval`)
   `grid_0001.npy` may equal `grid_0000.npy` because no mutation is applied before step 1.
 - static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
 
@@ -46,6 +47,7 @@ Recorded step `t` (where **t starts at 1**) corresponds to the election-time sta
 - `color_*` in `steps.parquet` reflects the global election-time distribution for step `t`,
   computed from exact grid counts (not from averaging area distributions).
 - Grid snapshots (`grids/grid_*.npy`) are the election-time state for step `t` and match the distributions.
+- First/last election-time snapshots are always present at `t=1` and `t=S`.
 - When snapshots are stored sparsely (`grid_interval > 1`), replay uses carry-forward semantics:
   for step `t` it shows the latest available `grid_k` with `k <= t`.
 

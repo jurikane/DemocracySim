@@ -38,7 +38,7 @@ def _grid_indices(run_dir: Path) -> list[int]:
     return idx
 
 
-def test_store_grid_oracle_false_writes_no_grid_artifacts(tmp_path: Path) -> None:
+def test_store_grid_false_still_writes_first_and_last_grid_snapshots(tmp_path: Path) -> None:
     out = _run(
         tmp_path,
         num_steps=4,
@@ -47,14 +47,16 @@ def test_store_grid_oracle_false_writes_no_grid_artifacts(tmp_path: Path) -> Non
         seed=5101,
         label="no_grid",
     )
-    assert not (out / "grids").exists()
+    idx = _grid_indices(out)
+    assert idx == [1, 4]
     # Core schema-v2 parquet artifacts still must exist.
     for name in ("steps.parquet", "area_steps.parquet", "agents.parquet", "votes.parquet"):
         assert (out / name).exists(), name
 
 
 def test_grid_interval_metamorphic_changes_written_step_indices(tmp_path: Path) -> None:
-    # num_steps=6 => recorded steps are 1..6. With interval=2, write at step indices 1,3,5.
+    # num_steps=6 => recorded steps are 1..6.
+    # With interval=2 and store_grid=True, write 0,1,3,5 plus always-final 6.
     out_i1 = _run(
         tmp_path,
         num_steps=6,
@@ -75,7 +77,7 @@ def test_grid_interval_metamorphic_changes_written_step_indices(tmp_path: Path) 
     idx1 = _grid_indices(out_i1)
     idx2 = _grid_indices(out_i2)
     assert idx1 == [0, 1, 2, 3, 4, 5, 6]
-    assert idx2 == [0, 1, 3, 5]
+    assert idx2 == [0, 1, 3, 5, 6]
     assert len(idx2) < len(idx1)
 
 
@@ -96,8 +98,8 @@ def test_grid_filename_and_indexing_integration_expectations(tmp_path: Path) -> 
     names = [p.name for p in grids]
     # Initial pre-election snapshot must exist.
     assert "grid_00.npy" in names
-    # Per-step snapshots for interval=3: steps 1,4,7,10.
-    for expected in ("grid_01.npy", "grid_04.npy", "grid_07.npy", "grid_10.npy"):
+    # Per-step snapshots for interval=3: steps 1,4,7,10, plus always-final step 12.
+    for expected in ("grid_01.npy", "grid_04.npy", "grid_07.npy", "grid_10.npy", "grid_12.npy"):
         assert expected in names
     # Every index must be zero-padded to width 2.
     for name in names:

@@ -803,6 +803,50 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 250,
         },
     },
+    "phase3_party_freeze_local_100seed_v1": {
+        "name": "phase3_party_freeze_local_100seed_v1",
+        # Final local freeze profile after supersearch:
+        # - focus around top-performing regions from supersearch
+        # - keep enough spread around seed-128/160 failure regimes
+        # NOTE: run with --robust-every 1 so discriminability is observed for every design.
+        "ranges": {
+            # Participation dynamics (local around top-quantile region).
+            "participation_init_q": (0.115, 0.165),
+            "participation_alpha": (0.105, 0.150),
+            "participation_beta": (4.40, 6.05),
+            "election_cost_rate": (0.008, 0.029),
+            "reward_rate_personal": (0.21, 0.285),
+            "break_even_distance_common": (0.36, 0.60),
+
+            # Puzzle / power regime:
+            # known_cells kept high because top designs strongly concentrated there.
+            "known_cells": (12.0, 18.0),
+            "election_impact_on_mutation": (1.15, 2.55),
+            "puzzle_local_kappa": (32.0, 90.0),
+            "puzzle_shock_prob": (0.012, 0.065),
+            "mu": (0.12, 0.34),
+
+            # Satisfaction -> altruism mapping (local around best region).
+            "altruism_satisfaction_theta": (0.66, 0.735),
+            "altruism_satisfaction_slope": (1.75, 3.20),
+            "altruism_response_gamma": (0.89, 0.975),
+
+            # Party learning signal shaping.
+            "participation_signal_fee_weight": (0.45, 0.75),
+            "participation_signal_group_shrink_k": (1.30, 4.40),
+            "participation_signal_clip": (0.24, 0.43),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
 
 }
 

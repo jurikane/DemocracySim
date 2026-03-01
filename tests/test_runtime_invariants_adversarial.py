@@ -80,16 +80,17 @@ def _assert_runtime_invariants(model) -> None:
         q_max = float(model.participation_q_max)
         assert -q_max - 1e-12 <= float(agent.q_participation) <= q_max + 1e-12
 
-        if model.altruism_learning:
-            assert float(model.altruism_clip_min) - 1e-12 <= float(agent.altruism_factor)
-            assert float(agent.altruism_factor) <= float(model.altruism_clip_max) + 1e-12
-        else:
+        altruism_mode = str(getattr(model, "altruism_mode", "static"))
+        if altruism_mode == "static":
             np.testing.assert_allclose(
                 float(agent.altruism_factor),
                 float(model.altruism_static),
                 rtol=0.0,
                 atol=1e-12,
             )
+        else:
+            assert float(model.altruism_clip_min) - 1e-12 <= float(agent.altruism_factor)
+            assert float(agent.altruism_factor) <= float(model.altruism_clip_max) + 1e-12
 
 
 @pytest.mark.parametrize(
