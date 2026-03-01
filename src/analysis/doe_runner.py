@@ -113,6 +113,29 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
         },
         "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
     },
+    "phase2_altruism_probe": {
+        "name": "phase2_altruism_probe",
+        "ranges": {
+            "election_cost_rate": (0.001, 0.10),
+            "reward_rate_personal": (0.00, 0.30),
+            "break_even_distance_common": (0.15, 0.45),
+            "election_impact_on_mutation": (1.0, 3.0),
+            "mu": (0.15, 1.00),
+            "participation_alpha": (0.01, 0.20),
+            "participation_beta": (2.5, 9.5),
+            "participation_init_q": (0.15, 1.2),
+            "altruism_alpha": (0.01, 0.08),
+            "altruism_init": (0.20, 0.80),
+            "satisfaction_baseline_alpha": (0.02, 0.25),
+            "known_cells": _known_cells_probe_bounds(DEFAULT_FROZEN_MODEL),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "surprise_learning",
+            "altruism_learning": True,
+        },
+        "frozen_simulation": dict(DEFAULT_FROZEN_SIM),
+    },
     "phase3_puzzle_main": {
         "name": "phase3_puzzle_main",
         "ranges": {
@@ -782,6 +805,10 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
     },
 
 }
+
+
+def list_doe_profiles() -> tuple[str, ...]:
+    return tuple(DEFAULT_DOE_PROFILES.keys())
 
 
 def get_doe_profile(name: str) -> dict[str, Any]:

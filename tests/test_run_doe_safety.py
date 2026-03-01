@@ -6,9 +6,16 @@ import sys
 
 import pytest
 
-from src.analysis.doe_runner import DOERunTask
-from scripts.run_doe import execute_run_plan
+from src.analysis.doe_runner import DOERunTask, get_doe_profile, list_doe_profiles
+from scripts.run_doe import DOE_PROFILE_CHOICES, execute_run_plan
 from src.config.loader import load_config
+
+
+def test_run_doe_profile_choices_match_doe_runner_profiles() -> None:
+    assert DOE_PROFILE_CHOICES == list(list_doe_profiles())
+    for profile_name in DOE_PROFILE_CHOICES:
+        profile = get_doe_profile(profile_name)
+        assert profile["name"] == profile_name
 
 
 def test_execute_run_plan_continue_on_error(tmp_path: Path) -> None:

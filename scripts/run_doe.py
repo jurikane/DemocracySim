@@ -15,6 +15,7 @@ from src.analysis.doe_runner import (
     apply_doe_overrides,
     build_run_plan,
     get_doe_profile,
+    list_doe_profiles,
     sample_design_points,
     select_stratified_seeds,
     write_design_manifest,
@@ -22,6 +23,9 @@ from src.analysis.doe_runner import (
     write_seed_selection_manifest,
 )
 from src.config.loader import load_config, resolve_output_dir
+
+
+DOE_PROFILE_CHOICES = list(list_doe_profiles())
 
 
 def _parse_seed_list(raw: str) -> list[int]:
@@ -189,28 +193,7 @@ def main() -> None:
         "--doe-profile",
         type=str,
         default="phase1",
-        choices=[
-            "phase1",
-            "phase2_altruism_learning",
-            "phase2_altruism_probe",
-            "phase3_puzzle_main",
-            "phase3_puzzle_refine1",
-            "phase3_puzzle_summary_dev",
-            "phase3_puzzle_motion_hypothesis",
-            "phase3_puzzle_refine2",
-            "phase3_puzzle_refine3",
-            "phase3_turnout_focus_medium",
-            "phase3_refine4",
-            "phase3_refine5_local",
-            "phase3_turnover_balance_probe_medium",
-            "phase3_turnover_balance_probe_medium_v2",
-            "phase3_refine5_party_relative_probe",
-            "phase3_refine6_party_relative_tuned",
-            "phase3_party_broad_global_retune",
-            "phase3_party_local_search_balanced_v1",
-            "phase3_party_local_search_robust_v1",
-            "phase3_party_final_supersearch_v1",
-        ],
+        choices=DOE_PROFILE_CHOICES,
         help="DOE profile defining ranges + frozen settings.",
     )
     parser.add_argument("--primary-rule-idx", type=int, default=1, help="Primary screening rule (default=1 approval).")
