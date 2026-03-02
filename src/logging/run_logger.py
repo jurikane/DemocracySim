@@ -36,12 +36,6 @@ from src.logging.output_schema import (
 from src.agents.area import Area
 from src.agents.vote_agent import VoteAgent
 from src.models.participation_model import ParticipationModel as Model
-from src.utils.metrics import (
-    get_area_border_grid,
-    get_agents_per_cell_grid,
-    get_agent_strings_per_cell_grid,
-    get_area_strings_per_cell_grid,
-)
 
 
 @dataclass(frozen=True)
@@ -165,10 +159,8 @@ class RunLoggerV2:
                 "area_steps": "area_steps.parquet",
                 "agents": "agents.parquet",
                 "votes": "votes.parquet",
-                "area_borders": "area_borders.npy",
-                "agents_per_cell": "agents_per_cell.npy",
-                "agent_strings_per_cell": "agent_strings_per_cell.npy",
-                "cell_areas": "area_strings_per_cell.npy",
+                "cell_areas": "static_cell_areas.parquet",
+                "cell_agents": "static_cell_agents.parquet",
             },
         }
 
@@ -211,18 +203,88 @@ class RunLoggerV2:
         with open(self.ctx.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
 
-        # --- Static overlay artifacts for replay ---
-        borders = get_area_border_grid(model)
-        np.save(str(self.ctx.out_dir / "area_borders.npy"), np.asarray(borders, dtype=bool))
+        # --- Typed static overlay artifacts for replay/analysis ---
+        self._write_static_overlay_artifacts(model)
 
-        apc = get_agents_per_cell_grid(model)
-        np.save(str(self.ctx.out_dir / "agents_per_cell.npy"), np.asarray(apc, dtype=np.int32))
+    def _write_static_overlay_artifacts(self, model: Model) -> None:
+        """Write typed static cell/area/agent overlays used by replay and summaries."""
+        cell_area_rows: list[dict[str, Any]] = []
+        cell_agent_rows: list[dict[str, Any]] = []
 
-        as_pc = get_agent_strings_per_cell_grid(model)
-        np.save(str(self.ctx.out_dir / "agent_strings_per_cell.npy"), np.asarray(as_pc, dtype=str))
+        area_ids_by_agent: dict[int, set[int]] = {}
+        for area in model.areas:
+            if area is None:
+                continue
+            area_id = int(getattr(area, "unique_id", -1))
+            if area_id < 0:
+                continue
+            for agent in (getattr(area, "agents", None) or []):
+                if agent is None:
+                    continue
+                agent_id = int(getattr(agent, "unique_id", -1))
+                if agent_id < 0:
+                    continue
+                if agent_id not in area_ids_by_agent:
+                    area_ids_by_agent[agent_id] = set()
+                area_ids_by_agent[agent_id].add(area_id)
 
-        area_strs = get_area_strings_per_cell_grid(model)
-        np.save(str(self.ctx.out_dir / "area_strings_per_cell.npy"), np.asarray(area_strs, dtype=str))
+        for cell, (x, y) in model.grid.coord_iter():
+            if cell is None:
+                continue
+            xi = int(x)
+            yi = int(y)
+
+            for area in (getattr(cell, "areas", None) or []):
+                if area is None:
+                    continue
+                area_id = int(getattr(area, "unique_id", -1))
+                if area_id < 0:
+                    continue
+                cell_area_rows.append(
+                    {
+                        "x": np.int32(xi),
+                        "y": np.int32(yi),
+                        "area_id": np.int32(area_id),
+                    }
+                )
+
+            for agent in (getattr(cell, "agents", None) or []):
+                if agent is None:
+                    continue
+                agent_id = int(getattr(agent, "unique_id", -1))
+                if agent_id < 0:
+                    continue
+                pg_idx = int(getattr(agent, "personality_group_idx", -1))
+                area_ids = sorted(int(v) for v in area_ids_by_agent.get(agent_id, set()))
+                if not area_ids:
+                    # Some geometries intentionally leave cells outside all areas.
+                    area_ids = [-1]
+                for area_id in area_ids:
+                    cell_agent_rows.append(
+                        {
+                            "x": np.int32(xi),
+                            "y": np.int32(yi),
+                            "area_id": np.int32(area_id),
+                            "agent_id": np.int32(agent_id),
+                            "personality_group_idx": np.int32(pg_idx),
+                        }
+                    )
+
+        cell_areas_df = pd.DataFrame.from_records(cell_area_rows, columns=["x", "y", "area_id"])
+        if not cell_areas_df.empty:
+            cell_areas_df = cell_areas_df.drop_duplicates(subset=["x", "y", "area_id"], keep="first")
+        cell_areas_df.to_parquet(self.ctx.out_dir / "static_cell_areas.parquet", engine="pyarrow", compression=self.compression)
+
+        cell_agents_df = pd.DataFrame.from_records(
+            cell_agent_rows,
+            columns=["x", "y", "area_id", "agent_id", "personality_group_idx"],
+        )
+        if not cell_agents_df.empty:
+            cell_agents_df = cell_agents_df.drop_duplicates(
+                subset=["x", "y", "area_id", "agent_id"],
+                keep="first",
+            )
+        cell_agents_df.to_parquet(self.ctx.out_dir / "static_cell_agents.parquet", engine="pyarrow", compression=self.compression)
 
     # -----------------
     # Logging

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+from collections import defaultdict
 import json
 import numpy as np
 import pandas as pd
@@ -191,6 +192,13 @@ class ReplayData:
             if gf.exists():
                 return np.load(str(gf)), int(t)
 
+        # DOE runs with store_grid=false may only persist step-1/last grids.
+        # For replay bootstrap at step 0, fall forward to grid_001 when grid_000 is absent.
+        if s == 0:
+            gf1 = self.grids_dir / (self._grid_pattern % 1)
+            if gf1.exists():
+                return np.load(str(gf1)), 1
+
         raise FileNotFoundError(
             f"Missing grid snapshot for step {s} and no earlier fallback found in {self.grids_dir}"
         )
@@ -253,41 +261,33 @@ class ReplayData:
 
         return {"step": step, "model": model_row, "areas": areas}
 
-    def load_area_borders(self) -> Optional[np.ndarray]:
+    def _artifact_path(self, key: str) -> Path:
         static = self.load_static() or {}
         artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
-        f_name = artifacts.get("area_borders", "area_borders.npy")
-        p = self.run_dir / f_name
+        if key not in artifacts:
+            raise ValueError(f"static.json missing required artifacts.{key}; run_dir={self.run_dir}")
+        p = self.run_dir / str(artifacts[key])
         if not p.exists():
-            raise FileNotFoundError(f"Missing area_borders artifact: {p}")
-        return np.load(str(p))
+            raise FileNotFoundError(f"Missing {key} artifact: {p}")
+        return p
 
-    def load_agents_per_cell(self) -> Optional[np.ndarray]:
-        static = self.load_static() or {}
-        artifacts = static.get("artifacts")
-        f_name = artifacts.get("agents_per_cell", "agents_per_cell.npy")
-        p = self.run_dir / f_name
-        if not p.exists():
-            raise FileNotFoundError(f"Missing agents_per_cell artifact: {p}")
-        return np.load(str(p))
+    def load_cell_areas(self) -> pd.DataFrame:
+        p = self._artifact_path("cell_areas")
+        df = pd.read_parquet(p)
+        need = {"x", "y", "area_id"}
+        missing = sorted(need - set(df.columns))
+        if missing:
+            raise KeyError(f"{p.name} missing required columns: {missing}")
+        return df
 
-    def load_agent_strings_per_cell(self) -> Optional[np.ndarray]:
-        static = self.load_static() or {}
-        artifacts = static.get("artifacts")
-        f_name = artifacts.get("agent_strings_per_cell", "agent_strings_per_cell.npy")
-        p = self.run_dir / f_name
-        if not p.exists():
-            raise FileNotFoundError(f"Missing agent_strings_per_cell artifact: {p}")
-        return np.load(str(p))
-
-    def load_cell_areas(self) -> Optional[np.ndarray]:
-        static = self.load_static() or {}
-        artifacts = static.get("artifacts")
-        f_name = artifacts.get("cell_areas", "cell_areas.npy")
-        p = self.run_dir / f_name
-        if not p.exists():
-            raise FileNotFoundError(f"Missing cell_areas artifact: {p}")
-        return np.load(str(p))
+    def load_cell_agents(self) -> pd.DataFrame:
+        p = self._artifact_path("cell_agents")
+        df = pd.read_parquet(p)
+        need = {"x", "y", "area_id", "agent_id", "personality_group_idx"}
+        missing = sorted(need - set(df.columns))
+        if missing:
+            raise KeyError(f"{p.name} missing required columns: {missing}")
+        return df
 
     def __len__(self) -> int:
         if self._schema == "v2":
@@ -311,6 +311,34 @@ def _expanded_range(row: pd.Series, prefix: str) -> List[int]:
     if not idxs:
         return []
     return list(range(0, max(idxs) + 1))
+
+
+def _derive_borders_by_cell(
+    *,
+    cell_areas_df: pd.DataFrame,
+    width: int,
+    height: int,
+) -> dict[tuple[int, int], bool]:
+    """Derive border flags from area occupancy (no static border artifact file)."""
+    area_cells: dict[int, set[tuple[int, int]]] = defaultdict(set)
+    for r in cell_areas_df.itertuples(index=False):
+        x = int(r.x)
+        y = int(r.y)
+        if x < 0 or x >= int(width) or y < 0 or y >= int(height):
+            continue
+        area_cells[int(r.area_id)].add((x, y))
+
+    borders: dict[tuple[int, int], bool] = {}
+    neighbors = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    for cells in area_cells.values():
+        if not cells:
+            continue
+        for x, y in cells:
+            for dx, dy in neighbors:
+                if (x + dx, y + dy) not in cells:
+                    borders[(x, y)] = True
+                    break
+    return borders
 
 
 class ReplayModel(mesa.Model):
@@ -350,45 +378,51 @@ class ReplayModel(mesa.Model):
         self.areas = self._build_area_stubs_from_personality_groups()
         self.voting_agents = []
 
-        # Load npy static data if present
-        borders_arr = self.data.load_area_borders()
-        set_borders = self._check_npy_arr(borders_arr)
+        cell_areas_df = self.data.load_cell_areas()
+        cell_agents_df = self.data.load_cell_agents()
 
-        # New static artifact: per-cell area assignments as comma-separated area ids.
-        cell_areas_arr = self.data.load_cell_areas()
-        set_cell_areas = self._check_npy_arr(cell_areas_arr)
+        borders_by_cell = _derive_borders_by_cell(
+            cell_areas_df=cell_areas_df,
+            width=self._width,
+            height=self._height,
+        )
 
-        apc_arr = self.data.load_agents_per_cell()
-        apply_apc = self._check_npy_arr(apc_arr)
-        apc_str_arr = self.data.load_agent_strings_per_cell()
-        set_a_strings = self._check_npy_arr(apc_str_arr)
+        areas_by_cell: dict[tuple[int, int], list[int]] = defaultdict(list)
+        for r in cell_areas_df.itertuples(index=False):
+            x = int(r.x)
+            y = int(r.y)
+            if x < 0 or x >= self._width or y < 0 or y >= self._height:
+                continue
+            area_id = int(r.area_id)
+            if area_id not in areas_by_cell[(x, y)]:
+                areas_by_cell[(x, y)].append(area_id)
+
+        agent_ids_by_cell: dict[tuple[int, int], list[int]] = defaultdict(list)
+        pg_idx_by_agent_id: dict[int, int] = {}
+        for r in cell_agents_df.itertuples(index=False):
+            x = int(r.x)
+            y = int(r.y)
+            if x < 0 or x >= self._width or y < 0 or y >= self._height:
+                continue
+            agent_id = int(r.agent_id)
+            if agent_id not in agent_ids_by_cell[(x, y)]:
+                agent_ids_by_cell[(x, y)].append(agent_id)
+            if agent_id not in pg_idx_by_agent_id:
+                pg_idx_by_agent_id[agent_id] = int(r.personality_group_idx)
+
+        agent_stubs_by_id = self._build_agent_stubs(pg_idx_by_agent_id=pg_idx_by_agent_id)
+        self.voting_agents = [agent_stubs_by_id[k] for k in sorted(agent_stubs_by_id)]
+        area_by_id = {int(a.unique_id): a for a in self.areas}
 
         for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):  # In Mesa, coord_iter() yields (contents, (x, y)), i.e. x is column and y is row
             # Create ColorCell with placeholder color 0; will be overridden by snapshots
             cell = ColorCell(unique_id=idx, model=self, pos=(col, row), initial_color=0)
 
-            # Apply static area borders (if present)
-            if set_borders:
-                cell.is_border_cell = borders_arr[row, col]
-
-            # Apply static agents-per-cell information (if present)
-            if apply_apc:
-                n_agents = int(apc_arr[row, col])
-                if n_agents > 0 and set_a_strings:
-                    # Create the agents from str info as placeholders
-                    agents_str = apc_str_arr[row, col]
-                    vote_agents = self._build_agent_stubs(agents_str)
-                    self.voting_agents.extend(vote_agents)
-                    cell.agents = vote_agents
-
-            # Apply static area assignments (if present)
-            if set_cell_areas:
-                area_str = str(cell_areas_arr[row, col] or "").strip()
-                try:
-                    area_ids = [int(i) for i in area_str.split(", ") if i != ""]
-                except ValueError:
-                    area_ids = []
-                cell.areas = [a for a in self.areas if a.unique_id in set(area_ids)]
+            cell.is_border_cell = bool(borders_by_cell.get((int(col), int(row)), False))
+            area_ids = areas_by_cell.get((int(col), int(row)), [])
+            cell.areas = [area_by_id[aid] for aid in area_ids if aid in area_by_id]
+            voter_ids = agent_ids_by_cell.get((int(col), int(row)), [])
+            cell.agents = [agent_stubs_by_id[aid] for aid in voter_ids if aid in agent_stubs_by_id]
 
             self.color_cells.append(cell)
 
@@ -412,11 +446,6 @@ class ReplayModel(mesa.Model):
         # advance to the first recorded step (step=1). steps/area_steps color
         # distributions are pre-mutation; grid snapshots are pre-mutation.
 
-    def _check_npy_arr(self, arr) -> bool:
-        if arr is not None and arr.shape == (self._height, self._width):
-            return True
-        return False
-
     def _load_static_personality_group_info(self) -> None:
         payload = self.data.load_static().get("personality_group_info") or {}
         self.personality_groups = np.array(payload.get("personality_groups") or [])
@@ -439,17 +468,29 @@ class ReplayModel(mesa.Model):
         stubs.sort(key=lambda a: a.unique_id)
         return stubs
 
-    def _build_agent_stubs(self, agents_str):
+    def _build_agent_stubs(self, *, pg_idx_by_agent_id: dict[int, int]):
         class _VoterStub:
-            def __init__(self, vote_agent_str: str):
-                aid, personality_group = vote_agent_str.split(": ")
-                self.unique_id = int(aid)
-                self.personality_group_idx = "-" # Placeholder; the idx is not yet available in static info.
-                self.personality_group = personality_group
-                self.personality = "-"  # Placeholder; the actual personality vector is not yet available in static info.
+            def __init__(self, *, agent_id: int, personality_group_idx: int, personality_group: list[int]):
+                self.unique_id = int(agent_id)
+                self.personality_group_idx = int(personality_group_idx)
+                self.personality_group = list(personality_group)
+                self.personality = list(personality_group)
                 self.assets = "-"
 
-        return [_VoterStub(a_str) for a_str in agents_str.split(", ")]
+        stubs: dict[int, Any] = {}
+        n_groups = int(self.personality_groups.shape[0]) if self.personality_groups.ndim == 2 else 0
+        for aid in sorted(pg_idx_by_agent_id):
+            pg_idx = int(pg_idx_by_agent_id[aid])
+            if 0 <= pg_idx < n_groups:
+                personality_group = [int(v) for v in self.personality_groups[pg_idx].tolist()]
+            else:
+                personality_group = []
+            stubs[int(aid)] = _VoterStub(
+                agent_id=int(aid),
+                personality_group_idx=pg_idx,
+                personality_group=personality_group,
+            )
+        return stubs
 
     # --- Properties expected by visualization elements ---
     @property

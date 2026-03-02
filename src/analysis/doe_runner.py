@@ -847,6 +847,101 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 250,
         },
     },
+    "phase3_party_altruism_sharp_probe_v1": {
+        "name": "phase3_party_altruism_sharp_probe_v1",
+        # Focused probe:
+        # - keep most freeze-successful knobs tight
+        # - deliberately open the unresolved deadlock drivers:
+        #   altruism nonlinearity + puzzle motion + election-impact speed
+        # - include known_cells because majority deadlock sensitivity is
+        #   strongly affected by information breadth in recent analyses.
+        "ranges": {
+            # Keep stable participation/economy neighborhood mostly tight.
+            "participation_init_q": (0.118, 0.162),
+            "participation_alpha": (0.095, 0.150),
+            "participation_beta": (4.55, 6.05),
+            "election_cost_rate": (0.008, 0.029),
+            "reward_rate_personal": (0.21, 0.285),
+            "break_even_distance_common": (0.36, 0.60),
+
+            # Keep puzzle/power family open where uncertainty remains.
+            "known_cells": (10.0, 20.0),
+            "election_impact_on_mutation": (0.95, 3.20),
+            "puzzle_local_kappa": (18.0, 120.0),
+            "puzzle_shock_prob": (0.002, 0.12),
+            "mu": (0.10, 0.36),
+
+            # Satisfaction -> altruism switch:
+            # start from current upper-third slope and open to sharp regimes.
+            "altruism_satisfaction_theta": (0.64, 0.84),
+            "altruism_satisfaction_slope": (2.40, 10.0),
+            "altruism_response_gamma": (0.90, 1.00),
+
+            # Party learning signal shaping stays near validated region.
+            "participation_signal_fee_weight": (0.45, 0.75),
+            "participation_signal_group_shrink_k": (1.30, 4.40),
+            "participation_signal_clip": (0.24, 0.45),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
+    "phase3_party_altruism_sharp_local_v1": {
+        "name": "phase3_party_altruism_sharp_local_v1",
+        # Follow-up local profile:
+        # intended as a final medium local DOE before freeze.
+        "ranges": {
+            # Participation/economy: tighten around successful probe region.
+            "participation_alpha": (0.108, 0.136),
+            "participation_beta": (5.0, 5.4),
+            "reward_rate_personal": (0.23, 0.26),
+            "break_even_distance_common": (0.45, 0.55),
+
+            # Keep knowledge conservative to preserve rule-difference signal
+            # (avoid over-unifying altruistic voters).
+            "known_cells": (11.0, 16.0),
+
+            # Keep unresolved puzzle/power dynamics moderately open.
+            "election_impact_on_mutation": (1.10, 3.10),
+            "puzzle_local_kappa": (85.0, 125.0),
+            "puzzle_shock_prob": (0.04, 0.08),
+            "mu": (0.10, 0.30),
+
+            # Satisfaction -> altruism switch:
+            # - maintain sharp regime (higher slope)
+            # - avoid very high theta that hurt viability in probe
+            # - gamma<1 introduces delay/smoothing; keep somewhat open due uncertainty
+            "altruism_satisfaction_theta": (0.64, 0.76),
+            "altruism_satisfaction_slope": (4.50, 10.5),
+            "altruism_response_gamma": (0.5, 1.0),
+
+            # Party-learning shaping: tighten around validated neighborhood.
+            "participation_signal_group_shrink_k": (1.60, 3.80),
+            "participation_signal_clip": (0.27, 0.40),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "election_cost_rate": 0.02,
+            "participation_signal_fee_weight": 0.6,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            # Freeze near the weighted center of top designs across the last
+            # three party-focused DOEs.
+            "participation_init_q": 0.14,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
 
 }
 

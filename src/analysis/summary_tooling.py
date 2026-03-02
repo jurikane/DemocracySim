@@ -3877,49 +3877,42 @@ def _personal_dists_from_static(*, static: dict[str, Any], num_colors: int) -> n
 
 
 def _load_area_agent_ids_from_static_overlays(*, run_dir: Path) -> dict[int, list[int]]:
-    """Recover resident area->agent ids from static overlay arrays written at run start."""
-    area_map: dict[int, set[int]] = {}
-    area_path = run_dir / "area_strings_per_cell.npy"
-    agent_path = run_dir / "agent_strings_per_cell.npy"
-    if not area_path.exists() or not agent_path.exists():
-        return {}
+    """Recover resident area->agent ids from typed static overlay artifacts."""
+    static_path = run_dir / "static.json"
+    if not static_path.exists():
+        raise FileNotFoundError(f"Missing static.json for typed overlay lookup: {run_dir}")
 
-    area_grid = np.load(area_path, allow_pickle=True)
-    agent_grid = np.load(agent_path, allow_pickle=True)
-    if area_grid.shape != agent_grid.shape:
-        return {}
+    try:
+        static = json.loads(static_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as e:
+        raise ValueError(f"Failed reading static.json for typed overlays: {static_path}") from e
 
-    for idx in np.ndindex(area_grid.shape):
-        area_str = str(area_grid[idx]) if area_grid[idx] is not None else ""
-        agent_str = str(agent_grid[idx]) if agent_grid[idx] is not None else ""
-        if not area_str.strip() or not agent_str.strip():
+    artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
+    rel = artifacts.get("cell_agents")
+    if not isinstance(rel, str) or rel.strip() == "":
+        raise KeyError(f"static.json missing required artifacts.cell_agents: {static_path}")
+    cell_agents_path = run_dir / rel
+    if not cell_agents_path.exists():
+        raise FileNotFoundError(f"Missing typed cell_agents artifact: {cell_agents_path}")
+
+    try:
+        df = pd.read_parquet(cell_agents_path)
+    except (OSError, ValueError, TypeError) as e:
+        raise ValueError(f"Failed reading typed cell_agents artifact: {cell_agents_path}") from e
+
+    if not {"area_id", "agent_id"}.issubset(df.columns):
+        raise KeyError(f"{cell_agents_path.name} missing required columns ['area_id', 'agent_id']")
+
+    out: dict[int, set[int]] = {}
+    for r in df[["area_id", "agent_id"]].dropna().itertuples(index=False):
+        area_id = int(r.area_id)
+        agent_id = int(r.agent_id)
+        if area_id < 0 or agent_id < 0:
             continue
-
-        area_ids: list[int] = []
-        for tok in area_str.split(","):
-            tok = tok.strip()
-            if tok == "":
-                continue
-            try:
-                area_ids.append(int(tok))
-            except ValueError:
-                continue
-        if not area_ids:
-            continue
-
-        # agent_strings are formatted as "<id>: <...>, <id>: <...>"
-        agent_ids = [int(m.group(1)) for m in re.finditer(r"(\d+)\s*:", agent_str)]
-        if not agent_ids:
-            continue
-
-        for a_id in area_ids:
-            if a_id < 0:
-                continue
-            if a_id not in area_map:
-                area_map[a_id] = set()
-            area_map[a_id].update(agent_ids)
-
-    return {k: sorted(v) for k, v in area_map.items()}
+        if area_id not in out:
+            out[area_id] = set()
+        out[area_id].add(agent_id)
+    return {k: sorted(v) for k, v in sorted(out.items())}
 
 
 def _draw_reference_optima_panel(*, ax, refs: dict[str, np.ndarray | None], num_colors: int) -> None:

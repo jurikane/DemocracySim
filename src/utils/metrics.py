@@ -50,21 +50,6 @@ def get_grid_colors(model):
     return grid_colors_arr
 
 
-def get_area_border_grid(model):
-    """
-    Return the area borders grid state as an array of rows (row-major):
-      result[y][x] == is_border_cell at position (x, y)
-    """
-    grid = model.grid
-    h, w = grid.height, grid.width
-    flat = np.fromiter(
-        (cell.is_border_cell for cell, _pos in grid.coord_iter()),
-        dtype=bool,
-        count=w * h,
-    )
-    return flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
-
-
 def compute_collective_assets(model):
     sum_assets = sum(agent.assets for agent in model.voting_agents)
     return sum_assets
@@ -85,57 +70,3 @@ def get_voter_turnout(model):
     total_resident = float(sum(int(area.num_agents) for area in model.areas))
     return (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
 
-
-def get_agents_per_cell_grid(model) -> np.ndarray:
-    """Return an HxW int grid with the number of voting agents per cell.
-
-    Contract:
-      result[y][x] == number of agents in the ColorCell at position (x, y)
-
-    Implementation mirrors get_grid_colors/get_area_border_grid ordering.
-    """
-    grid = model.grid
-    h, w = grid.height, grid.width
-    flat = np.fromiter(
-        (len(cell.agents) if cell is not None else 0 for cell, _pos in grid.coord_iter()),
-        dtype=np.int32,
-        count=w * h,
-    )
-    return flat.reshape((w, h)).T  # -> shape (h, w) with arr[y, x]
-
-
-def get_agent_strings_per_cell_grid(model) -> np.ndarray:
-    """Return an HxW str grid with vote agent infos per cell.
-
-    Contract:
-      result[y][x] == str listing all vote agents in the ColorCell at (x, y)
-    """
-    grid = model.grid
-    h, w = grid.height, grid.width
-
-    def agents_to_str(agents) -> str:
-        return ", ".join(f"{a.unique_id}: {a.personality_group}" for a in agents)
-
-    flat = [
-        agents_to_str(cell.agents) if cell is not None else ""
-        for cell, _pos in grid.coord_iter()
-    ]
-    return np.asarray(flat, dtype=object).reshape((w, h)).T
-
-
-def get_area_strings_per_cell_grid(model) -> np.ndarray:
-    """Return an HxW str grid with area ids per cell.
-    Contract:
-      result[y][x] == str listing all area ids in the ColorCell at (x, y)
-      id-sting: "a1, a2, ..." (excluding global area with id -1)
-    """
-    grid = model.grid
-    h, w = grid.height, grid.width
-
-    def areas_to_str(areas) -> str:
-        return ", ".join(f"{a.unique_id}" for a in areas if a.unique_id != -1)
-    flat = [
-        areas_to_str(cell.areas) if cell is not None else ""
-        for cell, _pos in grid.coord_iter()
-    ]
-    return np.asarray(flat, dtype=object).reshape((w, h)).T

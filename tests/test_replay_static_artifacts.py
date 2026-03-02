@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import json
 
-import numpy as np
+import pandas as pd
 
 from scripts.run_headless import run_once
 from src.config.loader import load_config
+from src.replay.replay_server import ReplayModel
 
 
 def test_replay_static_includes_borders_and_voter_counts(tmp_path):
     """Schema v2 completeness regression.
 
     New runs must write static artifacts needed for replay + analysis:
-      - static.json exists and declares schema v2
-      - area_borders.npy exists and has shape (H, W)
+    - static.json exists and declares schema v2
+    - static_cell_areas.parquet maps every grid cell to at least one area
+    - static_cell_agents.parquet includes area_id per agent for area membership recovery
 
     This test generates a tiny run to avoid depending on checked-in sample data.
     """
@@ -37,8 +39,26 @@ def test_replay_static_includes_borders_and_voter_counts(tmp_path):
     assert schema.get('name') == 'output_schema_v2'
     assert int(schema.get('version', 0) or 0) == 2
 
-    borders_path = run_dir / 'area_borders.npy'
-    assert borders_path.exists()
-    arr = np.load(str(borders_path))
-    assert arr.ndim == 2
-    assert arr.shape == (int(static['height']), int(static['width']))
+    cell_areas_path = run_dir / "static_cell_areas.parquet"
+    assert cell_areas_path.exists()
+    area_df = pd.read_parquet(cell_areas_path)
+    assert {"x", "y", "area_id"}.issubset(area_df.columns)
+    n_cells = int(static["height"]) * int(static["width"])
+    assert int(len(area_df[["x", "y"]].drop_duplicates())) == n_cells
+
+    cell_agents_path = run_dir / "static_cell_agents.parquet"
+    assert cell_agents_path.exists()
+    agents_df = pd.read_parquet(cell_agents_path)
+    assert {"x", "y", "area_id", "agent_id", "personality_group_idx"}.issubset(agents_df.columns)
+
+    # Replay must derive border flags from cell_areas without a border artifact file.
+    m = ReplayModel(appcfg=conf, run_dir=run_dir)
+    assert any(bool(c.is_border_cell) for c in m.color_cells)
+
+    # Hard cut: removed overlay artifacts are no longer written.
+    assert not (run_dir / "cell_borders.parquet").exists()
+    assert not (run_dir / "area_agents.parquet").exists()
+    assert not (run_dir / "area_borders.npy").exists()
+    assert not (run_dir / "agents_per_cell.npy").exists()
+    assert not (run_dir / "agent_strings_per_cell.npy").exists()
+    assert not (run_dir / "area_strings_per_cell.npy").exists()
