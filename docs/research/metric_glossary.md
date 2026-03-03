@@ -1,50 +1,68 @@
-# Metric Glossary (Frozen Names & Meanings)
+# Metric Glossary (Frozen IDs and Meanings)
 
-This is the field-to-meaning dictionary for thesis analysis.
+This glossary is the field-to-meaning dictionary for thesis analysis.
 It complements:
+- `docs/research/thesis_measurement_spec.md`
+- `docs/research/execution_scope_freeze.md`
 
-- `docs/research/thesis_measurement_spec.md` (formulas and analysis rules)
-- `docs/research/execution_scope_freeze.md` (scope and change control)
+Metric IDs are immutable after freeze unless a documented validity bug requires correction.
 
-## Primary Metrics
+## Current Contract (Implemented Truth)
 
-| Metric ID | Definition | Source | Unit | Direction |
-|---|---|---|---|---|
-| `turnout_pct_t` | global participation rate at step `t` | `steps.turnout` | percent (`0..100`) | higher = more participation |
-| `gini_assets_t` | inequality over agent assets at step `t` | `steps.gini_index` | `0..100` | higher = more inequality |
-| `mean_dissatisfaction_t` | mean of `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..1` | higher = worse |
-| `gini_dissatisfaction_t` | Gini over `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..100` | higher = more inequality |
-| `dist_to_reality_t` | area-level election quality aggregated at step `t` | derived from `area_steps.parquet` | `0..1` | lower = better |
+### Primary time-series metrics
 
-`turnout_pct_t` aggregation rule (frozen):
+| Metric ID | Definition | Source | Unit | Direction | Status |
+|---|---|---|---|---|---|
+| `turnout_pct_t` | global participation rate at step `t` | `steps.turnout` | `0..100` | higher = more participation | `implemented` |
+| `gini_assets_t` | inequality over agent assets at step `t` | `steps.gini_index` | `0..100` | higher = more inequality | `implemented` |
+| `mean_dissatisfaction_t` | mean `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..1` | higher = worse | `implemented` |
+| `gini_dissatisfaction_t` | Gini over `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..100` | higher = more inequality | `implemented` |
+| `dist_to_reality_t` | eligible-weighted election quality distance at step `t` | derived from `area_steps.parquet` | `0..1` | lower = better | `implemented` |
 
-- population-based aggregation across areas:
-  - `100 * sum_a participants(a,t) / sum_a area_num_agents(a)`
-- if denominator is zero, define value as `0`.
+Frozen aggregation semantics:
+- `turnout_pct_t = 100 * sum_a participants(a,t) / sum_a area_num_agents(a)`; if denominator is zero, value is `0`.
+- `dist_to_reality_t = sum_a dist_to_reality(a,t) * eligible_voters(a,t) / sum_a eligible_voters(a,t)`; if denominator is zero, value is `NaN`.
 
-`dist_to_reality_t` aggregation rule (frozen):
+### Secondary descriptive metrics
 
-- eligible-weighted mean across areas:
-  - `sum_a dist_to_reality(a,t) * eligible_voters(a,t) / sum_a eligible_voters(a,t)`
-- if denominator is zero, define value as `NaN` (or skip step in summaries).
+| Metric ID | Definition | Source | Unit | Direction | Status |
+|---|---|---|---|---|---|
+| `diversity_first_choice_entropy_t` | normalized entropy of first-choice ballot IDs | `votes.parquet` | `0..1` | higher = more diverse | `implemented` |
+| `dist_to_ref_utilitarian` | distance to utilitarian benchmark trajectory | analysis output | `0..1` | lower = closer | `implemented` |
+| `dist_to_ref_nash` | distance to nash benchmark trajectory | analysis output | `0..1` | lower = closer | `implemented` |
+| `dist_to_ref_egalitarian` | distance to egalitarian benchmark (`lambda=1`) | analysis output | `0..1` | lower = closer | `implemented` |
+| `dist_to_ref_rawlsian` | distance to rawlsian benchmark trajectory | analysis output | `0..1` | lower = closer | `implemented` |
+| `dist_to_ref_egalitarian_lam025` | egalitarian sensitivity (`lambda=0.25`) | analysis output | `0..1` | lower = closer | `implemented` |
+| `dist_to_ref_egalitarian_lam400` | egalitarian sensitivity (`lambda=4.0`) | analysis output | `0..1` | lower = closer | `implemented` |
 
-## Secondary Descriptive Metrics
+## Freeze-Target Contract (Decided, May Include Pending Items)
 
-| Metric ID | Definition | Source | Unit | Direction |
-|---|---|---|---|---|
-| `diversity_first_choice_entropy_t` | normalized entropy of `rank_1_option_id` distribution at step `t` | `votes.parquet` | `[0,1]` | higher = more diverse |
-| `dist_to_ref_utilitarian` | distance to utilitarian benchmark reference | analysis output | `0..1` | lower = closer |
-| `dist_to_ref_nash` | distance to nash benchmark reference | analysis output | `0..1` | lower = closer |
-| `dist_to_ref_egalitarian` | distance to egalitarian benchmark reference (`lambda=1`) | analysis output | `0..1` | lower = closer |
-| `dist_to_ref_rawlsian` | distance to rawlsian benchmark reference | analysis output | `0..1` | lower = closer |
-| `dist_to_ref_egalitarian_lam025` | distance to egalitarian sensitivity reference (`lambda=0.25`) | analysis output | `0..1` | lower = closer |
-| `dist_to_ref_egalitarian_lam400` | distance to egalitarian sensitivity reference (`lambda=4.0`) | analysis output | `0..1` | lower = closer |
+### Run-level thesis endpoint IDs
 
-## Naming Convention
+| Metric ID | Definition | Status |
+|---|---|---|
+| `turnout_mean_over_time` | mean of `turnout_pct_t` over all recorded steps | `freeze-target pending` |
+| `turnout_late_mean` | mean over final 20% of steps | `freeze-target pending` |
+| `turnout_early_late_delta` | late mean minus early mean | `freeze-target pending` |
+| `turnout_volatility` | step-change volatility endpoint | `TODO-POST-IMPLEMENTATION` |
+| `gini_assets_mean_over_time` | mean of `gini_assets_t` | `freeze-target pending` |
+| `gini_dissatisfaction_mean_over_time` | mean of `gini_dissatisfaction_t` | `freeze-target pending` |
+| `dist_to_reality_mean_over_time` | mean of `dist_to_reality_t` | `freeze-target pending` |
 
-- Use **dissatisfaction** consistently in thesis text and code/logs (`dissatisfaction_value`).
+Rule-family status labels for inference:
+- canonical family: confirmatory
+- random-reference family: reference-only unless explicitly reclassified
+
+## Pending Implementation Dependencies
+
+- [ ] `ANALYSIS_ENDPOINTS` (owner: code)
+  - Implement/emit endpoint IDs promoted to required for final runs.
+- [ ] `GLOSSARY_LOCK_NOTE` (owner: thesis lead)
+  - Record final endpoint lock and family classification before freeze lock.
 
 ## Freeze Rule
 
-After schema freeze (Gate B), metric IDs and meanings in this glossary are immutable.
-Only bug-fix clarifications are allowed, with explicit entry in `docs/technical/decision_log.md`.
+After Gate B/D0 lock:
+- Do not rename metric IDs.
+- Do not change metric meanings without explicit decision-log entry.
+- Allowed edits are limited to wording clarifications and bug-fix annotations.

@@ -2,6 +2,6 @@
 
 ::: src.agents.area.Area
 
-## Private Method
+## Method
 
-::: src.agents.area.Area._conduct_election
+::: src.agents.area.Area.conduct_election

@@ -6,7 +6,9 @@
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
-## Run directory layout
+## Current Contract (Implemented Truth)
+
+### Run directory layout
 
 Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 
@@ -17,13 +19,16 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 - `area_steps.parquet`
 - `agents.parquet`
 - `votes.parquet`
-- `grids/grid_0000.npy` (optional, **pre-election** snapshot for UI/replay convenience; written when `store_grid=true`)
-- `grids/grid_0001.npy` and `grids/grid_{S}.npy` (**always written**, election-time snapshots, **pre-mutation**)
-- `grids/grid_0001.npy` … `grids/grid_{S}.npy` (additional optional per-step snapshots, depending on `store_grid` + `grid_interval`)
-  `grid_0001.npy` may equal `grid_0000.npy` because no mutation is applied before step 1.
-- static overlays: `area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`
+- `static_cell_areas.parquet` – typed cell-to-area overlay
+- `static_cell_agents.parquet` – typed cell/area/agent overlay
+- `grids/grid_<k>.npy` snapshots (index `k` zero-padded to `len(str(num_steps))`)
+  - `grid_001` and `grid_{S}` election-time snapshots are always present
+  - `grid_000` (pre-election convenience snapshot) is written only when `store_grid=true`
+  - additional sparse snapshots follow `store_grid` + `grid_interval`
 
-## Voting rule identification (reproducibility)
+Legacy replay-side `.npy` overlays (`area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`) are not required artifacts for current schema-v2 headless runs.
+
+### Voting rule identification (reproducibility)
 
 The *primary independent variable* for the thesis experiments is `rule_idx`.
 To make `rule_idx` unambiguous across code changes, schema v2 stores:
@@ -36,7 +41,7 @@ The distance function (`distance_idx`) is also recorded for auditability:
 - `meta.yaml`: `run.distance_idx`, `run.distance_name`, `run.distance_impl_name`
 - `static.json`: `distance_functions.names`, `distance_functions.impl_names`, plus the selected index/name
 
-## Timing semantics (important)
+### Timing semantics (important)
 
 Recorded step `t` (where **t starts at 1**) corresponds to the election-time state:
 
@@ -57,33 +62,33 @@ Recorded step `t` (where **t starts at 1**) corresponds to the election-time sta
 
 Replay starts in a **grid-only step 0** state:
 
-- It loads `grids/grid_0000.npy` (if present) and shows it as the initial grid.
+- It loads `grids/grid_000.npy` (pad-aware filename; if present) and shows it as the initial grid.
 - It does **not** populate model/area time series until the first replay `step()` call.
 
-## Shared identifiers
+### Shared identifiers
 
 All Parquet tables include:
 
 - `run_seed` (int32): concrete RNG seed used for the run
 - `rule_idx` (int16): voting rule index used for the run
 
-## Tables
+### Tables
 
 ### `steps.parquet`
 
 **Primary key:** `(run_seed, rule_idx, step)`
 
-| column               |   dtype | notes                      |
-|----------------------|--------:|----------------------------|
-| run_seed             |   int32 | run identifier (seed)      |
-| rule_idx             |   int16 | voting rule index          |
-| step                 |   int32 | **1..S**                   |
-| collective_assets    | float32 | model sum of assets        |
-| gini_index           |   int16 | 0–100                      |
-| turnout              | float32 | global population-based turnout (%) |
-| mean_altruism        | float32 | mean altruism_factor       |
-| mean_dissatisfaction    | float32 | mean dissatisfaction_value      |
-| color_0..color_{C-1} | float32 | optional, pre-mutation     |
+| column               |   dtype | notes                                |
+|----------------------|--------:|--------------------------------------|
+| run_seed             |   int32 | run identifier (seed)                |
+| rule_idx             |   int16 | voting rule index                    |
+| step                 |   int32 | **1..S**                             |
+| collective_assets    | float32 | model sum of assets                  |
+| gini_index           |   int16 | 0–100                                |
+| turnout              | float32 | global population-based turnout (%)  |
+| mean_altruism        | float32 | mean altruism_factor                 |
+| mean_dissatisfaction | float32 | mean dissatisfaction_value           |
+| color_0..color_{C-1} | float32 | optional, pre-mutation               |
 
 ### `area_steps.parquet`
 
@@ -104,7 +109,7 @@ Merged area-state + election table.
 | winning_option_id                    |   int32 | option row index into `model.options`          |
 | elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
 | dist_to_reality                      | float32 | distance(real_order, voted_order)              |
-| puzzle_distance                      | float32 | distance(puzzle_order, voted_order); NaN when puzzle mode is off |
+| puzzle_distance                      | float32 | distance(puzzle_order, voted_order); NaN when puzzle mode is off            |
 | gini_index                           |   int16 | area gini 0–100         |
 | area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                  |
 
@@ -133,9 +138,9 @@ Agent snapshot table (**agent state only**).
 | participation_signal       | float32 | participation learning signal (mode-dependent) |
 | participation_signal_group_component | float32 | centered/group component of participation signal |
 | participation_signal_fee_component | float32 | explicit fee component of participation signal |
-| q_participation            | float32 | learned participation propensity (`q`) |
-| participation_probability  | float32 | current participation probability from `q` |
-| altruism_factor            | float32 | agent altruism_factor                        |
+| q_participation            | float32 | learned participation propensity (`q`)       |
+| participation_probability  | float32 | current participation probability from `q`   |
+| altruism_factor               | float32 | agent altruism_factor                        |
 | dissatisfaction_value         | float32 | dissatisfaction (distance)                   |
 | dissatisfaction_baseline      | float32 | EMA baseline for dissatisfaction             |
 | dissatisfaction_signal        | float32 | baseline-corrected dissatisfaction signal    |
@@ -176,7 +181,7 @@ Vote signal table (participants only). This is the single source of
 - If no agent participates in a run/step, `votes.parquet` may be empty (`0` rows) but remains schema-valid with typed columns.
 - For tied oppose scores, top-k rank extraction uses seeded RNG tie-breaking (unbiased); id-based tie fallback is not used.
 
-## Notes
+### Notes
 
 - Vector columns are **expanded**: `*_0..*_{C-1}` where `C=num_colors`.
 - `dist_to_ref_*` benchmark metrics are **not** runtime schema columns;
@@ -184,3 +189,19 @@ Vote signal table (participants only). This is the single source of
 - Validators live in `src/logging/output_schema.py` and allow safe dtype upcasts.
 - Validators reject unknown columns (strict schema lock). Only documented fields and documented vector prefixes are accepted.
 - Missing required pre-mutation area snapshot fields fail loudly during logging (no silent fallback).
+
+## Freeze-Target Contract (Decided, May Include Pending Items)
+
+- Schema-v2 remains structurally stable for thesis freeze (no field pruning as cleanup strategy).
+- Random reference arm (`rule_idx=4`) may be added without schema-structure changes.
+- Runtime artifact contract remains:
+  - typed parquet static overlays are authoritative (`static_cell_areas.parquet`, `static_cell_agents.parquet`)
+  - first and last election-time grids are always present
+  - step-0 pre-election grid is optional and controlled by `store_grid`
+
+## Pending Implementation Dependencies
+
+- [ ] `DOC_SYNC_TESTS` (owner: code/docs)
+  - Add checks that documented run-layout/summary contracts match emitted artifacts.
+- [ ] `RANDOM_RULE_METADATA` (owner: code)
+  - Ensure metadata mappings (`rule_idx`, `rule_name`, `rule_impl_name`) include new random arm safely.

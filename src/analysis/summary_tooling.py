@@ -33,7 +33,7 @@ from src.analysis.reference_benchmarks import (
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
 from src.utils.representations import distribution_to_ordering_tie_aware
-from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule
+from src.utils.social_welfare_functions import majority_rule, approval_voting, utilitarian_rule, borda_rule, random_rule
 
 
 @dataclass(frozen=True)
@@ -4121,8 +4121,8 @@ def _compute_area_power_direction_orderings(
         return []
     pref_table = np.vstack(pref_rows)
 
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
-    rule_names = ["Majority", "Approval", "Utilitarian", "Borda"]
+    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, random_rule]
+    rule_names = ["Majority", "Approval", "Utilitarian", "Borda", "Random"]
     run_seed = int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0)
     out: list[dict[str, Any]] = []
     for idx, (fn, name) in enumerate(zip(rule_fns, rule_names)):

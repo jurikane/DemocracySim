@@ -47,11 +47,15 @@ IN THE SOFTWARE.
           <h1>{{ config.site_name }}</h1>
             <p>{{ config.site_description }}</p>
             <p>This thesis investigates how different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent simulation with adaptive agents.
-                Agents are heterogeneous in their preferences and resources and repeatedly decide whether to participate in elections that aggregate individual preferences into collective decisions with payoff consequences.
-                The environment is stationary in its update rules but evolves over time in response to collective decisions, affecting the distribution of rewards among agents.
-                Agent behavior adapts via a fixed, explicit learning mechanism based on experienced outcomes, ensuring non-random, time-dependent dynamics.
-                The study compares a small set of canonical voting rules (2–4) while keeping all other model components constant.
-                Outcomes are evaluated primarily using participation rates and inequality measures (Gini index) as time-series, supported by descriptive summary statistics on collective outcomes.
+                Agents are heterogeneous in preferences and repeatedly decide whether to participate in elections that aggregate individual preferences into collective decisions with payoff consequences.
+                The model couples two environment mechanisms: a path-dependent color grid shaped by past collective decisions, and a Puzzle Quality Gate process that defines decision-quality pressure.
+                Election outcomes shape future grid states, while decision quality is evaluated by alignment with the Quality Gate.
+                Alignment activates positive reward mode, misalignment activates negative reward mode, and participation remains explicitly costly through election fees.
+                Agent dissatisfaction with the current environment is tracked over time and mapped to probabilistic altruistic versus self-regarding voting behavior, while participation itself adapts through a group-relative party-performance learning signal with fee salience.
+                This creates a controlled participation dilemma and a dynamic tension between collective quality tracking and self-regarding power-struggle voting.
+                The study compares a small set of canonical voting rules while keeping non-rule components fixed; for final experiments, the voting rule is the only intentionally varied independent variable.
+                Outcomes are evaluated as time-series and summary statistics with primary focus on turnout, resource inequality, and experiential inequality (dissatisfaction).
+                Assets are interpreted as a resource/capacity state, not literal currency.
                 The thesis explicitly excludes strategic voting, complex learning models, empirical validation, policy recommendations, and normative notions such as optimal democratic design.</p>
             <br>
             <p>This project is kindly supported by <a href="https://www.openpetition.eu/">OpenPetition</a> and supervised by the <a href="https://siks.informatik.uni-leipzig.de">Swarm Intelligence and Complex Systems Group</a> at University Leipzig.</p>

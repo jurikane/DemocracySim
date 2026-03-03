@@ -15,6 +15,7 @@ from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
     majority_rule,
+    random_rule,
     utilitarian_rule,
 )
 from src.utils.representations import distribution_to_ordering_tie_aware
@@ -373,7 +374,7 @@ def _current_rule_power_ordering_for_run(
 ) -> np.ndarray | None:
     run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
     rule_idx = int(run_meta.get("rule_idx", -1))
-    if rule_idx not in {0, 1, 2, 3}:
+    if rule_idx not in {0, 1, 2, 3, 4}:
         return None
     pgi = (static.get("personality_group_info") or {}) if isinstance(static, dict) else {}
     personality_groups = np.asarray(pgi.get("personality_groups", []), dtype=np.int64)
@@ -419,7 +420,7 @@ def _current_rule_power_ordering_for_run(
     if not pref_rows:
         return None
     pref_table = np.vstack(pref_rows)
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
+    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, random_rule]
     fn = rule_fns[rule_idx]
     seed = int(run_meta.get("run_seed", 0))
     rng = np.random.default_rng((seed * 1_000_003 + 97 * (rule_idx + 1)) % (2**63 - 1))

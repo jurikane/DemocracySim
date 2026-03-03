@@ -15,6 +15,7 @@ RULE_LABELS = {
     1: "approval",
     2: "utilitarian",
     3: "borda",
+    4: "random",
 }
 
 INTEGER_DOE_KEYS: set[str] = {"known_cells"}

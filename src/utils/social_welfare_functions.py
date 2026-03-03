@@ -14,6 +14,7 @@ Implemented rules (schema B1):
 - approval_voting_custom (legacy adaptive approval mapping; non-canonical)
 - utilitarian_rule (minimize total disagreement)
 - borda_rule (positional scoring derived from per-voter orderings)
+- random_rule (uniform full random ranking, seed-deterministic)
 """
 
 from __future__ import annotations
@@ -229,6 +230,25 @@ def utilitarian_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.
     # Primary key totals (ascending), secondary random key.
     rand = rng.random(m)
     ordering = np.lexsort((rand, totals))
+    validate_ordering(ordering, m)
+    return ordering
+
+
+def random_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+    """Uniform random full ranking of options.
+
+    Semantics:
+    - Ignores preference magnitudes intentionally.
+    - Returns a full permutation sampled uniformly from all `m!` rankings.
+    - Deterministic for fixed RNG state/seed.
+    """
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    _n, m = pref_table.shape
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+    ordering = np.arange(m, dtype=np.int64)
+    rng.shuffle(ordering)
     validate_ordering(ordering, m)
     return ordering
 

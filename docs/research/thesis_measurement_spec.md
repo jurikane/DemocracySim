@@ -1,193 +1,137 @@
-# Thesis Measurement Spec (Frozen Before Final Runs)
+# Thesis Measurement Spec (Core Contract)
 
-This document defines the operational metrics used for final thesis analysis.
-It aligns the thesis framing with the current simulation semantics and logging pipeline.
-Execution-level scope and triage are frozen in:
-`docs/research/execution_scope_freeze.md`.
-Field naming and interpretation dictionary is frozen in:
-`docs/research/metric_glossary.md`.
+This document defines how thesis metrics are computed and interpreted.
+It is coupled with:
 
-## Data Sources
+- `docs/research/thesis_contract.md`
+- `docs/research/metric_glossary.md`
+- `docs/research/execution_scope_freeze.md`
+
+## Current Contract (Implemented Truth)
+
+### Data sources (logged artifacts only)
 
 - `steps.parquet`
 - `area_steps.parquet`
 - `agents.parquet`
 - `votes.parquet`
-- `meta.yaml` / `static.json` (run metadata and schema metadata)
+- `meta.yaml`
+- `static.json`
 
-All analysis is derived from logged artifacts only (no live model-state dependencies).
+### Current primary time-series definitions
 
-## Core Variables
+- `turnout_pct_t` from `steps.turnout` (0..100)
+- `gini_assets_t` from `steps.gini_index` (0..100)
+- `mean_dissatisfaction_t` from mean of `agents.dissatisfaction_value` by step
+- `gini_dissatisfaction_t` from stepwise Gini over `agents.dissatisfaction_value` (0..100)
+- `dist_to_reality_t` from eligible-weighted `area_steps.dist_to_reality` by step
 
-- `t`: recorded step index (1-based)
-- `i`: agent index
-- `a`: area index
+Current weighted aggregation for `dist_to_reality_t`:
 
-### Participation
+- numerator: `sum_a dist_to_reality(a,t) * eligible_voters(a,t)`
+- denominator: `sum_a eligible_voters(a,t)`
+- if denominator is zero: `NaN`
 
-- `P(t) = steps.turnout[t]`
-- Unit: percent (`0..100`)
+### Current emitted run-level summaries (`summary_stats.json`)
 
-### Inequality: Resource Dimension
+Current `global_summary` keys emitted by `summary_tooling`:
 
-- Agent resource state: `A_i(t) = agents.assets` at step `t`
-- Inequality series: `I_A(t) = steps.gini_index[t]`
-- Unit: percent-like Gini scale (`0..100`)
-
-Interpretation: inequality in simulation participation capacity (resource / motivation to take effort), not literal income inequality.
-Note: agents may be initialized equally, but inequality is evaluated dynamically over time.
-
-### Inequality: Experiential Dimension
-
-- Agent dissatisfaction: `D_i(t) = agents.dissatisfaction_value` at step `t`
-- `D_i(t)` is a normalized distribution-distance style quantity (`0..1` in current implementation)
-- Define:
-  - `L_D(t) = mean_i D_i(t)` (mean dissatisfaction level)
-  - `I_D(t) = Gini_0_100({D_i(t)})` (dissatisfaction inequality)
-
-Interpretation: heterogeneity in experienced preference-mismatch.
-Terminology convention in thesis text and code/logs: use **dissatisfaction** (`dissatisfaction_value`).
-
-## Summary Statistics Per Run
-
-For each run, compute:
-
-- `turnout_mean`, `turnout_final`, `turnout_volatility`
+- `turnout_mean`, `turnout_final`
 - `gini_assets_mean`, `gini_assets_final`
-- `mean_dissatisfaction_mean`, `mean_dissatisfaction_final`
 - `gini_dissatisfaction_mean`, `gini_dissatisfaction_final`
-- `dist_to_reality_mean`, `dist_to_reality_final` (from `area_steps`)
+- `mean_dissatisfaction_mean`, `mean_dissatisfaction_final`
+- `dist_to_reality_mean`, `dist_to_reality_final`
+- `diversity_entropy_mean`, `diversity_entropy_final`
 
-Recommended volatility definition:
+Not emitted in current sidecar summary:
 
-- standard deviation over steps of the corresponding series.
+- `turnout_volatility`
+- analogous volatility endpoints for other primary metrics
 
-## Cross-Table Consistency Checks (Must Hold)
+### Current secondary descriptive metrics
 
-- `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a area_num_agents(a)` (if denominator is 0, turnout is defined as 0)
-- `area_steps.participants(a,t) == count(votes rows for (a,t))`
-- One `agents` row per `(agent_id, step)`
-- All probability-vector columns sum to 1 within numeric tolerance
-- No `NaN/inf` in thesis-critical series
+- `diversity_first_choice_entropy_t` from `votes.rank_1_option_id`
+- `dist_to_ref_*` benchmark trajectories (analysis artifacts; not runtime schema columns)
+  - `dist_to_ref_utilitarian`
+  - `dist_to_ref_nash`
+  - `dist_to_ref_egalitarian`
+  - `dist_to_ref_rawlsian`
+  - `dist_to_ref_egalitarian_lam025`
+  - `dist_to_ref_egalitarian_lam400`
 
-## Secondary Descriptive Metrics (Included)
+These are descriptive benchmark comparisons, not normative optimality claims.
 
-These are included as descriptive diagnostics and must not be interpreted as
-normative welfare-optimality claims.
+### Current benchmark reference computation contract
 
-### Diversity of Shared Opinions
-
-Purpose:
-
-- characterize whether participating ballots are convergent or dispersed at step `t`.
-
-Frozen operational metric:
-
-- `diversity_first_choice_entropy_t`
-- computed from `votes.rank_1_option_id` at step `t`
-- normalized entropy in `[0,1]`
-- if no votes in step `t`, value is `NaN` (excluded from mean-based summaries)
-
-### Distance to Reference Optima
-
-Purpose:
-
-- track how far realized collective outcomes are from fixed benchmark references
-  computed from static preference information.
-
-Computation layer freeze:
-
-- reference benchmarks and `dist_to_ref_*` are computed in the **analysis layer**
-  from logged artifacts (`steps/area_steps` color vectors + static preferences),
-  not in the simulation reward loop.
-
-Frozen reference families:
+Reference families currently used in analysis:
 
 - utilitarian reference
 - nash reference
-- egalitarian reference
+- egalitarian reference (`lambda=1.0`) with sensitivity variants (`lambda=0.25`, `lambda=4.0`)
 - rawlsian reference
 
-Frozen analysis output columns (time-indexed by `step`):
+Analysis output columns (time-indexed):
 
 - `dist_to_ref_utilitarian`
 - `dist_to_ref_nash`
 - `dist_to_ref_egalitarian`
 - `dist_to_ref_rawlsian`
-- `dist_to_ref_egalitarian_lam025` (analysis-side sensitivity)
-- `dist_to_ref_egalitarian_lam400` (analysis-side sensitivity)
+- `dist_to_ref_egalitarian_lam025`
+- `dist_to_ref_egalitarian_lam400`
 
-Frozen operational definitions (exact):
+Computation-layer freeze:
 
-Let:
-
-- `d_i` = static `personal_opt_dist` of agent `i` (distribution over colors)
-- `Delta_L1(x, y) = 0.5 * ||x - y||_1` (normalized L1 distance in `[0,1]`)
-- `Delta_L2sq(x, y) = ||x - y||_2^2`
-- `Gini(v)` = continuous Gini in `[0,1]` over vector `v`
-- simplex domain: `p in Delta^{C-1}` (`p_k >= 0`, `sum_k p_k = 1`)
-- `z_i(p) = Delta_L1(p, d_i)` (dissatisfaction under candidate reference `p`)
-
-For each area `a` with agent set `I_a`:
-
-- Utilitarian (`L2^2`):
-  - `p_utilitarian(a) = argmin_{p in simplex} mean_{i in I_a} Delta_L2sq(p, d_i)`
-  - closed form: arithmetic mean of `d_i` (then simplex normalization for numerical safety)
-- Nash (`KL`):
-  - `p_nash(a) = argmin_{p in simplex} sum_{i in I_a} KL(p || d_i)`
-  - closed form: normalized geometric mean by coordinate
-  - with numerical floor `eps=1e-12` before logs
-- Rawlsian (minimax `L2^2`):
-  - `p_rawlsian(a) = argmin_{p in simplex} max_{i in I_a} Delta_L2sq(p, d_i)`
-  - deterministic projected subgradient solver
-- Egalitarian (`mean + lambda * Gini`):
-  - objective family: `F_lambda(p) = mean_i z_i(p) + lambda * Gini({z_i(p)}_{i in I_a})`
-  - frozen lambdas: `{0.25, 1.0, 4.0}`
-  - primary egalitarian reference uses `lambda=1.0`
-  - `lambda=0.25` and `lambda=4.0` are reported as sensitivity references
-  - optimizer: deterministic simplex grid + deterministic local refine
-
-Per-step area analysis metrics (`summary_area_series.csv`):
-
-- `dist_to_ref_utilitarian(a,t) = Delta_L1(area_color_distribution(a,t), p_utilitarian(a))`
-- `dist_to_ref_nash(a,t) = Delta_L1(area_color_distribution(a,t), p_nash(a))`
-- `dist_to_ref_egalitarian(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda1(a))`
-- `dist_to_ref_rawlsian(a,t) = Delta_L1(area_color_distribution(a,t), p_rawlsian(a))`
-- sensitivity:
-  - `dist_to_ref_egalitarian_lam025(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda0.25(a))`
-  - `dist_to_ref_egalitarian_lam400(a,t) = Delta_L1(area_color_distribution(a,t), p_egalitarian_lambda4(a))`
-
-Global analysis counterparts (`summary_global_series.csv`) use the global agent set `I`
-and global color distribution:
-
-- define `p_utilitarian(global)`, `p_nash(global)`, `p_egalitarian(global)`, `p_rawlsian(global)` analogously
-- `dist_to_ref_*(global,t) = Delta_L1(global_color_distribution(t), p_*(global))`
+- all `dist_to_ref_*` values are computed in analysis from logged artifacts
+- no runtime reward-loop dependency on these benchmark trajectories
+- optimization/tie policies are deterministic for fixed input artifacts
 
 NaN policy:
 
-- if an area has `|I_a| == 0`, all area-level `dist_to_ref_*` values are `NaN`
-- global `dist_to_ref_*` is `NaN` iff global agent set is empty
-- no-participant election steps are still defined (distance is based on color distributions, not vote rows)
+- area-level benchmark distances are `NaN` for empty-area agent sets
+- global benchmark distance is `NaN` only if the global agent set is empty
+- no-vote steps still produce defined distances based on color distributions
 
-Determinism / tie policy:
+### Current consistency checks (must hold)
 
-- no random tie-breaks in benchmark optimization
-- simplex grid traversal is deterministic
-- local refine step schedule is deterministic
+- `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a area_num_agents(a)` (if denominator is zero, turnout is `0`)
+- `area_steps.participants(a,t) == count(votes rows for (a,t))`
+- one `agents` row per `(agent_id, step)`
+- no `NaN/inf` in thesis-critical emitted series (except explicitly allowed `NaN` semantics like denominator-zero `dist_to_reality_t`)
 
-Interpretation rule:
+## Freeze-Target Contract (Decided, May Include Pending Items)
 
-- these are benchmark trajectories for comparison, not claims about “true”
-  democratic optimality.
+### Thesis inference endpoints (design contract)
 
-## Experimental Freeze Rules
+For each primary time series and each run, use fixed estimands:
 
-Before final experiment execution:
+- `mean_over_time`
+- `late_mean` (last 20% of steps)
+- `early_late_delta = late_mean - early_mean` (first 20% vs last 20%)
+- `volatility` (step-change instability metric)
 
-- Fix independent variable plan: vary only the voting rule.
-- Fix satisfaction mode and learning knobs.
-- Fix overlap mode (baseline choice) and topology settings.
-- Freeze config files + commit hash used for final runs.
-- Do not change metric formulas after observing final rule-comparison results.
-- Treat secondary descriptive metrics as non-normative diagnostics.
-- Do not rename or reinterpret glossary metric IDs after Gate B.
+Status in freeze-target:
+
+- `mean_over_time`, `late_mean`, `early_late_delta`: required for thesis inference layer.
+- `volatility`: allowed but currently pending implementation in sidecar outputs.
+
+### Inference-family guardrails
+
+- Canonical rule-family tests and reference-family tests must remain separated in reporting.
+- Multiple-testing correction policy is frozen before first full final-run readout.
+- No endpoint formula changes after freeze lock.
+
+### Summary-layer separation rule
+
+- Sidecar summary (`summary_stats.json`) describes currently emitted implementation outputs.
+- Thesis inference outputs may extend beyond sidecar keys, but must be computed from logged artifacts with fixed formulas.
+
+## Pending Implementation Dependencies
+
+- [ ] `ANALYSIS_ENDPOINTS` (owner: code)
+  - Implement promoted freeze-target endpoints not currently emitted (if marked required before final runs).
+- [ ] `VOLATILITY_ENDPOINTS` (owner: code, status: `TODO-POST-IMPLEMENTATION`)
+  - Add volatility endpoints only if promoted from TODO to required.
+- [x] `DOC_SYNC_TESTS` (owner: code/docs)
+  - Contract checks added to ensure documented current summary keys match emitted `summary_stats` keys.
+- [ ] `INFERENCE_FREEZE_NOTE` (owner: thesis lead)
+  - Record final endpoint list and multiplicity protocol in freeze note before final-run execution.

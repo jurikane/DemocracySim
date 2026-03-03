@@ -1,32 +1,82 @@
-# How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
+# Thesis Contract: Voting Rules, Participation, and Inequality Dynamics
 
-This thesis investigates how different voting rules influence the temporal evolution of participation rates
-and inequality in a simple multi-agent simulation with adaptive agents.
+Research question:
+How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
 
-Agents are heterogeneous in preferences and repeatedly decide whether to participate in area-level elections
-that aggregate individual preferences into collective decisions with payoff consequences.
-Agents may start with equal resources, but resource inequality can emerge endogenously through repeated relative
-reward/cost updates and adaptive behavior.
-The matching or mismatching of agents’ preferences with their environment (and/or their perception of it) yields a time-varying measure of satisfaction/dissatisfaction.
+Execution-level freeze and gate control:
 
-The environment evolves under stationary update rules in response to collective decisions, which shape future reward distributions through preference matching or mismatching across agents. Elections therefore exert both immediate payoff effects and lagged effects via environmental change.
+- `docs/research/execution_scope_freeze.md`
 
-Agent behavior adapts via a fixed, explicit learning mechanism based on experienced outcomes, ensuring non-random, time-dependent dynamics.
+Concept model documentation:
 
-The study compares a small set of canonical voting rules (2–4) while keeping all other model components fixed.
-For final experiments, the voting rule is the only intentionally varied independent variable.
+- `docs/research/thesis_model_concepts.md`
 
-Outcomes are evaluated as time-series and summary statistics, with primary focus on participation and inequality:
+## Current Contract (Implemented Truth)
 
-- Participation dynamics: turnout over time.
-- Inequality dynamics (resource dimension): Gini over agent assets (`gini_assets`).
-- Inequality dynamics (experiential dimension): Gini over agent dissatisfaction (`gini_dissatisfaction`), where dissatisfaction is operationalized by `dissatisfaction_value` (distribution mismatch distance).
+### Scientific scope
 
-Important semantic clarification for interpretation:
-`assets` are modeled as a generic resource/capacity state under relative reward/fee updates, not literal currency.
-Accordingly, `gini_assets` is interpreted as inequality in simulation resource capacity.
+This thesis studies a fixed simulation environment where only the voting-rule arm is intentionally varied for rule-comparison runs. The model includes adaptive participation behavior and adaptive altruism under a fixed update regime.
 
-The thesis explicitly excludes strategic voting, complex learning models, empirical validation, policy recommendations, and normative notions such as optimal democratic design.
+### Baseline mechanics currently implemented
 
-Execution-level implementation scope and experiment triage are frozen in:
-`docs/research/execution_scope_freeze.md`.
+- Quality target mode baseline: `quality_target_mode=puzzle`
+- Participation signal regime baseline: `participation_signal_mode=group_relative_delta_rel_party`
+- Altruism baseline family: `altruism_mode=satisfaction`
+  - with satisfaction-response parameters (`altruism_satisfaction_theta`, `altruism_satisfaction_slope`) and response gain (`altruism_response_gamma`)
+- Implemented voting rules (rule index contract):
+  - `0=majority`
+  - `1=approval`
+  - `2=utilitarian`
+  - `3=borda`
+  - `4=random` (reference arm)
+
+### Outcome focus (current)
+
+Primary thesis outcome families are tracked as time series and run-level summaries:
+
+- Participation dynamics (`turnout`)
+- Resource inequality dynamics (`gini_assets` from `steps.gini_index`)
+- Experiential inequality dynamics (`gini_dissatisfaction` from `agents.dissatisfaction_value`)
+- Outcome quality trajectory (`dist_to_reality` aggregated from `area_steps`)
+
+Interpretation constraint:
+
+- `assets` is simulation resource/capacity state, not literal income.
+
+### Exclusions (current)
+
+Out of scope for confirmatory claims:
+
+- strategic voting mechanisms
+- empirical validation against real election data
+- normative policy prescription
+- strong claims about optimal democratic design
+
+## Freeze-Target Contract (Decided, May Include Pending Items)
+
+### Voting-rule arm design
+
+- Keep canonical implemented arm family as the primary confirmatory family.
+- Keep `random` voting rule as a reference arm:
+  - semantics: uniform full random ranking per election
+  - deterministic replay under fixed seed
+  - role: reference family (non-confirmatory unless reclassified later)
+
+### Independent-variable discipline
+
+For final thesis experiments, voting rule remains the only intentionally varied independent variable in the confirmatory comparison matrix.
+
+### Contract layering rule
+
+Core docs are allowed to include freeze-target items before implementation, but every non-implemented item must be explicitly marked pending with dependency tracking.
+
+## Pending Implementation Dependencies
+
+- [x] `RANDOM_RULE` (owner: code)
+  - `random` rule added to voting-rule registry and metadata paths.
+  - hardcoded 4-rule analysis/scoring maps upgraded to 5-rule-safe behavior.
+  - determinism/neutrality/canonical-regression tests added.
+- [x] `DOC_SYNC_TESTS` (owner: code/docs)
+  - Automated doc/summary drift checks added for current summary contract fields.
+- [ ] `CORE_DOC_SIGNOFF` (owner: thesis lead)
+  - Sign off D0 drift register before moving to final freeze execution gates.
