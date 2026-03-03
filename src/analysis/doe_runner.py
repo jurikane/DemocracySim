@@ -943,6 +943,44 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 250,
         },
     },
+    "phase3_party_switch_puzzle_small_v1": {
+        "name": "phase3_party_switch_puzzle_small_v1",
+        # Small confirmation DOE:
+        # freeze to design-0006-centered baseline and open only the
+        # satisfaction-switch knobs + one puzzle-dominance knob.
+        "ranges": {
+            "altruism_satisfaction_theta": (0.70, 1.00),
+            "altruism_satisfaction_slope": (6.0, 13.0),
+            "altruism_response_gamma": (0.45, 0.95),
+            # Direct puzzle-vs-power lever (knowledge coherence in altruistic voting).
+            "known_cells": (16.0, 30.0),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            # Design-0006-centered freeze values from DOE 20260302_175623.
+            "participation_init_q": 0.14,
+            "participation_alpha": 0.118717,
+            "participation_beta": 5.041759,
+            "election_cost_rate": 0.02,
+            "reward_rate_personal": 0.231437,
+            "break_even_distance_common": 0.459207,
+            "known_cells": 16,
+            "election_impact_on_mutation": 2.448928,
+            "puzzle_local_kappa": 123.302102,
+            "puzzle_shock_prob": 0.073023,
+            "mu": 0.278457,
+            "participation_signal_fee_weight": 0.6,
+            "participation_signal_group_shrink_k": 1.954833,
+            "participation_signal_clip": 0.277565,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
 
 }
 

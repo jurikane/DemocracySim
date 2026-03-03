@@ -43,6 +43,11 @@ Interpretation constraint:
 
 - `assets` is simulation resource/capacity state, not literal income.
 
+Secondary descriptive lenses (non-confirmatory):
+
+- group-level turnout and participation-composition diagnostics (majority/minority dynamics by personality group)
+- participation and inequality co-movement diagnostics across time
+
 ### Exclusions (current)
 
 Out of scope for confirmatory claims:
@@ -70,13 +75,8 @@ For final thesis experiments, voting rule remains the only intentionally varied 
 
 Core docs are allowed to include freeze-target items before implementation, but every non-implemented item must be explicitly marked pending with dependency tracking.
 
-## Pending Implementation Dependencies
+## Implementation Status Notes
 
-- [x] `RANDOM_RULE` (owner: code)
-  - `random` rule added to voting-rule registry and metadata paths.
-  - hardcoded 4-rule analysis/scoring maps upgraded to 5-rule-safe behavior.
-  - determinism/neutrality/canonical-regression tests added.
-- [x] `DOC_SYNC_TESTS` (owner: code/docs)
-  - Automated doc/summary drift checks added for current summary contract fields.
-- [ ] `CORE_DOC_SIGNOFF` (owner: thesis lead)
-  - Sign off D0 drift register before moving to final freeze execution gates.
+- Random reference arm is implemented in runtime, metadata, and analysis paths.
+- Core doc/summary drift checks are implemented for current summary-key coverage.
+- Final D0 thesis-lead sign-off is tracked in internal freeze records before Gate C closure.

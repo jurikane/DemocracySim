@@ -15,12 +15,13 @@ Key features:
 ## Voting Rules (Primary Independent Variable)
 
 The voting rule is the primary independent variable for thesis comparisons.
-Implemented canonical rules:
+Implemented rule set:
 
 - `majority_rule`
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`
+- `random_rule` (reference arm)
 
 ## Features
 

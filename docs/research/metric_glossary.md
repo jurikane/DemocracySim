@@ -27,6 +27,7 @@ Frozen aggregation semantics:
 
 | Metric ID | Definition | Source | Unit | Direction | Status |
 |---|---|---|---|---|---|
+| `mean_altruism_t` | mean altruistic-vote propensity over agents at step `t` | `steps.mean_altruism` | `0..1` | descriptive only | `implemented` |
 | `diversity_first_choice_entropy_t` | normalized entropy of first-choice ballot IDs | `votes.parquet` | `0..1` | higher = more diverse | `implemented` |
 | `dist_to_ref_utilitarian` | distance to utilitarian benchmark trajectory | analysis output | `0..1` | lower = closer | `implemented` |
 | `dist_to_ref_nash` | distance to nash benchmark trajectory | analysis output | `0..1` | lower = closer | `implemented` |
@@ -44,7 +45,7 @@ Frozen aggregation semantics:
 | `turnout_mean_over_time` | mean of `turnout_pct_t` over all recorded steps | `freeze-target pending` |
 | `turnout_late_mean` | mean over final 20% of steps | `freeze-target pending` |
 | `turnout_early_late_delta` | late mean minus early mean | `freeze-target pending` |
-| `turnout_volatility` | step-change volatility endpoint | `TODO-POST-IMPLEMENTATION` |
+| `turnout_volatility` | step-change volatility endpoint | `todo pending` |
 | `gini_assets_mean_over_time` | mean of `gini_assets_t` | `freeze-target pending` |
 | `gini_dissatisfaction_mean_over_time` | mean of `gini_dissatisfaction_t` | `freeze-target pending` |
 | `dist_to_reality_mean_over_time` | mean of `dist_to_reality_t` | `freeze-target pending` |
@@ -53,12 +54,10 @@ Rule-family status labels for inference:
 - canonical family: confirmatory
 - random-reference family: reference-only unless explicitly reclassified
 
-## Pending Implementation Dependencies
+## Freeze Status Notes
 
-- [ ] `ANALYSIS_ENDPOINTS` (owner: code)
-  - Implement/emit endpoint IDs promoted to required for final runs.
-- [ ] `GLOSSARY_LOCK_NOTE` (owner: thesis lead)
-  - Record final endpoint lock and family classification before freeze lock.
+- Endpoint IDs listed under freeze-target remain fixed once promoted to required thesis inference outputs.
+- Family classification remains fixed: canonical family is confirmatory, random-reference family is reference-only unless explicitly reclassified.
 
 ## Freeze Rule
 

@@ -43,6 +43,20 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "min_power_recovery_share_conflict": 0.02,
     "puzzle_dominance_share_score_low": 0.65,
     "puzzle_dominance_share_score_high": 0.90,
+    # Explicit lock-in recovery sequence detection (conflict-only):
+    # power lock-in episode (same dominant participant group + power-dominant margin)
+    # -> dominant-group altruism surge
+    # -> puzzle takes over (margin crosses positive) in forward window.
+    "lockin_episode_min_len_steps": 8.0,
+    "lockin_recovery_window_steps": 40.0,
+    "lockin_min_dominant_participant_share": 0.55,
+    "lockin_min_altruism_share": 0.80,
+    "lockin_min_altruism_lift": 0.12,
+    "lockin_margin_power_threshold": 0.0,
+    "lockin_margin_puzzle_recovery_threshold": 0.0,
+    # Soft-score shaping for lock-in recovery share.
+    "lockin_recovery_share_score_zero_at": 0.05,
+    "lockin_recovery_share_score_good_min": 0.40,
     # Turnout shape soft score (step-count independent; avoids deceptive mean-only scoring).
     "turnout_start_score_low": 30.0,
     "turnout_start_score_high": 70.0,
@@ -125,6 +139,35 @@ OPTIONAL_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
     "participant_share_mean_abs_drift_20_w",
     "participant_share_turnover_rate_w",
     "puzzle_dominance_share_conflict",
+    "lockin_recovery_share_conflict",
+)
+
+PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
+    "z_turnout_std",
+    "z_gini_std",
+    "z_dist_std",
+    "z_group_std",
+    "z_group_turnout_range",
+    "z_roll3_group_turnout_range",
+    "z_roll3_group_turnout_range_max",
+    "z_roll20_group_turnout_range",
+    "z_roll20_group_turnout_range_max",
+    "z_group_turnout_resid",
+    "z_pa_gap",
+    "z_group_pa_gap",
+    "z_winner_entropy",
+    "z_dist_nonzero_share",
+    "z_competitive_step_share",
+    "z_winner_changes",
+    "z_turnout_shape",
+    "z_q_delta_mean_stability",
+    "z_q_delta_late_stability",
+    "z_turnout_drop_stability",
+    "z_turnout_decline_stability",
+    "z_q_delta_group_dispersion_late",
+    "z_participant_composition_dynamics",
+    "z_puzzle_dom_balance_conflict",
+    "z_lockin_recovery_conflict",
 )
 
 REQUIRED_ROBUST_SCORING_COLUMNS: tuple[str, ...] = (
@@ -160,7 +203,14 @@ def load_selection_objective(path: Path | str) -> dict[str, Any]:
     payload = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Selection objective config must be a JSON object.")
-    allowed = {"version", "thresholds", "weights", "stage_weights", "strict_completeness"}
+    allowed = {
+        "version",
+        "thresholds",
+        "weights",
+        "stage_weights",
+        "strict_completeness",
+        "quality_component_weights",
+    }
     unknown = sorted(set(payload.keys()) - allowed)
     if unknown:
         raise ValueError(f"Unknown selection objective keys: {unknown}")
@@ -203,6 +253,24 @@ def load_selection_objective(path: Path | str) -> dict[str, Any]:
     if not isinstance(strict, bool):
         raise ValueError("strict_completeness must be a boolean.")
 
+    qcw_payload = payload.get("quality_component_weights", None)
+    qcw: dict[str, float] | None = None
+    if qcw_payload is not None:
+        if not isinstance(qcw_payload, dict):
+            raise ValueError("quality_component_weights must be a JSON object.")
+        qcw_raw: dict[str, float] = {}
+        for k, v in qcw_payload.items():
+            if k not in PRIMARY_QUALITY_COMPONENT_KEYS:
+                raise ValueError(f"Unknown quality_component_weights key: {k}")
+            qcw_raw[k] = float(v)
+        pos_total = float(sum(max(0.0, x) for x in qcw_raw.values()))
+        if pos_total <= 0.0:
+            raise ValueError("quality_component_weights must have positive total weight.")
+        qcw = {
+            k: (max(0.0, qcw_raw.get(k, 0.0)) / pos_total)
+            for k in PRIMARY_QUALITY_COMPONENT_KEYS
+        }
+
     return {
         "path": str(p),
         "version": payload.get("version"),
@@ -210,6 +278,7 @@ def load_selection_objective(path: Path | str) -> dict[str, Any]:
         "weights": w,
         "stage_weights": sw,
         "strict_completeness": bool(strict),
+        "quality_component_weights": qcw,
     }
 
 
@@ -444,62 +513,105 @@ def _compute_puzzle_power_metrics_for_run(
     burn_in_steps: int,
     conflict_min_dist: float,
 ) -> dict[str, float]:
+    step_tbl = _compute_puzzle_power_step_table(
+        run_dir=run_dir,
+        area_steps=area_steps,
+        agents=agents,
+        burn_in_steps=burn_in_steps,
+        conflict_min_dist=conflict_min_dist,
+    )
     out = {
         "puzzle_conflict_step_share": np.nan,
         "puzzle_dominance_share_conflict": np.nan,
         "power_recovery_share_conflict": np.nan,
         "puzzle_power_margin_mean_conflict": np.nan,
     }
-    if "puzzle_distance" not in area_steps.columns:
+    if step_tbl is None or len(step_tbl) == 0:
         return out
+    conflict = step_tbl["conflict"].to_numpy(dtype=bool)
+    out["puzzle_conflict_step_share"] = float(np.mean(conflict)) if conflict.size else np.nan
+    if not conflict.any():
+        return out
+    margin = pd.to_numeric(step_tbl.loc[conflict, "margin"], errors="coerce").to_numpy(dtype=float)
+    margin = margin[np.isfinite(margin)]
+    if margin.size == 0:
+        return out
+    out["puzzle_dominance_share_conflict"] = float(np.mean(margin > 0.0))
+    out["power_recovery_share_conflict"] = float(np.mean(margin < 0.0))
+    out["puzzle_power_margin_mean_conflict"] = float(np.mean(margin))
+    return out
+
+
+def _compute_puzzle_power_step_table(
+    *,
+    run_dir: Path,
+    area_steps: pd.DataFrame,
+    agents: pd.DataFrame,
+    burn_in_steps: int,
+    conflict_min_dist: float,
+) -> pd.DataFrame | None:
+    if "puzzle_distance" not in area_steps.columns:
+        return None
     puzzle_cols = [c for c in area_steps.columns if c.startswith("puzzle_color_")]
     if not puzzle_cols:
-        return out
+        return None
     try:
         meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
         static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
     except Exception:
-        return out
+        return None
     run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
     if str(run_meta.get("quality_target_mode", "reality")) != "puzzle":
-        return out
+        return None
     num_colors = int(static.get("num_colors", len(puzzle_cols)) or len(puzzle_cols))
     if num_colors <= 1:
-        return out
+        return None
     if "winning_option_id" not in area_steps.columns:
-        return out
+        return None
     has_puzzle_ids = "puzzle_ordering_id" in area_steps.columns
     need_pcols = [f"puzzle_color_{i}" for i in range(num_colors)]
     if not has_puzzle_ids and not all(c in area_steps.columns for c in need_pcols):
-        return out
+        return None
     power_ord = _current_rule_power_ordering_for_run(meta=meta, static=static, agents=agents, num_colors=num_colors)
     if power_ord is None:
-        return out
+        return None
 
     dist_func = _ordering_distance_func_from_meta(meta)
     search_pairs = list(itertools.combinations(range(int(num_colors)), 2))
     options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=np.int64)
-    df = area_steps.sort_values([c for c in ["step", "area_id"] if c in area_steps.columns]).copy()
-    df = df.loc[df["step"].astype(int) > int(burn_in_steps)].copy()
+    agg: dict[str, tuple[str, str]] = {
+        "winning_option_id": ("winning_option_id", "first"),
+        "puzzle_distance": ("puzzle_distance", "mean"),
+    }
+    if has_puzzle_ids:
+        agg["puzzle_ordering_id"] = ("puzzle_ordering_id", "first")
+    for c in need_pcols:
+        agg[c] = (c, "mean")
+    df = (
+        area_steps.groupby("step", as_index=False)
+        .agg(**agg)
+        .sort_values("step")
+        .reset_index(drop=True)
+    )
+    df = df.loc[pd.to_numeric(df["step"], errors="coerce").astype(float) > float(burn_in_steps)].copy()
     if df.empty:
-        return out
+        return None
     tie_rng = np.random.default_rng(int(run_meta.get("run_seed", 0)) + 31337)
     prev_pord: np.ndarray | None = None
-    d_out_puz: list[float] = []
-    d_out_pow: list[float] = []
-    d_puz_pow: list[float] = []
-    for _, row in df.iterrows():
-        oid = int(row.get("winning_option_id", -1))
-        if not (0 <= oid < int(options.shape[0])):
+    rows: list[dict[str, float | int | bool]] = []
+    for row in df.itertuples(index=False):
+        step = int(getattr(row, "step", -1))
+        oid = int(getattr(row, "winning_option_id", -1))
+        if step < 0 or not (0 <= oid < int(options.shape[0])):
             continue
         out_ord = np.asarray(options[oid], dtype=np.int64)
         pord: np.ndarray | None = None
         if has_puzzle_ids:
-            pid = int(row.get("puzzle_ordering_id", -1))
+            pid = int(getattr(row, "puzzle_ordering_id", -1))
             if 0 <= pid < int(options.shape[0]):
                 pord = np.asarray(options[pid], dtype=np.int64)
         if pord is None:
-            pvals = row[need_pcols].to_numpy(dtype=float)
+            pvals = np.asarray([getattr(row, c) for c in need_pcols], dtype=float)
             if not np.isfinite(pvals).all():
                 continue
             pord = distribution_to_ordering_tie_aware(
@@ -511,7 +623,7 @@ def _compute_puzzle_power_metrics_for_run(
             )
         prev_pord = pord
         # Reuse logged puzzle_distance if finite; otherwise recompute.
-        pd_logged = float(row.get("puzzle_distance", np.nan))
+        pd_logged = float(getattr(row, "puzzle_distance", np.nan))
         if np.isfinite(pd_logged):
             d_opuz = pd_logged
         else:
@@ -519,22 +631,208 @@ def _compute_puzzle_power_metrics_for_run(
         d_opow = float(dist_func(out_ord, power_ord, search_pairs))
         d_ppow = float(dist_func(pord, power_ord, search_pairs))
         if np.isfinite(d_opuz) and np.isfinite(d_opow) and np.isfinite(d_ppow):
-            d_out_puz.append(d_opuz)
-            d_out_pow.append(d_opow)
-            d_puz_pow.append(d_ppow)
-    if not d_puz_pow:
+            rows.append(
+                {
+                    "step": int(step),
+                    "winning_option_id": int(oid),
+                    "d_out_puz": float(d_opuz),
+                    "d_out_pow": float(d_opow),
+                    "d_puz_pow": float(d_ppow),
+                    "conflict": bool(d_ppow >= float(conflict_min_dist)),
+                    "margin": float(d_opow - d_opuz),
+                }
+            )
+    if not rows:
+        return None
+    return pd.DataFrame(rows).sort_values("step").reset_index(drop=True)
+
+
+def _compute_lockin_recovery_metrics_for_run(
+    *,
+    run_dir: Path,
+    area_steps: pd.DataFrame,
+    agents: pd.DataFrame,
+    burn_in_steps: int,
+    conflict_min_dist: float,
+    episode_min_len_steps: int,
+    recovery_window_steps: int,
+    min_dominant_participant_share: float,
+    min_altruism_share: float,
+    min_altruism_lift: float,
+    margin_power_threshold: float,
+    margin_puzzle_recovery_threshold: float,
+) -> dict[str, float]:
+    out = {
+        "lockin_episode_count_conflict": 0.0,
+        "lockin_altruism_surge_count_conflict": 0.0,
+        "lockin_recovery_event_count_conflict": 0.0,
+        "lockin_recovery_share_conflict": np.nan,
+        "lockin_altruism_surge_share_conflict": np.nan,
+        "lockin_recovery_lag_mean_steps_conflict": np.nan,
+    }
+    step_tbl = _compute_puzzle_power_step_table(
+        run_dir=run_dir,
+        area_steps=area_steps,
+        agents=agents,
+        burn_in_steps=burn_in_steps,
+        conflict_min_dist=conflict_min_dist,
+    )
+    if step_tbl is None or len(step_tbl) == 0:
         return out
-    a = np.asarray(d_out_puz, dtype=float)
-    b = np.asarray(d_out_pow, dtype=float)
-    c = np.asarray(d_puz_pow, dtype=float)
-    conflict = c >= float(conflict_min_dist)
-    out["puzzle_conflict_step_share"] = float(np.mean(conflict)) if conflict.size else np.nan
-    if not conflict.any():
+    steps_sorted = sorted(pd.to_numeric(step_tbl["step"], errors="coerce").dropna().astype(int).unique().tolist())
+    if not steps_sorted:
         return out
-    margin = b[conflict] - a[conflict]
-    out["puzzle_dominance_share_conflict"] = float(np.mean(margin > 0.0))
-    out["power_recovery_share_conflict"] = float(np.mean(margin < 0.0))
-    out["puzzle_power_margin_mean_conflict"] = float(np.mean(margin))
+
+    # Dominant participant group by step.
+    ap = agents.copy()
+    if "eligible_for_election" in ap.columns:
+        ap = ap.loc[ap["eligible_for_election"] == True]
+    req = {"step", "personality_group_idx", "participating"}
+    if not req <= set(ap.columns):
+        return out
+    gp = (
+        ap.groupby(["step", "personality_group_idx"], as_index=False)
+        .agg(participants=("participating", "sum"))
+        .sort_values(["step", "participants", "personality_group_idx"], ascending=[True, False, True])
+    )
+    if len(gp) == 0:
+        return out
+    totals = gp.groupby("step", as_index=False).agg(total_participants=("participants", "sum"))
+    top = gp.groupby("step", as_index=False).first()
+    dom = top.merge(totals, on="step", how="left")
+    dom["dominant_participant_share"] = np.where(
+        pd.to_numeric(dom["total_participants"], errors="coerce").to_numpy(dtype=float) > 0.0,
+        pd.to_numeric(dom["participants"], errors="coerce").to_numpy(dtype=float)
+        / pd.to_numeric(dom["total_participants"], errors="coerce").to_numpy(dtype=float),
+        np.nan,
+    )
+    dom = dom.rename(columns={"personality_group_idx": "dominant_group_idx"})
+
+    seq = step_tbl.merge(dom.loc[:, ["step", "dominant_group_idx", "dominant_participant_share"]], on="step", how="left")
+    seq["dominant_group_idx"] = pd.to_numeric(seq["dominant_group_idx"], errors="coerce")
+    if len(seq) == 0:
+        return out
+    seq = seq.sort_values("step").reset_index(drop=True)
+    step_rows = {int(r["step"]): r for _, r in seq.iterrows()}
+
+    cond_vals: list[tuple[int, int]] = []  # (step, dominant_group_idx)
+    for step in steps_sorted:
+        r = step_rows.get(int(step))
+        if r is None:
+            continue
+        conflict = bool(r.get("conflict", False))
+        margin = float(r.get("margin", np.nan))
+        dom_share = float(r.get("dominant_participant_share", np.nan))
+        dom_group = r.get("dominant_group_idx", np.nan)
+        if (not conflict) or (not np.isfinite(margin)) or (margin >= float(margin_power_threshold)):
+            continue
+        if (not np.isfinite(dom_share)) or (dom_share < float(min_dominant_participant_share)):
+            continue
+        if not np.isfinite(dom_group):
+            continue
+        cond_vals.append((int(step), int(dom_group)))
+
+    if not cond_vals:
+        return out
+
+    # Segment into episodes: consecutive steps with same dominant group.
+    episodes: list[tuple[int, int, int]] = []  # (start_step, end_step, dominant_group_idx)
+    seg_start, seg_prev, seg_group = cond_vals[0][0], cond_vals[0][0], cond_vals[0][1]
+    for step, grp in cond_vals[1:]:
+        if (step == seg_prev + 1) and (grp == seg_group):
+            seg_prev = step
+            continue
+        if (seg_prev - seg_start + 1) >= int(episode_min_len_steps):
+            episodes.append((seg_start, seg_prev, seg_group))
+        seg_start, seg_prev, seg_group = step, step, grp
+    if (seg_prev - seg_start + 1) >= int(episode_min_len_steps):
+        episodes.append((seg_start, seg_prev, seg_group))
+
+    n_episode = int(len(episodes))
+    if n_episode <= 0:
+        return out
+
+    # Dominant-group altruistic vote share by step (from vote logs), loaded only
+    # for runs that actually contain lock-in episodes.
+    votes_path = run_dir / "votes.parquet"
+    if not votes_path.exists():
+        return out
+    try:
+        votes = pd.read_parquet(votes_path)
+    except Exception:
+        return out
+    if not {"step", "agent_id", "voted_altruistically"} <= set(votes.columns):
+        return out
+    group_map = ap.loc[:, ["step", "agent_id", "personality_group_idx"]].drop_duplicates(
+        subset=["step", "agent_id"]
+    )
+    vm = votes.merge(group_map, on=["step", "agent_id"], how="left")
+    vm = vm.loc[vm["personality_group_idx"].notna()].copy()
+    if len(vm) == 0:
+        return out
+    vm["voted_altruistically"] = pd.to_numeric(vm["voted_altruistically"], errors="coerce")
+    altru = (
+        vm.groupby(["step", "personality_group_idx"], as_index=False)
+        .agg(group_altruism_share=("voted_altruistically", "mean"))
+    )
+    altru_lookup: dict[tuple[int, int], float] = {}
+    for row in altru.itertuples(index=False):
+        st = int(getattr(row, "step"))
+        gi = int(getattr(row, "personality_group_idx"))
+        av = float(getattr(row, "group_altruism_share"))
+        if np.isfinite(av):
+            altru_lookup[(st, gi)] = av
+
+    n_surge = 0
+    n_recovery = 0
+    lags: list[float] = []
+    for s0, s1, gidx in episodes:
+        ep_steps = range(int(s0), int(s1) + 1)
+        baseline_vals = np.asarray([altru_lookup.get((st, int(gidx)), np.nan) for st in ep_steps], dtype=float)
+        baseline = float(np.nanmean(baseline_vals))
+        if not np.isfinite(baseline):
+            baseline = 0.0
+        fut_lo = int(s1 + 1)
+        fut_hi = int(s1 + int(recovery_window_steps))
+        if fut_lo > fut_hi:
+            continue
+        fsteps = list(range(fut_lo, fut_hi + 1))
+        alt_series = np.asarray([altru_lookup.get((st, int(gidx)), np.nan) for st in fsteps], dtype=float)
+        alt_ok_mask = np.isfinite(alt_series) & (alt_series >= float(min_altruism_share)) & (
+            (alt_series - baseline) >= float(min_altruism_lift)
+        )
+        if not bool(np.any(alt_ok_mask)):
+            continue
+        n_surge += 1
+        first_surge_step = int(fsteps[int(np.argmax(alt_ok_mask))])
+        post = seq.loc[
+            (seq["step"] >= int(first_surge_step))
+            & (seq["step"] <= int(fut_hi))
+            & (seq["conflict"] == True)
+        ].copy()
+        if len(post) == 0:
+            continue
+        post_margin = pd.to_numeric(post["margin"], errors="coerce").to_numpy(dtype=float)
+        post_step = pd.to_numeric(post["step"], errors="coerce").to_numpy(dtype=float)
+        mask = np.isfinite(post_margin) & np.isfinite(post_step) & (
+            post_margin > float(margin_puzzle_recovery_threshold)
+        )
+        if not bool(np.any(mask)):
+            continue
+        rec_step = int(post_step[np.argmax(mask)])
+        n_recovery += 1
+        lags.append(float(rec_step - s1))
+
+    out["lockin_episode_count_conflict"] = float(n_episode)
+    out["lockin_altruism_surge_count_conflict"] = float(n_surge)
+    out["lockin_recovery_event_count_conflict"] = float(n_recovery)
+    out["lockin_altruism_surge_share_conflict"] = (
+        float(n_surge) / float(n_episode) if n_episode > 0 else np.nan
+    )
+    out["lockin_recovery_share_conflict"] = (
+        float(n_recovery) / float(n_episode) if n_episode > 0 else np.nan
+    )
+    out["lockin_recovery_lag_mean_steps_conflict"] = float(np.mean(lags)) if lags else np.nan
     return out
 
 
@@ -1021,6 +1319,13 @@ def collect_run_features(
     *,
     burn_in_steps: int = 0,
     puzzle_conflict_min_dist: float = DEFAULT_SCORING_THRESHOLDS["puzzle_conflict_min_dist"],
+    lockin_episode_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["lockin_episode_min_len_steps"]),
+    lockin_recovery_window_steps: int = int(DEFAULT_SCORING_THRESHOLDS["lockin_recovery_window_steps"]),
+    lockin_min_dominant_participant_share: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_dominant_participant_share"],
+    lockin_min_altruism_share: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_altruism_share"],
+    lockin_min_altruism_lift: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_altruism_lift"],
+    lockin_margin_power_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_power_threshold"],
+    lockin_margin_puzzle_recovery_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_puzzle_recovery_threshold"],
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for run_dir in sorted(doe_root.glob("design_*/rule_*/seed_*/run_0")):
@@ -1038,6 +1343,22 @@ def collect_run_features(
                 agents=agents,
                 burn_in_steps=int(burn_in_steps),
                 conflict_min_dist=float(puzzle_conflict_min_dist),
+            )
+        )
+        features.update(
+            _compute_lockin_recovery_metrics_for_run(
+                run_dir=run_dir,
+                area_steps=area,
+                agents=agents,
+                burn_in_steps=int(burn_in_steps),
+                conflict_min_dist=float(puzzle_conflict_min_dist),
+                episode_min_len_steps=int(lockin_episode_min_len_steps),
+                recovery_window_steps=int(lockin_recovery_window_steps),
+                min_dominant_participant_share=float(lockin_min_dominant_participant_share),
+                min_altruism_share=float(lockin_min_altruism_share),
+                min_altruism_lift=float(lockin_min_altruism_lift),
+                margin_power_threshold=float(lockin_margin_power_threshold),
+                margin_puzzle_recovery_threshold=float(lockin_margin_puzzle_recovery_threshold),
             )
         )
 
@@ -1167,6 +1488,8 @@ def score_designs(
     min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
     puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
     puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
+    lockin_recovery_share_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_zero_at"],
+    lockin_recovery_share_score_good_min: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_good_min"],
     turnout_start_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_low"],
     turnout_start_score_high: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_high"],
     turnout_end_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_end_score_low"],
@@ -1183,6 +1506,7 @@ def score_designs(
     participation_q_delta_late_mean_abs_zero_at: float = DEFAULT_SCORING_THRESHOLDS["participation_q_delta_late_mean_abs_zero_at"],
     turnout_drop_context_relief_strength: float = 0.60,
     turnout_decline_context_relief_strength: float = 0.60,
+    quality_component_weights: dict[str, float] | None = None,
     return_meta: bool = False,
 ) -> pd.DataFrame | tuple[pd.DataFrame, dict[str, Any]]:
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
@@ -1342,38 +1666,35 @@ def score_designs(
         low=float(puzzle_dominance_share_score_low),
         high=float(puzzle_dominance_share_score_high),
     )
-    primary["run_quality_raw"] = primary[
-        [
-            "z_turnout_std",
-            "z_gini_std",
-            "z_dist_std",
-            "z_group_std",
-            "z_group_turnout_range",
-            "z_roll3_group_turnout_range",
-            "z_roll3_group_turnout_range_max",
-            "z_roll20_group_turnout_range",
-            "z_roll20_group_turnout_range_max",
-            "z_group_turnout_resid",
-            "z_pa_gap",
-            "z_group_pa_gap",
-            "z_winner_entropy",
-            "z_dist_nonzero_share",
-            "z_competitive_step_share",
-            "z_winner_changes",
-            "z_turnout_shape",
-            "z_q_delta_mean_stability",
-            "z_q_delta_late_stability",
-            # Extra emphasis on sustained turnout shape quality (drop / monotone decline),
-            # beyond the aggregate turnout-shape score.
-            "z_turnout_drop_stability",
-            "z_turnout_decline_stability",
-            # Mild encouragement for group-differentiated participation learning drift (size-weighted, late-window).
-            "z_q_delta_group_dispersion_late",
-            # Mild encouragement for temporal reallocation in participant composition across groups.
-            "z_participant_composition_dynamics",
-            "z_puzzle_dom_balance_conflict",
-        ]
-    ].mean(axis=1)
+    primary["z_lockin_recovery_conflict"] = _lower_bound_pref01(
+        pd.to_numeric(primary["lockin_recovery_share_conflict"], errors="coerce"),
+        zero_at=float(lockin_recovery_share_score_zero_at),
+        good_min=float(lockin_recovery_share_score_good_min),
+    )
+    quality_components = list(PRIMARY_QUALITY_COMPONENT_KEYS)
+    quality_values = primary[quality_components].copy()
+    if quality_component_weights is None:
+        primary["run_quality_raw"] = quality_values.mean(axis=1)
+        effective_qcw = {k: 1.0 / float(len(quality_components)) for k in quality_components}
+    else:
+        # Normalize provided weights over known components and compute row-wise
+        # weighted means with NaN-robust denominator.
+        w_arr = np.asarray(
+            [max(0.0, float(quality_component_weights.get(k, 0.0))) for k in quality_components],
+            dtype=float,
+        )
+        w_sum = float(np.sum(w_arr))
+        if not np.isfinite(w_sum) or w_sum <= 0.0:
+            w_arr = np.full(len(quality_components), 1.0 / float(len(quality_components)), dtype=float)
+        else:
+            w_arr = w_arr / w_sum
+        vals = quality_values.to_numpy(dtype=float)
+        finite = np.isfinite(vals)
+        num = np.nansum(vals * w_arr[None, :], axis=1)
+        den = np.sum(finite * w_arr[None, :], axis=1)
+        raw = np.divide(num, den, out=np.zeros_like(num), where=den > 0.0)
+        primary["run_quality_raw"] = pd.Series(raw, index=primary.index, dtype=float)
+        effective_qcw = {k: float(w_arr[i]) for i, k in enumerate(quality_components)}
     primary["run_quality_viable"] = np.where(primary["passes_hard_gates"], primary["run_quality_raw"], np.nan)
 
     by_design = (
@@ -1486,6 +1807,7 @@ def score_designs(
                 "viability": float(s_viability),
                 "quality_bundle": float(s_quality),
             },
+            "effective_quality_component_weights": effective_qcw,
             "required_primary_runs": (
                 None if required_primary_runs is None else int(required_primary_runs)
             ),
@@ -1512,6 +1834,7 @@ def analyze_doe_root(
     thresholds: dict[str, float] | None = None,
     weights: dict[str, float] | None = None,
     stage_weights: dict[str, float] | None = None,
+    quality_component_weights: dict[str, float] | None = None,
     strict_completeness: bool | None = None,
 ) -> dict[str, Path]:
     root = Path(doe_root)
@@ -1524,6 +1847,7 @@ def analyze_doe_root(
         thr = dict(objective_payload["thresholds"])
         w = dict(objective_payload["weights"])
         sw = dict(objective_payload["stage_weights"])
+        qcw = objective_payload.get("quality_component_weights")
         strict_flag = (
             bool(objective_payload["strict_completeness"])
             if strict_completeness is None
@@ -1533,6 +1857,7 @@ def analyze_doe_root(
         thr = dict(DEFAULT_SCORING_THRESHOLDS)
         w = dict(DEFAULT_SCORING_WEIGHTS)
         sw = dict(DEFAULT_STAGE_WEIGHTS)
+        qcw = None
         strict_flag = True if strict_completeness is None else bool(strict_completeness)
 
     if thresholds is not None:
@@ -1541,11 +1866,20 @@ def analyze_doe_root(
         w.update(dict(weights))
     if stage_weights is not None:
         sw.update(dict(stage_weights))
+    if quality_component_weights is not None:
+        qcw = dict(quality_component_weights)
 
     rf = collect_run_features(
         root,
         burn_in_steps=int(burn_in_steps),
         puzzle_conflict_min_dist=float(thr["puzzle_conflict_min_dist"]),
+        lockin_episode_min_len_steps=int(thr["lockin_episode_min_len_steps"]),
+        lockin_recovery_window_steps=int(thr["lockin_recovery_window_steps"]),
+        lockin_min_dominant_participant_share=float(thr["lockin_min_dominant_participant_share"]),
+        lockin_min_altruism_share=float(thr["lockin_min_altruism_share"]),
+        lockin_min_altruism_lift=float(thr["lockin_min_altruism_lift"]),
+        lockin_margin_power_threshold=float(thr["lockin_margin_power_threshold"]),
+        lockin_margin_puzzle_recovery_threshold=float(thr["lockin_margin_puzzle_recovery_threshold"]),
     )
     gated = apply_hard_gates(
         rf,
@@ -1603,6 +1937,8 @@ def analyze_doe_root(
         min_competitive_step_share=float(thr["min_competitive_step_share"]),
         puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
         puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
+        lockin_recovery_share_score_zero_at=float(thr["lockin_recovery_share_score_zero_at"]),
+        lockin_recovery_share_score_good_min=float(thr["lockin_recovery_share_score_good_min"]),
         turnout_start_score_low=float(thr["turnout_start_score_low"]),
         turnout_start_score_high=float(thr["turnout_start_score_high"]),
         turnout_end_score_low=float(thr["turnout_end_score_low"]),
@@ -1617,6 +1953,7 @@ def analyze_doe_root(
         participation_q_delta_mean_abs_zero_at=float(thr["participation_q_delta_mean_abs_zero_at"]),
         participation_q_delta_late_mean_abs_good_max=float(thr["participation_q_delta_late_mean_abs_good_max"]),
         participation_q_delta_late_mean_abs_zero_at=float(thr["participation_q_delta_late_mean_abs_zero_at"]),
+        quality_component_weights=qcw,
         return_meta=True,
     )
 
@@ -1646,9 +1983,11 @@ def analyze_doe_root(
                 "thresholds": thr,
                 "weights": w,
                 "stage_weights": sw,
+                "quality_component_weights": qcw,
                 "strict_completeness": bool(strict_flag),
                 "effective_weights": score_meta["effective_weights"],
                 "effective_stage_weights": score_meta["effective_stage_weights"],
+                "effective_quality_component_weights": score_meta["effective_quality_component_weights"],
                 "discriminability_active": bool(score_meta["discriminability_active"]),
                 "required_primary_runs": score_meta["required_primary_runs"],
                 "required_matched_seed_pairs": score_meta["required_matched_seed_pairs"],
@@ -1685,6 +2024,7 @@ def analyze_doe_root(
                     "participant_share_mean_abs_drift_20_w (mild, size-weighted)",
                     "participant_share_turnover_rate_w (mild, size-weighted)",
                     "puzzle_dominance_share_conflict",
+                    "lockin_recovery_share_conflict (episode: dominant power lock-in -> altruism surge -> puzzle recovery)",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",
             },

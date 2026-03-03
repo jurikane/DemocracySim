@@ -25,7 +25,10 @@ This creates a structured free-rider tension.
 
 ## 2. Why Fees and Rewards Are Not Absolute but Relative to Assets
 
-This was a conscious choice to account for relative nature of effort and reward. We do not try to model the influance of wealth and power onto a democratic process but rather motivational resources and psychological reward driven behaviours which come closer to relative values than dealing with absolute differences among agents. The absolute differences are interesting for analytical comparison.
+This was a conscious choice to account for the relative nature of effort and reward.
+The model does not attempt to represent direct real-world wealth-power effects.
+Instead, it models motivational resources and reward pressure in relative terms.
+Absolute differences still remain analytically visible and comparable.
 
 ## 3. Why Pure Individual Reward Learning Is Weak Here
 
@@ -50,7 +53,7 @@ Per-agent signal:
 - participant fee term: `fee_component_i = - participation_signal_fee_weight * fee_rel_i`
 - abstainer fee term: `fee_component_i = 0`
 
-## 5. Update direction for participants and abstainers"
+## 5. Update Direction for Participants and Abstainers
 
 In this baseline mode, for every eligible agent `i` (participant or abstainer):
 

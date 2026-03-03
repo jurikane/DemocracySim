@@ -1,6 +1,4 @@
-# Thesis Model Concepts (Draft)
-
-Status: concept overview draft for thesis writing alignment.
+# Thesis Model Concepts
 
 This document explains the conceptual logic behind the simulation as currently implemented.
 It is intentionally narrative and causal (not only metric/schema focused).
@@ -118,7 +116,7 @@ Therefore, the implemented participation-learning mode (`group_relative_delta_re
 - group relative performance vs other groups
 - group-size shrinkage
 - explicit participant fee salience
-- direct q-space update for all eligible agents:
+- direct q-space updates for all eligible agents:
   - for each eligible agent `i`, `q_i <- q_i + participation_alpha * signal_i`
   - participants and abstainers both receive the group-relative component
   - participants additionally receive a fee penalty component in `signal_i`
@@ -143,8 +141,6 @@ This creates tension between:
 Voting rules are expected to affect this balance by how they aggregate mixed ballots under heterogeneous groups.
 
 Attractor Design Intuition (Hypothetical):
-
-X. Attractor Design Intuition (Hypothetical)
 
 The puzzle’s "rewardable direction" drifts randomly overall.
 If the grid state yields high satisfaction, agents vote more puzzle-aligned (via altruism), so outcomes tend to track that random drift rather than being pulled toward fixed group extremes.

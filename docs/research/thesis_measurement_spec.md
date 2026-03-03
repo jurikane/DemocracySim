@@ -50,6 +50,7 @@ Not emitted in current sidecar summary:
 
 ### Current secondary descriptive metrics
 
+- `mean_altruism_t` from `steps.mean_altruism` (mechanism diagnostic; non-confirmatory)
 - `diversity_first_choice_entropy_t` from `votes.rank_1_option_id`
 - `dist_to_ref_*` benchmark trajectories (analysis artifacts; not runtime schema columns)
   - `dist_to_ref_utilitarian`
@@ -60,6 +61,8 @@ Not emitted in current sidecar summary:
   - `dist_to_ref_egalitarian_lam400`
 
 These are descriptive benchmark comparisons, not normative optimality claims.
+
+Group-level descriptive diagnostics (non-confirmatory) may additionally be computed in analysis artifacts to inspect majority/minority participation composition over time.
 
 ### Current benchmark reference computation contract
 
@@ -125,13 +128,9 @@ Status in freeze-target:
 - Sidecar summary (`summary_stats.json`) describes currently emitted implementation outputs.
 - Thesis inference outputs may extend beyond sidecar keys, but must be computed from logged artifacts with fixed formulas.
 
-## Pending Implementation Dependencies
+## Implementation Status Notes
 
-- [ ] `ANALYSIS_ENDPOINTS` (owner: code)
-  - Implement promoted freeze-target endpoints not currently emitted (if marked required before final runs).
-- [ ] `VOLATILITY_ENDPOINTS` (owner: code, status: `TODO-POST-IMPLEMENTATION`)
-  - Add volatility endpoints only if promoted from TODO to required.
-- [x] `DOC_SYNC_TESTS` (owner: code/docs)
-  - Contract checks added to ensure documented current summary keys match emitted `summary_stats` keys.
-- [ ] `INFERENCE_FREEZE_NOTE` (owner: thesis lead)
-  - Record final endpoint list and multiplicity protocol in freeze note before final-run execution.
+- Sidecar summary keys are intentionally limited to currently emitted implementation outputs.
+- Freeze-target inference endpoints are fixed at the formula level and are computed in the thesis inference layer from logged artifacts.
+- Volatility endpoints remain optional and are promoted only if explicitly required before final runs.
+- Final endpoint and multiplicity lock-in is recorded in internal freeze notes before final execution.

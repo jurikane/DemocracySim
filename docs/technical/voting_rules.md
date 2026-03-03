@@ -5,18 +5,20 @@ the primary independent variable (voting rule), rule semantics, and logging iden
 
 ## Rule Set
 
-Implemented canonical rules:
+Implemented rule set:
 
 - `majority_rule`
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`
+- `random_rule` (reference arm)
 
 Additional non-baseline variant available:
 
 - `approval_voting_custom` (adaptive `mean-variance` threshold mapping)
 
 For baseline thesis experiments, the voting rule is the only intentionally varied independent variable.
+Canonical confirmatory reporting and random-reference reporting are separated in the thesis inference layer.
 
 ## Rule Input/Output Contract
 
@@ -84,3 +86,4 @@ Fairness / invariance / determinism:
 - `tests/test_tie_break_fairness.py`
 - `tests/test_rule_label_permutation_invariance.py`
 - `tests/test_rule_tie_seed_contract.py`
+- `tests/test_random_rule_contract.py`

@@ -84,7 +84,7 @@ the learning signal is:
 signal <- delta_rel
 ```
 
-### `group_centered_delta_rel_plus_fee` (current experimental alternative)
+### `group_centered_delta_rel_plus_fee` (legacy experimental alternative)
 
 Let `mu_g` be the mean `delta_rel` of eligible agents in group `g` for the current step,
 and `mu_groups` the mean of those group means (equal-weighted across groups).
@@ -96,9 +96,9 @@ signal_i          = clip(group_component_g + fee_component_i, ±participation_si
 ```
 
 This mode is intended to reduce step-wide common shock dominance (e.g. puzzle gate good/bad)
-while preserving fee/free-rider tension in the learning signal.
+while preserving stricter action signed fee/free-rider tension in the learning signal.
 
-### `group_relative_delta_rel_party` (party-relative alternative)
+### `group_relative_delta_rel_party` (thesis baseline)
 
 Let `mu_g` be the mean `delta_rel` of eligible agents in group `g` for the current step,
 and `mu_groups` the mean of those group means (equal-weighted across groups).

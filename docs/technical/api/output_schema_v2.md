@@ -193,15 +193,13 @@ Vote signal table (participants only). This is the single source of
 ## Freeze-Target Contract (Decided, May Include Pending Items)
 
 - Schema-v2 remains structurally stable for thesis freeze (no field pruning as cleanup strategy).
-- Random reference arm (`rule_idx=4`) may be added without schema-structure changes.
+- Random reference arm (`rule_idx=4`) is included without schema-structure changes.
 - Runtime artifact contract remains:
   - typed parquet static overlays are authoritative (`static_cell_areas.parquet`, `static_cell_agents.parquet`)
   - first and last election-time grids are always present
   - step-0 pre-election grid is optional and controlled by `store_grid`
 
-## Pending Implementation Dependencies
+## Contract Maintenance Notes
 
-- [ ] `DOC_SYNC_TESTS` (owner: code/docs)
-  - Add checks that documented run-layout/summary contracts match emitted artifacts.
-- [ ] `RANDOM_RULE_METADATA` (owner: code)
-  - Ensure metadata mappings (`rule_idx`, `rule_name`, `rule_impl_name`) include new random arm safely.
+- Keep metadata mappings (`rule_idx`, `rule_name`, `rule_impl_name`) synchronized for all rule IDs.
+- Keep run-layout documentation synchronized with emitted artifacts and schema validators.

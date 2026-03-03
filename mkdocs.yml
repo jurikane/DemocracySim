@@ -15,12 +15,17 @@ nav:
     - Teaser: teaser.md
     - Research:
         - Thesis Contract: research/thesis_contract.md
-        - Execution Scope Freeze (M0): research/execution_scope_freeze.md
+        - Thesis Model Concepts: research/thesis_model_concepts.md
+        - Concept Deep Dives:
+            - Grid State Concept: research/grid_state_concept.md
+            - Puzzle Quality Gate Concept: research/puzzle_quality_gate_concept.md
+            - Satisfaction to Altruistic Voting: research/satisfaction_altruistic_voting_concept.md
+            - Participation Dilemma and Group Learning: research/participation_dilemma_and_group_learning_concept.md
+            - Group-Relative Participation Learning: research/participation_learning_group_relative_party_mode.md
+            - Dynamics and Rule Interaction: research/dynamics_rule_interaction_concept.md
         - Thesis Measurement Spec: research/thesis_measurement_spec.md
         - Metric Glossary: research/metric_glossary.md
-        - Broader Concept: research/research_concept.md
-        - (All) Metrics: research/metrics.md
-        - Future Goals: research/goals.md
+        - Execution Scope Freeze (M0): research/execution_scope_freeze.md
     - Technical:
         - Overview: technical/technical_overview.md
         - Semantics, Representations & RNG: technical/semantics_representation_rng.md
@@ -41,6 +46,7 @@ nav:
             - Voting Agent: technical/api/VoteAgent.md
             - Inherited Classes: technical/api/inherited.md
             - Utility Functions: technical/api/utility_functions.md
+            - Output Schema V2: technical/api/output_schema_v2.md
         #- User Guide: technical/user_guide.md #1. Provide step-by-step guides for common project usage.
         #- Examples: technical/examples.md #1. Show key use cases via practical code examples or interactive demos.
         #- Developer Docs: technical/dev_docs.md #Offer guidelines for contributing or extending the project (e.g., folder structure, conventions, CI/CD pipelines).
