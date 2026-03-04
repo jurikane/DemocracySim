@@ -7,6 +7,9 @@ import sys
 
 from src.analysis.summary_tooling import (
     generate_run_summary_batch2,
+    SUMMARY_PROFILE_FULL,
+    SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
+    SUMMARY_PROFILE_THESIS_CORE,
 )
 from src.utils.run_path_picker import (
     normalize_selected_run_dir,
@@ -42,6 +45,17 @@ def main() -> None:
         action="store_true",
         help="Disable benchmark reference cache reuse.",
     )
+    parser.add_argument(
+        "--profile",
+        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT, SUMMARY_PROFILE_THESIS_CORE),
+        default=SUMMARY_PROFILE_FULL,
+        help=(
+            "Summary render profile: "
+            "'full' keeps all pages, "
+            "'debug_doe_compact' keeps DOE review pages, "
+            "'thesis_core' currently aliases full."
+        ),
+    )
     args = parser.parse_args()
 
     run_dir = resolve_run_dir(args.run_dir) if args.run_dir is not None else pick_run_dir_interactive(action_label="summarize")
@@ -62,6 +76,7 @@ def main() -> None:
         run_dir=run_dir,
         out_dir=args.out_dir,
         mode=args.mode,
+        profile=args.profile,
         use_cache=not args.no_cache,
     )
     print(f"Wrote: {artifacts.global_series_csv}")

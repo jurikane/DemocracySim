@@ -103,6 +103,10 @@ Run-level summaries are generated from logged artifacts only:
 python -m scripts.generate_summary --run-dir <path_to_run_dir>
 ```
 
+Canonical visualization planning/inventory (thesis-first):
+
+- `docs/research/visualization_insight_inventory.md`
+
 Mode selection:
 
 - `--mode full` (default): compute all benchmark families (`utilitarian`, `nash`, `rawlsian`, `egalitarian` + sensitivity)

@@ -95,6 +95,15 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
         "dist_to_ref_egalitarian_lam025",
         "dist_to_ref_egalitarian_lam400",
         "diversity_first_choice_entropy",
+        "altruistic_rank1_match_puzzle_share",
+        "non_altruistic_rank1_match_puzzle_share",
+        "altruistic_rank1_match_outcome_share",
+        "non_altruistic_rank1_match_outcome_share",
+        "altruistic_votes_count",
+        "non_altruistic_votes_count",
+        "vote_count_total",
+        "altruistic_vote_share",
+        "non_altruistic_vote_share",
     }
     assert area_required.issubset(set(area_df.columns))
     assert stats["shape"]["num_steps"] == len(global_df)

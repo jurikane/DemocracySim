@@ -30,6 +30,7 @@ from src.analysis.reference_benchmarks import (
     rawlsian_ref_minimax_l2sq,
     egalitarian_refs_mean_plus_lambda_gini,
 )
+from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
 from src.utils.representations import distribution_to_ordering_tie_aware
@@ -51,8 +52,39 @@ SUMMARY_MODE_FULL = "full"
 SUMMARY_MODE_FAST = "fast"
 _SUMMARY_MODES = {SUMMARY_MODE_FULL, SUMMARY_MODE_FAST}
 
+SUMMARY_PROFILE_FULL = "full"
+SUMMARY_PROFILE_DEBUG_DOE_COMPACT = "debug_doe_compact"
+SUMMARY_PROFILE_THESIS_CORE = "thesis_core"
+_SUMMARY_PROFILES = {
+    SUMMARY_PROFILE_FULL,
+    SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
+    SUMMARY_PROFILE_THESIS_CORE,
+}
+
+
+@dataclass(frozen=True)
+class _SummaryRenderProfile:
+    name: str
+    global_colors_and_grids: bool
+    global_static_overview: bool
+    global_per_area_group_distribution: bool
+    global_core_metrics: bool
+    global_distance_metrics: bool
+    area_core_page: bool
+    area_puzzle_page: bool
+    area_vote_mode_alignment_page: bool
+    area_group_opportunity_page: bool
+    area_puzzle_gate_page: bool
+    area_group_diagnostics_pages: bool
+    area_assets_page: bool
+    area_group_means_page: bool
+    area_dist_to_ref_page: bool
+
 _Y_PAD_UNIT = 0.02
 _Y_PAD_PERCENT = 1.5
+_SMOOTH_WINDOW_STEPS = 9
+_MODE_ALIGNMENT_LOW_SUPPORT_VOTES = 5
+_SMALL_GROUP_MIN_RESIDENTS = 5
 
 
 def _set_unit_ylim_visible(ax, *, pad: float = _Y_PAD_UNIT) -> None:
@@ -63,6 +95,21 @@ def _set_unit_ylim_visible(ax, *, pad: float = _Y_PAD_UNIT) -> None:
 def _set_percent_ylim_visible(ax, *, pad: float = _Y_PAD_PERCENT) -> None:
     """Bounded [0,100] axis with a tiny pad so flat lines at 0/100 stay visible."""
     ax.set_ylim(-float(pad), 100.0 + float(pad))
+
+
+def _rolling_mean_nan(values: np.ndarray, *, window: int = _SMOOTH_WINDOW_STEPS) -> np.ndarray:
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    if arr.size == 0:
+        return arr
+    w = max(1, int(window))
+    if w <= 1:
+        return arr
+    return (
+        pd.Series(arr, dtype=float)
+        .rolling(window=w, min_periods=1, center=True)
+        .mean()
+        .to_numpy(dtype=float)
+    )
 
 
 def list_summary_pdfs_in_recommended_view_order(out_dir: Path) -> list[Path]:
@@ -176,6 +223,7 @@ def generate_run_summary_batch2(
     out_dir: Path | None = None,
     *,
     mode: str = SUMMARY_MODE_FULL,
+    profile: str = SUMMARY_PROFILE_FULL,
     use_cache: bool = True,
 ) -> RunSummaryArtifacts:
     """Generate batch-1 sidecars plus batch-2 run-level PDFs.
@@ -187,6 +235,7 @@ def generate_run_summary_batch2(
     base = generate_run_summary_batch1(run_dir=run_dir, out_dir=out_dir, mode=mode, use_cache=use_cache)
     run_dir = Path(run_dir)
     _validate_summary_mode(mode)
+    _validate_summary_profile(profile)
 
     global_series = pd.read_csv(base.global_series_csv).sort_values("step").reset_index(drop=True)
     area_series = pd.read_csv(base.area_series_csv).sort_values(["step", "area_id"]).reset_index(drop=True)
@@ -205,11 +254,16 @@ def generate_run_summary_batch2(
         use_cache=use_cache,
     )
     refs_global = refs_payload["global"]
+    render_profile = _resolve_summary_render_profile(
+        profile=profile,
+        num_areas=int(area_series["area_id"].nunique()) if "area_id" in area_series.columns else 0,
+    )
     area_group_series = _build_area_group_series(
         agents=agents,
         votes=votes,
         area_agent_ids=area_agent_ids,
         participation_alpha=_load_participation_alpha_for_run(run_dir=run_dir),
+        participation_signal_mode=_load_participation_signal_mode_for_run(run_dir=run_dir),
         altruism_alpha=_load_altruism_alpha_for_run(run_dir=run_dir),
         altruism_learning=_load_altruism_learning_for_run(run_dir=run_dir),
     )
@@ -228,14 +282,17 @@ def generate_run_summary_batch2(
         static=static,
         meta=meta,
         refs_global=refs_global,
+        render_profile=render_profile,
     )
     _render_area_detail_pdfs(
+        run_dir=run_dir,
         out_dir=base.out_dir,
         area_series=area_series,
         area_group_series=area_group_series,
         static=static,
         meta=meta,
         refs_by_area=refs_payload["areas"],
+        render_profile=render_profile,
     )
 
     return RunSummaryArtifacts(
@@ -418,6 +475,11 @@ def _build_area_series(
             "non_altruistic_rank1_match_puzzle_share",
             "altruistic_rank1_match_outcome_share",
             "non_altruistic_rank1_match_outcome_share",
+            "altruistic_votes_count",
+            "non_altruistic_votes_count",
+            "vote_count_total",
+            "altruistic_vote_share",
+            "non_altruistic_vote_share",
         ):
             a[c] = np.float32(np.nan)
 
@@ -459,6 +521,11 @@ def _compute_area_vote_mode_alignment_series(
                 "non_altruistic_rank1_match_puzzle_share",
                 "altruistic_rank1_match_outcome_share",
                 "non_altruistic_rank1_match_outcome_share",
+                "altruistic_votes_count",
+                "non_altruistic_votes_count",
+                "vote_count_total",
+                "altruistic_vote_share",
+                "non_altruistic_vote_share",
             ]
         )
     req_vote = {"step", "area_id", "agent_id", "rank_1_option_id", "voted_altruistically"}
@@ -527,8 +594,17 @@ def _compute_area_vote_mode_alignment_series(
     rows_out: list[dict[str, Any]] = []
     for (step, area_id), block in v.groupby(["step", "area_id"], sort=True):
         row: dict[str, Any] = {"step": int(step), "area_id": int(area_id)}
+        total_votes = int(len(block))
+        row["vote_count_total"] = int(total_votes)
         for mode_val, prefix in ((True, "altruistic"), (False, "non_altruistic")):
             m = block[block["voted_altruistically"] == mode_val]
+            mode_count = int(len(m))
+            row[f"{prefix}_votes_count"] = int(mode_count)
+            row[f"{prefix}_vote_share"] = (
+                np.float32(100.0 * (float(mode_count) / float(total_votes)))
+                if total_votes > 0
+                else np.float32(np.nan)
+            )
             if len(m) > 0:
                 row[f"{prefix}_rank1_match_outcome_share"] = np.float32(100.0 * float(m["match_outcome"].mean()))
                 # Only meaningful if puzzle option id exists for that row's step.
@@ -578,6 +654,7 @@ def _build_area_group_series(
     votes: pd.DataFrame,
     area_agent_ids: dict[int, list[int]],
     participation_alpha: float = 1.0,
+    participation_signal_mode: str = "raw_delta_rel",
     altruism_alpha: float = 1.0,
     altruism_learning: bool = True,
 ) -> pd.DataFrame:
@@ -856,16 +933,20 @@ def _build_area_group_series(
         np.nan,
     ).astype("float32")
     alpha = float(participation_alpha) if np.isfinite(participation_alpha) else 1.0
+    mode = str(participation_signal_mode).strip()
     resident_eligible = residents["assets"].to_numpy(dtype=float) > 0.0
-    residents["participation_q_update_proxy"] = np.where(
-        resident_eligible,
-        alpha
-        * np.where(
+    p_signal = residents["participation_signal"].to_numpy(dtype=float)
+    if mode == "group_relative_delta_rel_party":
+        q_push_proxy = p_signal
+    else:
+        q_push_proxy = np.where(
             residents["participating"].astype(bool).to_numpy(),
             1.0,
             -1.0,
-        )
-        * residents["participation_signal"].to_numpy(dtype=float),
+        ) * p_signal
+    residents["participation_q_update_proxy"] = np.where(
+        resident_eligible,
+        alpha * q_push_proxy,
         np.nan,
     ).astype("float32")
     altruism_alpha_eff = float(altruism_alpha) if np.isfinite(altruism_alpha) else 1.0
@@ -1373,6 +1454,72 @@ def _validate_summary_mode(mode: str) -> None:
         raise ValueError(f"Invalid summary mode '{mode}'. Allowed: {allowed}")
 
 
+def _validate_summary_profile(profile: str) -> None:
+    if profile not in _SUMMARY_PROFILES:
+        allowed = ", ".join(sorted(_SUMMARY_PROFILES))
+        raise ValueError(f"Invalid summary profile '{profile}'. Allowed: {allowed}")
+
+
+def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _SummaryRenderProfile:
+    _validate_summary_profile(profile)
+    if profile == SUMMARY_PROFILE_FULL:
+        return _SummaryRenderProfile(
+            name=profile,
+            global_colors_and_grids=True,
+            global_static_overview=True,
+            global_per_area_group_distribution=True,
+            global_core_metrics=True,
+            global_distance_metrics=True,
+            area_core_page=True,
+            area_puzzle_page=True,
+            area_vote_mode_alignment_page=True,
+            area_group_opportunity_page=True,
+            area_puzzle_gate_page=False,
+            area_group_diagnostics_pages=True,
+            area_assets_page=True,
+            area_group_means_page=True,
+            area_dist_to_ref_page=True,
+        )
+    if profile == SUMMARY_PROFILE_DEBUG_DOE_COMPACT:
+        # For single-area DOE packets, global/area core pages are mostly duplicates.
+        is_single_area = int(num_areas) <= 1
+        return _SummaryRenderProfile(
+            name=profile,
+            global_colors_and_grids=False,
+            global_static_overview=False,
+            global_per_area_group_distribution=False,
+            global_core_metrics=True,
+            global_distance_metrics=True,
+            area_core_page=(not is_single_area),
+            area_puzzle_page=True,
+            area_vote_mode_alignment_page=True,
+            area_group_opportunity_page=True,
+            area_puzzle_gate_page=True,
+            area_group_diagnostics_pages=False,
+            area_assets_page=False,
+            area_group_means_page=False,
+            area_dist_to_ref_page=False,
+        )
+    # Placeholder profile: keep full behavior until thesis-core packet is implemented.
+    return _SummaryRenderProfile(
+        name=profile,
+        global_colors_and_grids=True,
+        global_static_overview=True,
+        global_per_area_group_distribution=True,
+        global_core_metrics=True,
+        global_distance_metrics=True,
+        area_core_page=True,
+        area_puzzle_page=True,
+        area_vote_mode_alignment_page=True,
+        area_group_opportunity_page=True,
+        area_puzzle_gate_page=False,
+        area_group_diagnostics_pages=True,
+        area_assets_page=True,
+        area_group_means_page=True,
+        area_dist_to_ref_page=True,
+    )
+
+
 @dataclass(frozen=True)
 class _ModelCfgParseResult:
     ok: bool
@@ -1485,6 +1632,21 @@ def _load_participation_alpha_for_run(*, run_dir: Path) -> float:
 def _load_altruism_alpha_for_run(*, run_dir: Path) -> float:
     """Load model.altruism_alpha from config_used.yaml (strict)."""
     return _load_required_finite_float_for_run(run_dir=run_dir, field="altruism_alpha")
+
+
+def _load_participation_signal_mode_for_run(*, run_dir: Path) -> str:
+    """Load model.participation_signal_mode from config_used.yaml (strict)."""
+    model_cfg = _load_model_cfg_for_run(run_dir=run_dir)
+    field = "participation_signal_mode"
+    if field not in model_cfg:
+        raise RuntimeError(f"Missing required model config field '{field}' in config_used.yaml")
+    raw = model_cfg[field]
+    if not isinstance(raw, str):
+        raise RuntimeError(f"Invalid model config field '{field}': expected str, got {type(raw).__name__}")
+    value = raw.strip()
+    if not value:
+        raise RuntimeError(f"Invalid model config field '{field}': empty string")
+    return value
 
 
 def _load_altruism_learning_for_run(*, run_dir: Path) -> bool:
@@ -1992,24 +2154,26 @@ def _render_combined_global_summary_pdf(
     static: dict[str, Any],
     meta: dict[str, Any],
     refs_global: dict[str, np.ndarray | None],
+    render_profile: _SummaryRenderProfile,
 ) -> None:
     with PdfPages(out_pdf) as pdf:
-        # Page 1 first: fixed reference optima + global color curves + grid snapshots
-        _render_global_colors_and_grids_page(
-            pdf=pdf,
-            run_dir=run_dir,
-            global_series=global_series,
-            steps=steps,
-            static=static,
-            refs_global=refs_global,
-        )
-        # Then static overview page(s)
-        _append_static_overview_pages(pdf=pdf, static=static, meta=meta)
-        # Extra page(s): per-area "group with global-style distribution" panels.
-        _append_per_area_group_distribution_pages(pdf=pdf, static=static, meta=meta)
-        # Then remaining global pages
-        _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta)
-        _render_global_distance_page(pdf=pdf, global_series=global_series)
+        if render_profile.global_colors_and_grids:
+            _render_global_colors_and_grids_page(
+                pdf=pdf,
+                run_dir=run_dir,
+                global_series=global_series,
+                steps=steps,
+                static=static,
+                refs_global=refs_global,
+            )
+        if render_profile.global_static_overview:
+            _append_static_overview_pages(pdf=pdf, static=static, meta=meta)
+        if render_profile.global_per_area_group_distribution:
+            _append_per_area_group_distribution_pages(pdf=pdf, static=static, meta=meta)
+        if render_profile.global_core_metrics:
+            _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta)
+        if render_profile.global_distance_metrics:
+            _render_global_distance_page(pdf=pdf, global_series=global_series)
 
 
 def _append_per_area_group_distribution_pages(*, pdf: PdfPages, static: dict[str, Any], meta: dict[str, Any]) -> None:
@@ -2134,12 +2298,14 @@ def _append_per_area_group_distribution_pages(*, pdf: PdfPages, static: dict[str
 
 def _render_area_detail_pdfs(
     *,
+    run_dir: Path,
     out_dir: Path,
     area_series: pd.DataFrame,
     area_group_series: pd.DataFrame,
     static: dict[str, Any],
     meta: dict[str, Any],
     refs_by_area: dict[int, dict[str, np.ndarray | None]] | None = None,
+    render_profile: _SummaryRenderProfile,
 ) -> None:
     area_ids = sorted(set(int(v) for v in area_series["area_id"].dropna().tolist()))
     for area_id in area_ids:
@@ -2147,6 +2313,7 @@ def _render_area_detail_pdfs(
         group_block = area_group_series[area_group_series["area_id"].astype(int) == int(area_id)].sort_values(["step", "group_idx"]).reset_index(drop=True)
         out_pdf = out_dir / f"area_{int(area_id)}.pdf"
         _render_area_detail_pdf(
+            run_dir=run_dir,
             out_pdf=out_pdf,
             area_id=int(area_id),
             area_series=block,
@@ -2154,11 +2321,13 @@ def _render_area_detail_pdfs(
             static=static,
             meta=meta,
             refs_area=(refs_by_area or {}).get(int(area_id), {}),
+            render_profile=render_profile,
         )
 
 
 def _render_area_detail_pdf(
     *,
+    run_dir: Path,
     out_pdf: Path,
     area_id: int,
     area_series: pd.DataFrame,
@@ -2166,9 +2335,9 @@ def _render_area_detail_pdf(
     static: dict[str, Any],
     meta: dict[str, Any],
     refs_area: dict[str, np.ndarray | None],
+    render_profile: _SummaryRenderProfile,
 ) -> None:
     with PdfPages(out_pdf) as pdf:
-        run_dir = out_pdf.parent.parent
         puzzle_threshold = _load_required_finite_float_for_run(
             run_dir=run_dir,
             field="break_even_distance_common",
@@ -2195,6 +2364,24 @@ def _render_area_detail_pdf(
         suptitle = (
             f"Area {area_id} Detail | run_seed={meta['run']['run_seed']} | "
             f"rule={meta['run'].get('rule_name')} | area_agents={area_n} | majority_group={majority_txt}"
+        )
+        current_rule_idx = int(((meta.get("run", {}) or {}).get("rule_idx", -1)) or -1)
+        power_dirs = _compute_area_power_direction_orderings(
+            area_group_series=area_group_series,
+            personality_groups=personality_groups,
+            num_colors=int(static.get("num_colors", 0)),
+            meta=meta,
+        )
+        power_current = None
+        for item in power_dirs:
+            if int(item.get("rule_idx", -1)) == current_rule_idx:
+                power_current = np.asarray(item.get("color_ordering", []), dtype=np.int64)
+                break
+        dist_decomp = _compute_area_puzzle_power_distances(
+            area_series=area_series,
+            num_colors=int(static.get("num_colors", 0)),
+            power_ordering_current_rule=power_current,
+            meta=meta,
         )
 
         # Page 1: left narrow reference/context + right dynamics panels.
@@ -2271,7 +2458,8 @@ def _render_area_detail_pdf(
             a.grid(True, alpha=0.25)
             a.set_xlabel("step")
         fig2.suptitle(suptitle, fontsize=11)
-        pdf.savefig(fig2, dpi=140)
+        if render_profile.area_core_page:
+            pdf.savefig(fig2, dpi=140)
         plt.close(fig2)
 
         # Page 2: puzzle tracking (area-local puzzle distribution + puzzle distance).
@@ -2288,13 +2476,6 @@ def _render_area_detail_pdf(
         ax_pcurve = fig2p.add_subplot(gs2p[0, 1], sharex=ax_color)
         ax_pg_p = fig2p.add_subplot(gs2p[1, 0])
         ax_pdist = fig2p.add_subplot(gs2p[1, 1], sharex=ax_pcurve)
-        current_rule_idx = int(((meta.get("run", {}) or {}).get("rule_idx", -1)) or -1)
-        power_dirs = _compute_area_power_direction_orderings(
-            area_group_series=area_group_series,
-            personality_groups=personality_groups,
-            num_colors=int(static.get("num_colors", 0)),
-            meta=meta,
-        )
         _draw_power_direction_panel(
             ax=ax_power,
             power_dirs=power_dirs,
@@ -2348,17 +2529,6 @@ def _render_area_detail_pdf(
                     interpolation="nearest",
                     zorder=0,
                 )
-        power_current = None
-        for item in power_dirs:
-            if int(item.get("rule_idx", -1)) == current_rule_idx:
-                power_current = np.asarray(item.get("color_ordering", []), dtype=np.int64)
-                break
-        dist_decomp = _compute_area_puzzle_power_distances(
-            area_series=area_series,
-            num_colors=int(static.get("num_colors", 0)),
-            power_ordering_current_rule=power_current,
-            meta=meta,
-        )
         ax_pdist.plot(
             x,
             area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float),
@@ -2377,46 +2547,6 @@ def _render_area_detail_pdf(
                 label="outcome↔power",
                 zorder=3,
             )
-        if np.isfinite(dist_decomp["dist_puzzle_power"]).any():
-            ax_pdist.plot(
-                x,
-                dist_decomp["dist_puzzle_power"].astype(float),
-                color="tab:blue",
-                linewidth=1.2,
-                linestyle="-.",
-                label="puzzle↔power",
-                zorder=3,
-            )
-        if np.isfinite(dist_decomp["dist_grid_power"]).any():
-            ax_pdist.plot(
-                x,
-                dist_decomp["dist_grid_power"].astype(float),
-                color="tab:orange",
-                linewidth=1.2,
-                linestyle=":",
-                label="grid↔power",
-                zorder=3,
-            )
-        margin_line = None
-        if np.isfinite(dist_decomp["dist_outcome_power"]).any():
-            puzzle_vals = area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float)
-            margin = dist_decomp["dist_outcome_power"].astype(float) - puzzle_vals
-            if np.isfinite(margin).any():
-                ax_margin = ax_pdist.twinx()
-                ax_margin.plot(
-                    x,
-                    margin,
-                    color="purple",
-                    linewidth=0.9,
-                    alpha=0.95,
-                    label="puzzle_power_margin",
-                    zorder=4,
-                )
-                ax_margin.axhline(0.0, color="purple", linestyle=":", linewidth=0.8, alpha=0.8, zorder=1)
-                ax_margin.set_ylim(-1.02, 1.02)
-                ax_margin.set_ylabel("margin", color="purple")
-                ax_margin.tick_params(axis="y", colors="purple", labelsize=8)
-                margin_line = ax_margin.lines[0]
         if np.isfinite(puzzle_threshold):
             ax_pdist.axhline(
                 puzzle_threshold,
@@ -2426,57 +2556,186 @@ def _render_area_detail_pdf(
                 label="threshold",
                 zorder=2,
             )
-        ax_pdist.set_title("Puzzle / Power Distance Decomposition")
+        ax_pdist.set_title("Puzzle Distance vs Outcome / Power")
         ax_pdist.set_ylabel("distance [0..1]")
         _set_unit_ylim_visible(ax_pdist)
         if len(ax_pdist.lines) > 0:
-            handles, labels = ax_pdist.get_legend_handles_labels()
-            if margin_line is not None:
-                handles = handles + [margin_line]
-                labels = labels + ["puzzle_power_margin (>0 puzzle closer)"]
-            ax_pdist.legend(handles, labels, loc="upper right", fontsize=7, ncol=2)
+            ax_pdist.legend(loc="upper right", fontsize=7, ncol=2)
         for a in (ax_pcurve, ax_pdist):
             if a.has_data():
                 a.grid(True, alpha=0.25)
                 a.set_xlabel("step")
         fig2p.suptitle(suptitle, fontsize=11)
-        pdf.savefig(fig2p, dpi=140)
+        if render_profile.area_puzzle_page:
+            pdf.savefig(fig2p, dpi=140)
         plt.close(fig2p)
 
-        # Page 3: vote-mode alignment diagnostics (how votes track puzzle/outcome).
-        fig2m, axes2m = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+        # Page 2b: split decomposition detail (less visual overload than all traces in one axis).
+        fig2pd, axes2pd = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
+        axpd = np.asarray(axes2pd).ravel()
+        puzzle_vals = area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float)
+        outcome_power_vals = dist_decomp["dist_outcome_power"].astype(float)
+        puzzle_power_vals = dist_decomp["dist_puzzle_power"].astype(float)
+        grid_power_vals = dist_decomp["dist_grid_power"].astype(float)
+        margin_vals = outcome_power_vals - puzzle_vals
+
+        axpd[0].plot(x, puzzle_vals, color="black", linestyle="--", linewidth=1.6, label="outcome↔puzzle")
+        axpd[0].plot(x, outcome_power_vals, color="tab:red", linewidth=1.4, label="outcome↔power")
+        if np.isfinite(puzzle_threshold):
+            axpd[0].axhline(
+                puzzle_threshold,
+                color="#4a4a4a",
+                linestyle=":",
+                linewidth=1.2,
+                label="threshold",
+            )
+        axpd[0].set_title("Decomposition A: Outcome↔Puzzle / Outcome↔Power")
+        axpd[0].set_ylabel("distance [0..1]")
+        _set_unit_ylim_visible(axpd[0])
+        if len(axpd[0].lines) > 0:
+            axpd[0].legend(loc="upper right", fontsize=8, ncol=2)
+
+        if np.isfinite(puzzle_power_vals).any():
+            axpd[1].plot(x, puzzle_power_vals, color="tab:blue", linestyle="-.", linewidth=1.35, label="puzzle↔power")
+        if np.isfinite(grid_power_vals).any():
+            axpd[1].plot(x, grid_power_vals, color="tab:orange", linestyle=":", linewidth=1.35, label="grid↔power")
+        axpd[1].set_title("Decomposition B: Puzzle↔Power / Grid↔Power")
+        axpd[1].set_ylabel("distance [0..1]")
+        _set_unit_ylim_visible(axpd[1])
+        if len(axpd[1].lines) > 0:
+            axpd[1].legend(loc="upper right", fontsize=8)
+        else:
+            axpd[1].text(0.5, 0.5, "No puzzle↔power/grid↔power diagnostics logged", ha="center", va="center")
+            axpd[1].set_yticks([])
+
+        if np.isfinite(margin_vals).any():
+            axpd[2].plot(x, margin_vals, color="purple", linewidth=1.2, alpha=0.95, label="puzzle_power_margin")
+            axpd[2].axhline(0.0, color="purple", linestyle=":", linewidth=1.0, alpha=0.85)
+            axpd[2].legend(loc="upper right", fontsize=8)
+        else:
+            axpd[2].text(0.5, 0.5, "Margin unavailable", ha="center", va="center")
+            axpd[2].set_yticks([])
+        axpd[2].set_title("Decomposition C: Puzzle-Power Margin (>0 means puzzle closer)")
+        axpd[2].set_ylabel("margin")
+        axpd[2].set_ylim(-1.02, 1.02)
+
+        for a in axpd:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
+        fig2pd.suptitle(suptitle + " | Puzzle/Power split", fontsize=11)
+        fig2pd.tight_layout()
+        if render_profile.area_puzzle_page:
+            pdf.savefig(fig2pd, dpi=140)
+        plt.close(fig2pd)
+
+        # Page 3: vote-mode alignment diagnostics (with support/coverage context).
+        fig2m, axes2m = plt.subplots(
+            3,
+            1,
+            figsize=(11.69, 8.27),
+            sharex=True,
+            gridspec_kw={"height_ratios": [1.0, 1.0, 0.75]},
+        )
         axm = np.asarray(axes2m).ravel()
         has_mode_alignment = False
-        for col, color, ls, label in (
-            ("altruistic_rank1_match_puzzle_share", "tab:green", "-", "altruistic -> puzzle"),
-            ("non_altruistic_rank1_match_puzzle_share", "tab:red", "--", "non-altruistic -> puzzle"),
+        has_mode_coverage = False
+        for plot_idx, series_spec, title in (
+            (
+                0,
+                (
+                    ("altruistic_rank1_match_puzzle_share", "altruistic_votes_count", "tab:green", "-", "altruistic -> puzzle"),
+                    ("non_altruistic_rank1_match_puzzle_share", "non_altruistic_votes_count", "tab:red", "--", "non-altruistic -> puzzle"),
+                ),
+                "Rank-1 Match to Puzzle by Vote Mode [% of mode votes]",
+            ),
+            (
+                1,
+                (
+                    ("altruistic_rank1_match_outcome_share", "altruistic_votes_count", "tab:green", "-", "altruistic -> elected"),
+                    ("non_altruistic_rank1_match_outcome_share", "non_altruistic_votes_count", "tab:red", "--", "non-altruistic -> elected"),
+                ),
+                "Rank-1 Match to Elected Outcome by Vote Mode [% of mode votes]",
+            ),
         ):
-            if col in area_series.columns:
-                y = area_series[col].to_numpy(dtype=float)
-                if np.isfinite(y).any():
-                    axm[0].plot(x, y, color=color, linestyle=ls, linewidth=1.5, label=label)
-                    has_mode_alignment = True
-        axm[0].set_title("Rank-1 Match to Puzzle by Vote Mode [% of mode votes]")
-        axm[0].set_ylabel("%")
-        _set_percent_ylim_visible(axm[0])
-        if len(axm[0].lines) > 0:
-            axm[0].legend(loc="best", fontsize=8)
+            for value_col, count_col, color, ls, label in series_spec:
+                if value_col not in area_series.columns:
+                    continue
+                y = area_series[value_col].to_numpy(dtype=float)
+                if not np.isfinite(y).any():
+                    continue
+                axm[plot_idx].plot(x, y, color=color, linestyle=ls, linewidth=0.9, alpha=0.25)
+                axm[plot_idx].plot(
+                    x,
+                    _rolling_mean_nan(y),
+                    color=color,
+                    linestyle=ls,
+                    linewidth=1.6,
+                    alpha=0.98,
+                    label=label,
+                )
+                if count_col in area_series.columns:
+                    cvals = area_series[count_col].to_numpy(dtype=float)
+                    low_support = np.isfinite(cvals) & (cvals < float(_MODE_ALIGNMENT_LOW_SUPPORT_VOTES))
+                    if np.any(low_support):
+                        axm[plot_idx].fill_between(
+                            x,
+                            0.0,
+                            100.0,
+                            where=low_support,
+                            color=color,
+                            alpha=0.06,
+                            linewidth=0.0,
+                        )
+                has_mode_alignment = True
+            axm[plot_idx].set_title(title)
+            axm[plot_idx].set_ylabel("%")
+            _set_percent_ylim_visible(axm[plot_idx])
+            if len(axm[plot_idx].lines) > 0:
+                axm[plot_idx].legend(loc="best", fontsize=8)
 
-        for col, color, ls, label in (
-            ("altruistic_rank1_match_outcome_share", "tab:green", "-", "altruistic -> elected"),
-            ("non_altruistic_rank1_match_outcome_share", "tab:red", "--", "non-altruistic -> elected"),
+        axm_cov = axm[2]
+        axm_cov.set_title("Vote-mode Coverage (solid=mode share, black=count)")
+        axm_cov.set_ylabel("% of votes")
+        for col, color, label in (
+            ("altruistic_vote_share", "tab:green", "altruistic vote share"),
+            ("non_altruistic_vote_share", "tab:red", "non-altruistic vote share"),
         ):
-            if col in area_series.columns:
-                y = area_series[col].to_numpy(dtype=float)
-                if np.isfinite(y).any():
-                    axm[1].plot(x, y, color=color, linestyle=ls, linewidth=1.5, label=label)
-                    has_mode_alignment = True
-        axm[1].set_title("Rank-1 Match to Elected Outcome by Vote Mode [% of mode votes]")
-        axm[1].set_ylabel("%")
-        _set_percent_ylim_visible(axm[1])
-        if len(axm[1].lines) > 0:
-            axm[1].legend(loc="best", fontsize=8)
-        if not has_mode_alignment:
+            if col not in area_series.columns:
+                continue
+            y = area_series[col].to_numpy(dtype=float)
+            if not np.isfinite(y).any():
+                continue
+            axm_cov.plot(x, y, color=color, linewidth=0.9, alpha=0.25)
+            axm_cov.plot(x, _rolling_mean_nan(y), color=color, linewidth=1.5, alpha=0.95, label=label)
+            has_mode_coverage = True
+        _set_percent_ylim_visible(axm_cov)
+
+        cov_rhs = None
+        if "vote_count_total" in area_series.columns:
+            votes_total = area_series["vote_count_total"].to_numpy(dtype=float)
+            if np.isfinite(votes_total).any():
+                cov_rhs = axm_cov.twinx()
+                cov_rhs.plot(x, votes_total, color="black", linewidth=1.1, alpha=0.85, label="mode vote count")
+                cov_rhs.axhline(
+                    float(_MODE_ALIGNMENT_LOW_SUPPORT_VOTES),
+                    color="black",
+                    linestyle=":",
+                    linewidth=1.0,
+                    alpha=0.8,
+                )
+                cov_rhs.set_ylabel("count", color="black")
+                cov_rhs.tick_params(axis="y", colors="black")
+                has_mode_coverage = True
+
+        if len(axm_cov.lines) > 0 or (cov_rhs is not None and len(cov_rhs.lines) > 0):
+            h1, l1 = axm_cov.get_legend_handles_labels()
+            if cov_rhs is not None:
+                h2, l2 = cov_rhs.get_legend_handles_labels()
+                axm_cov.legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
+            else:
+                axm_cov.legend(loc="best", fontsize=8)
+
+        if not has_mode_alignment and not has_mode_coverage:
             for a in axm:
                 a.text(0.5, 0.5, "Mode alignment unavailable (requires votes + puzzle logging)", ha="center", va="center")
                 a.set_yticks([])
@@ -2485,10 +2744,11 @@ def _render_area_detail_pdf(
             a.set_xlabel("step")
         fig2m.suptitle(suptitle, fontsize=11)
         fig2m.tight_layout()
-        pdf.savefig(fig2m, dpi=140)
+        if render_profile.area_vote_mode_alignment_page:
+            pdf.savefig(fig2m, dpi=140)
         plt.close(fig2m)
 
-        # Page 4: group puzzle opportunity alignment vs observed group behavior.
+        # Page 4: group puzzle opportunity alignment + compact divergence diagnostics.
         fig2g, axes2g = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
         axg = np.asarray(axes2g).ravel()
         opp_df = _compute_group_puzzle_opportunity_distances(
@@ -2506,7 +2766,9 @@ def _render_area_detail_pdf(
                 if c in opp_df.columns:
                     y = opp_df[c].to_numpy(dtype=float)
                     if np.isfinite(y).any():
-                        axg[0].plot(xs, y, color=get_group_color(int(g)), linewidth=1.3, label=f"g{g}")
+                        color = get_group_color(int(g))
+                        axg[0].plot(xs, y, color=color, linewidth=0.9, alpha=0.25)
+                        axg[0].plot(xs, _rolling_mean_nan(y), color=color, linewidth=1.5, alpha=0.98, label=f"g{g}")
                         has_opp = True
         axg[0].set_title("Group Opportunity Alignment to Puzzle [distance(group ordering, puzzle ordering)]")
         axg[0].set_ylabel("distance [0..1]\n(lower=more aligned)")
@@ -2515,6 +2777,7 @@ def _render_area_detail_pdf(
             axg[0].legend(loc="best", fontsize=8, ncol=min(5, len(axg[0].lines)))
 
         has_behavior = False
+        opp_rhs = None
         if not area_group_series.empty and groups_sorted:
             steps_g = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
             part_vals_all = area_group_series["participants"].to_numpy(dtype=float)
@@ -2539,37 +2802,93 @@ def _render_area_detail_pdf(
                 .reindex(index=steps_g.astype(int), columns=groups_sorted)
                 .astype(float)
             )
-            for g in groups_sorted:
-                color = get_group_color(int(g))
-                y_non = p_non_alt_share[g].to_numpy(dtype=float)
-                y_turn = p_turn[g].to_numpy(dtype=float)
-                if np.isfinite(y_non).any():
-                    axg[1].plot(steps_g, y_non, color=color, linewidth=1.3, linestyle=":", label=f"g{g} non-alt")
-                    has_behavior = True
-                if np.isfinite(y_turn).any():
-                    axg[1].plot(steps_g, y_turn, color=color, linewidth=0.9, linestyle="-", alpha=0.9, label=f"g{g} turnout")
-                    has_behavior = True
-        axg[1].set_title("Group Behavior vs Puzzle Opportunity (dotted=non-altruistic share, solid=turnout)")
+            non_alt_mat = p_non_alt_share.to_numpy(dtype=float)
+            turnout_mat = p_turn.to_numpy(dtype=float)
+            with np.errstate(invalid="ignore"):
+                non_alt_range = np.nanmax(non_alt_mat, axis=1) - np.nanmin(non_alt_mat, axis=1)
+                turnout_range = np.nanmax(turnout_mat, axis=1) - np.nanmin(turnout_mat, axis=1)
+            non_alt_all_nan = np.all(~np.isfinite(non_alt_mat), axis=1)
+            turnout_all_nan = np.all(~np.isfinite(turnout_mat), axis=1)
+            non_alt_range[non_alt_all_nan] = np.nan
+            turnout_range[turnout_all_nan] = np.nan
+            if np.isfinite(non_alt_range).any():
+                axg[1].plot(steps_g, non_alt_range, color="tab:red", linewidth=0.9, alpha=0.25, linestyle=":")
+                axg[1].plot(
+                    steps_g,
+                    _rolling_mean_nan(non_alt_range),
+                    color="tab:red",
+                    linewidth=1.6,
+                    alpha=0.95,
+                    linestyle=":",
+                    label="non-alt share range across groups",
+                )
+                has_behavior = True
+            if np.isfinite(turnout_range).any():
+                axg[1].plot(steps_g, turnout_range, color="tab:blue", linewidth=0.9, alpha=0.25, linestyle="-")
+                axg[1].plot(
+                    steps_g,
+                    _rolling_mean_nan(turnout_range),
+                    color="tab:blue",
+                    linewidth=1.6,
+                    alpha=0.95,
+                    linestyle="-",
+                    label="turnout range across groups",
+                )
+                has_behavior = True
+        if not opp_df.empty:
+            opp_cols = [c for c in opp_df.columns if c.startswith("group_") and c.endswith("_puzzle_opp_dist")]
+            if opp_cols:
+                opp_mat = opp_df[opp_cols].to_numpy(dtype=float)
+                with np.errstate(invalid="ignore"):
+                    opp_mean = np.nanmean(opp_mat, axis=1)
+                    opp_range = np.nanmax(opp_mat, axis=1) - np.nanmin(opp_mat, axis=1)
+                opp_all_nan = np.all(~np.isfinite(opp_mat), axis=1)
+                opp_mean[opp_all_nan] = np.nan
+                opp_range[opp_all_nan] = np.nan
+                if np.isfinite(opp_mean).any() or np.isfinite(opp_range).any():
+                    opp_rhs = axg[1].twinx()
+                    if np.isfinite(opp_mean).any():
+                        opp_rhs.plot(xs, _rolling_mean_nan(opp_mean), color="tab:green", linewidth=1.35, alpha=0.95, label="mean opp. dist")
+                    if np.isfinite(opp_range).any():
+                        opp_rhs.plot(xs, _rolling_mean_nan(opp_range), color="tab:purple", linewidth=1.25, alpha=0.95, linestyle="--", label="opp. dist range")
+                    _set_unit_ylim_visible(opp_rhs)
+                    opp_rhs.set_ylabel("puzzle-opportunity distance [0..1]", color="tab:green")
+                    opp_rhs.tick_params(axis="y", colors="tab:green")
+        axg[1].set_title("Cross-group Spread Diagnostics (behavior divergence + opportunity spread)")
         axg[1].set_ylabel("%")
         _set_percent_ylim_visible(axg[1])
-        if len(axg[1].lines) > 0:
-            axg[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(6, len(axg[1].lines)))
+        if len(axg[1].lines) > 0 or (opp_rhs is not None and len(opp_rhs.lines) > 0):
+            h1, l1 = axg[1].get_legend_handles_labels()
+            if opp_rhs is not None:
+                h2, l2 = opp_rhs.get_legend_handles_labels()
+                axg[1].legend(h1 + h2, l1 + l2, loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=2)
+            else:
+                axg[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=2)
         if not has_opp:
             axg[0].text(0.5, 0.5, "Opportunity alignment unavailable (requires puzzle distribution logging)", ha="center", va="center")
             axg[0].set_yticks([])
         if not has_behavior:
-            axg[1].text(0.5, 0.5, "Group behavior series unavailable", ha="center", va="center")
+            axg[1].text(0.5, 0.5, "Group divergence series unavailable", ha="center", va="center")
             axg[1].set_yticks([])
         for a in axg:
             a.grid(True, alpha=0.25)
             a.set_xlabel("step")
         fig2g.suptitle(suptitle, fontsize=11)
         fig2g.tight_layout()
-        pdf.savefig(fig2g, dpi=140)
+        if render_profile.area_group_opportunity_page:
+            pdf.savefig(fig2g, dpi=140)
         plt.close(fig2g)
 
+        if render_profile.area_puzzle_gate_page:
+            _render_area_puzzle_gate_page(
+                pdf=pdf,
+                area_series=area_series,
+                dist_decomp=dist_decomp,
+                suptitle=suptitle,
+            )
+
         # Following pages (group diagnostics etc.) come after the core area + puzzle analysis pages.
-        if not area_group_series.empty:
+        if render_profile.area_group_diagnostics_pages and (not area_group_series.empty):
             _render_area_group_pages(
                 pdf=pdf,
                 area_group_series=area_group_series,
@@ -2612,11 +2931,12 @@ def _render_area_detail_pdf(
             a.set_xlabel("step")
         fig1.suptitle(suptitle, fontsize=11)
         fig1.tight_layout()
-        pdf.savefig(fig1, dpi=140)
+        if render_profile.area_assets_page:
+            pdf.savefig(fig1, dpi=140)
         plt.close(fig1)
 
         # Then the rest: first group means page, then dist_to_ref + area means.
-        if not area_group_series.empty:
+        if render_profile.area_group_means_page and (not area_group_series.empty):
             _render_area_group_means_page(
                 pdf=pdf,
                 area_group_series=area_group_series,
@@ -2678,7 +2998,8 @@ def _render_area_detail_pdf(
             a.set_xlabel("step")
         fig3.suptitle(suptitle, fontsize=11)
         fig3.tight_layout()
-        pdf.savefig(fig3, dpi=140)
+        if render_profile.area_dist_to_ref_page:
+            pdf.savefig(fig3, dpi=140)
         plt.close(fig3)
 
 
@@ -2765,6 +3086,20 @@ def _render_area_group_pages(
         resident_share_static_vals.append(float(vals.iloc[0]) if not vals.empty else 0.0)
 
     resident_share_static = np.asarray(resident_share_static_vals, dtype=float)
+    group_resident_count_static: dict[int, float] = {}
+    if groups:
+        for g in groups:
+            vals = p_res[g].to_numpy(dtype=float)
+            group_resident_count_static[int(g)] = float(np.nanmedian(vals)) if np.isfinite(vals).any() else float("nan")
+
+    def _group_is_small(g: int) -> bool:
+        cnt = group_resident_count_static.get(int(g), float("nan"))
+        return bool(np.isfinite(cnt) and cnt < float(_SMALL_GROUP_MIN_RESIDENTS))
+
+    def _group_alpha(g: int, *, normal: float = 0.9, small: float = 0.14) -> float:
+        return float(small if _group_is_small(int(g)) else normal)
+
+    has_small_groups = any(_group_is_small(int(g)) for g in groups)
 
     ax4_ref.set_xlim(float(np.min(steps)) if steps.size > 0 else 0.0, float(np.max(steps)) if steps.size > 0 else 1.0)
     max_res = 0.0
@@ -3213,8 +3548,8 @@ def _render_area_group_pages(
             ax7[0].text(
                 0.01,
                 0.03,
-                "Proxy = participation_alpha * action_sign * participation_signal; "
-                "upgrade to exact Δq/Δp after q logging.",
+                "Proxy = participation_alpha * q_push_proxy "
+                "(party: signal, legacy: action_sign*signal).",
                 transform=ax7[0].transAxes,
                 fontsize=7,
                 ha="left",
@@ -3232,18 +3567,33 @@ def _render_area_group_pages(
         and np.isfinite(p_part_to_abs_switch.to_numpy(dtype=float)).any()
     )
     if has_part_drop:
+        shown_groups = 0
         for g in groups:
+            is_small = _group_is_small(int(g))
             ax7[1].plot(
                 steps,
                 p_part_to_abs_switch[g].to_numpy(dtype=float) * 100.0,
                 color=get_group_color(int(g)),
-                linewidth=0.9,
-                alpha=0.9,
-                label=f"g{g}",
+                linewidth=0.8 if is_small else 1.0,
+                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                label=f"g{g}" if not is_small else "_nolegend_",
             )
+            if not is_small:
+                shown_groups += 1
         _set_percent_ylim_visible(ax7[1])
-        if groups:
+        if shown_groups > 0:
             ax7[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+        if has_small_groups:
+            ax7[1].text(
+                0.01,
+                0.03,
+                f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+                transform=ax7[1].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
+            )
     else:
         ax7[1].text(0.5, 0.5, "Participation dropout share unavailable", ha="center", va="center")
         ax7[1].set_yticks([])
@@ -3404,20 +3754,35 @@ def _render_area_group_pages(
         )
     )
     if has_switch:
+        shown_groups_switch = 0
         for g in groups:
+            is_small = _group_is_small(int(g))
             color = get_group_color(int(g))
             ax9[0].plot(
                 steps,
                 p_mode_switch[g].to_numpy(dtype=float) * 100.0,
                 color=color,
-                linewidth=1.2,
+                linewidth=0.9 if is_small else 1.2,
                 linestyle="-",
-                alpha=0.9,
-                label=f"g{g}",
+                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                label=f"g{g}" if not is_small else "_nolegend_",
             )
+            if not is_small:
+                shown_groups_switch += 1
         _set_percent_ylim_visible(ax9[0])
-        if groups:
+        if shown_groups_switch > 0:
             ax9[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+        if has_small_groups:
+            ax9[0].text(
+                0.01,
+                0.03,
+                f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+                transform=ax9[0].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
+            )
     else:
         ax9[0].text(
             0.5,
@@ -3431,33 +3796,37 @@ def _render_area_group_pages(
     ax9[1].set_title("Vote-Mode Switch Origins by Group [% of participants: from altruistic / from non-altruistic]")
     ax9[1].set_ylabel("%")
     if has_switch:
+        shown_groups_origins = 0
         for g in groups:
+            is_small = _group_is_small(int(g))
             color = get_group_color(int(g))
             ax9[1].plot(
                 steps,
                 p_mode_switch_from_alt[g].to_numpy(dtype=float) * 100.0,
                 color=color,
-                linewidth=0.9,
+                linewidth=0.75 if is_small else 0.9,
                 linestyle="-",
-                alpha=0.9,
-                label=f"g{g}",
+                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                label=f"g{g}" if not is_small else "_nolegend_",
             )
             ax9[1].plot(
                 steps,
                 p_mode_switch_from_non_alt[g].to_numpy(dtype=float) * 100.0,
                 color=color,
-                linewidth=1.5,
+                linewidth=1.0 if is_small else 1.5,
                 linestyle=":",
-                alpha=0.9,
+                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
                 label="_nolegend_",
             )
+            if not is_small:
+                shown_groups_origins += 1
         _set_percent_ylim_visible(ax9[1])
-        if groups:
+        if shown_groups_origins > 0:
             group_leg = ax9[1].legend(
                 loc="upper center",
                 bbox_to_anchor=(0.5, 1.02),
                 fontsize=7,
-                ncol=min(5, len(groups)),
+                ncol=min(5, shown_groups_origins),
                 title="groups",
             )
             ax9[1].add_artist(group_leg)
@@ -3470,6 +3839,17 @@ def _render_area_group_pages(
                 loc="upper left",
                 fontsize=7,
                 title="line style",
+            )
+        if has_small_groups:
+            ax9[1].text(
+                0.01,
+                0.03,
+                f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+                transform=ax9[1].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
             )
     else:
         ax9[1].text(0.5, 0.5, "Vote-mode switch share unavailable", ha="center", va="center")
@@ -4248,6 +4628,238 @@ def _compute_area_puzzle_power_distances(
             out["dist_grid_power"][i] = np.float32(float(dist_func(gord, power_ord, search_pairs)))
             grid_prev = gord
     return out
+
+
+def _compute_area_puzzle_anti_monopoly_gate_metrics(
+    *,
+    area_series: pd.DataFrame,
+    dist_decomp: dict[str, np.ndarray],
+) -> dict[str, Any]:
+    xlen = int(len(area_series))
+    thresholds = {
+        "conflict_min_dist": float(DEFAULT_SCORING_THRESHOLDS["puzzle_conflict_min_dist"]),
+        "min_conflict_share": float(DEFAULT_SCORING_THRESHOLDS["min_puzzle_conflict_step_share_for_gate"]),
+        "max_dominance_share_conflict": float(DEFAULT_SCORING_THRESHOLDS["max_puzzle_dominance_share_conflict"]),
+        "min_recovery_share_conflict": float(DEFAULT_SCORING_THRESHOLDS["min_power_recovery_share_conflict"]),
+    }
+    out: dict[str, Any] = {
+        **thresholds,
+        "d_out_puz": np.full(xlen, np.nan, dtype=np.float32),
+        "d_out_pow": np.full(xlen, np.nan, dtype=np.float32),
+        "d_puz_pow": np.full(xlen, np.nan, dtype=np.float32),
+        "margin": np.full(xlen, np.nan, dtype=np.float32),
+        "conflict_mask": np.zeros(xlen, dtype=bool),
+        "puzzle_max_share": np.full(xlen, np.nan, dtype=np.float32),
+        "puzzle_entropy_norm": np.full(xlen, np.nan, dtype=np.float32),
+        "puzzle_conflict_step_share": np.nan,
+        "puzzle_dominance_share_conflict": np.nan,
+        "power_recovery_share_conflict": np.nan,
+        "puzzle_power_margin_mean_conflict": np.nan,
+        "gate_puzzle_anti_monopoly": True,
+        "puzzle_metric_available": False,
+        "gate_conflict_eligible": False,
+        "valid_rows": 0,
+        "conflict_rows": 0,
+    }
+    if xlen <= 0:
+        return out
+
+    d_out_puz = area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float)
+    d_out_pow = np.asarray(dist_decomp.get("dist_outcome_power", np.full(xlen, np.nan, dtype=np.float32)), dtype=float)
+    d_puz_pow = np.asarray(dist_decomp.get("dist_puzzle_power", np.full(xlen, np.nan, dtype=np.float32)), dtype=float)
+    if d_out_pow.size != xlen:
+        d_out_pow = np.full(xlen, np.nan, dtype=float)
+    if d_puz_pow.size != xlen:
+        d_puz_pow = np.full(xlen, np.nan, dtype=float)
+
+    margin = d_out_pow - d_out_puz
+    valid = np.isfinite(d_out_puz) & np.isfinite(d_out_pow) & np.isfinite(d_puz_pow)
+    conflict_mask = valid & (d_puz_pow >= float(thresholds["conflict_min_dist"]))
+
+    out["d_out_puz"] = d_out_puz.astype(np.float32)
+    out["d_out_pow"] = d_out_pow.astype(np.float32)
+    out["d_puz_pow"] = d_puz_pow.astype(np.float32)
+    out["margin"] = margin.astype(np.float32)
+    out["conflict_mask"] = conflict_mask.astype(bool)
+    out["valid_rows"] = int(np.count_nonzero(valid))
+    out["conflict_rows"] = int(np.count_nonzero(conflict_mask))
+
+    if int(np.count_nonzero(valid)) > 0:
+        out["puzzle_conflict_step_share"] = float(np.mean(conflict_mask[valid]))
+    if int(np.count_nonzero(conflict_mask)) > 0:
+        conflict_margins = margin[conflict_mask]
+        conflict_margins = conflict_margins[np.isfinite(conflict_margins)]
+        if conflict_margins.size > 0:
+            out["puzzle_dominance_share_conflict"] = float(np.mean(conflict_margins > 0.0))
+            out["power_recovery_share_conflict"] = float(np.mean(conflict_margins < 0.0))
+            out["puzzle_power_margin_mean_conflict"] = float(np.mean(conflict_margins))
+
+    metrics_available = (
+        np.isfinite(float(out["puzzle_conflict_step_share"]))
+        and np.isfinite(float(out["puzzle_dominance_share_conflict"]))
+        and np.isfinite(float(out["power_recovery_share_conflict"]))
+    )
+    enough_conflict = (
+        metrics_available
+        and float(out["puzzle_conflict_step_share"]) >= float(thresholds["min_conflict_share"])
+    )
+    anti_monopoly_ok = (
+        metrics_available
+        and float(out["puzzle_dominance_share_conflict"]) <= float(thresholds["max_dominance_share_conflict"])
+        and float(out["power_recovery_share_conflict"]) >= float(thresholds["min_recovery_share_conflict"])
+    )
+    out["puzzle_metric_available"] = bool(metrics_available)
+    out["gate_conflict_eligible"] = bool(enough_conflict)
+    out["gate_puzzle_anti_monopoly"] = bool(anti_monopoly_ok if enough_conflict else True)
+
+    puzzle_cols = sorted([c for c in area_series.columns if c.startswith("puzzle_color_")], key=lambda c: int(c.split("_")[-1]))
+    if puzzle_cols:
+        pdata = area_series[puzzle_cols].to_numpy(dtype=float)
+        n_cols = int(len(puzzle_cols))
+        max_share = np.full(xlen, np.nan, dtype=np.float32)
+        entropy_norm = np.full(xlen, np.nan, dtype=np.float32)
+        for i in range(xlen):
+            row = pdata[i]
+            if not np.isfinite(row).all():
+                continue
+            s = float(np.sum(row))
+            if s <= 0.0:
+                continue
+            p = row / s
+            max_share[i] = np.float32(float(np.max(p)))
+            if n_cols > 1:
+                h = float(-np.sum(p * np.log(p + 1e-15)))
+                entropy_norm[i] = np.float32(h / float(np.log(float(n_cols))))
+        out["puzzle_max_share"] = max_share
+        out["puzzle_entropy_norm"] = entropy_norm
+    return out
+
+
+def _render_area_puzzle_gate_page(
+    *,
+    pdf: PdfPages,
+    area_series: pd.DataFrame,
+    dist_decomp: dict[str, np.ndarray],
+    suptitle: str,
+) -> None:
+    metrics = _compute_area_puzzle_anti_monopoly_gate_metrics(
+        area_series=area_series,
+        dist_decomp=dist_decomp,
+    )
+    x = area_series["step"].to_numpy(dtype=float)
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
+    ax = np.asarray(axes).ravel()
+
+    status_ok = bool(metrics["gate_puzzle_anti_monopoly"])
+    status_txt = "PASS" if status_ok else "FAIL"
+    status_color = "tab:green" if status_ok else "tab:red"
+    conf_eligible = bool(metrics["gate_conflict_eligible"])
+    metric_ready = bool(metrics["puzzle_metric_available"])
+
+    ax[0].axis("off")
+    ax[0].text(
+        0.02,
+        0.98,
+        "Puzzle Anti-Monopoly Gate",
+        ha="left",
+        va="top",
+        fontsize=12,
+        fontweight="bold",
+    )
+    ax[0].text(
+        0.02,
+        0.80,
+        status_txt,
+        ha="left",
+        va="top",
+        fontsize=24,
+        color=status_color,
+        fontweight="bold",
+    )
+    lines = [
+        f"metrics_available: {metric_ready}",
+        f"conflict_eligible: {conf_eligible}",
+        f"conflict_share: {float(metrics['puzzle_conflict_step_share']):.3f} (>= {float(metrics['min_conflict_share']):.3f})",
+        f"dominance_share_conflict: {float(metrics['puzzle_dominance_share_conflict']):.3f} (<= {float(metrics['max_dominance_share_conflict']):.3f})",
+        f"recovery_share_conflict: {float(metrics['power_recovery_share_conflict']):.3f} (>= {float(metrics['min_recovery_share_conflict']):.3f})",
+        f"margin_mean_conflict: {float(metrics['puzzle_power_margin_mean_conflict']):.3f}",
+        f"valid_rows: {int(metrics['valid_rows'])}",
+        f"conflict_rows: {int(metrics['conflict_rows'])}",
+    ]
+    ax[0].text(0.02, 0.60, "\n".join(lines), ha="left", va="top", fontsize=9)
+
+    max_share = np.asarray(metrics["puzzle_max_share"], dtype=float)
+    entropy = np.asarray(metrics["puzzle_entropy_norm"], dtype=float)
+    if np.isfinite(max_share).any():
+        ax[1].plot(x, max_share, color="tab:red", linewidth=1.4, label="max puzzle color share")
+    if np.isfinite(entropy).any():
+        ax1b = ax[1].twinx()
+        ax1b.plot(x, entropy, color="tab:blue", linestyle="--", linewidth=1.2, label="puzzle entropy (norm)")
+        ax1b.set_ylim(-0.02, 1.02)
+        ax1b.set_ylabel("entropy [0..1]", color="tab:blue")
+        ax1b.tick_params(axis="y", colors="tab:blue")
+        h1, l1 = ax[1].get_legend_handles_labels()
+        h2, l2 = ax1b.get_legend_handles_labels()
+        if h1 or h2:
+            ax[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
+    elif len(ax[1].lines) > 0:
+        ax[1].legend(loc="best", fontsize=8)
+    ax[1].set_title("Puzzle Concentration Signals")
+    ax[1].set_ylabel("max share [0..1]", color="tab:red")
+    ax[1].tick_params(axis="y", colors="tab:red")
+    _set_unit_ylim_visible(ax[1])
+    ax[1].grid(True, alpha=0.25)
+    ax[1].set_xlabel("step")
+
+    d_out_puz = np.asarray(metrics["d_out_puz"], dtype=float)
+    d_out_pow = np.asarray(metrics["d_out_pow"], dtype=float)
+    d_puz_pow = np.asarray(metrics["d_puz_pow"], dtype=float)
+    conflict_mask = np.asarray(metrics["conflict_mask"], dtype=bool)
+    ax[2].plot(x, d_out_puz, color="black", linestyle="--", linewidth=1.2, label="outcome↔puzzle")
+    ax[2].plot(x, d_out_pow, color="tab:red", linewidth=1.1, label="outcome↔power")
+    ax[2].plot(x, d_puz_pow, color="tab:blue", linewidth=1.1, label="puzzle↔power")
+    ax[2].axhline(
+        float(metrics["conflict_min_dist"]),
+        color="tab:blue",
+        linestyle=":",
+        linewidth=1.2,
+        label="conflict threshold",
+    )
+    if conflict_mask.any():
+        ax[2].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.08, step="mid")
+    ax[2].set_title("Puzzle/Power Distance Signals")
+    ax[2].set_ylabel("distance [0..1]")
+    _set_unit_ylim_visible(ax[2])
+    ax[2].grid(True, alpha=0.25)
+    ax[2].set_xlabel("step")
+    if len(ax[2].lines) > 0:
+        ax[2].legend(loc="best", fontsize=8)
+
+    margin = np.asarray(metrics["margin"], dtype=float)
+    ax[3].plot(x, margin, color="purple", linewidth=1.1, label="margin = outcome↔power - outcome↔puzzle")
+    ax[3].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+    if conflict_mask.any():
+        ax[3].scatter(
+            x[conflict_mask],
+            margin[conflict_mask],
+            s=8,
+            color="purple",
+            alpha=0.65,
+            label="conflict steps",
+        )
+    ax[3].set_title("Margin Around Puzzle vs Power")
+    ax[3].set_ylabel("margin [-1..1]")
+    ax[3].set_ylim(-1.02, 1.02)
+    ax[3].grid(True, alpha=0.25)
+    ax[3].set_xlabel("step")
+    if len(ax[3].lines) > 0:
+        ax[3].legend(loc="best", fontsize=8)
+
+    fig.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate", fontsize=11)
+    fig.tight_layout()
+    pdf.savefig(fig, dpi=140)
+    plt.close(fig)
 
 
 def _compute_group_puzzle_opportunity_distances(
