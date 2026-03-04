@@ -1,0 +1,63 @@
+{
+  "version": "thesis-recovery-v3",
+  "strict_completeness": true,
+  "thresholds": {
+    "min_winner_change_rate_post_burnin": 0.02,
+    "min_winner_entropy_norm": 0.30,
+    "min_competitive_step_share": 0.08,
+    "min_puzzle_conflict_step_share_for_gate": 0.25,
+    "max_puzzle_dominance_share_conflict": 0.93,
+    "min_power_recovery_share_conflict": 0.04,
+    "puzzle_dominance_share_score_low": 0.30,
+    "puzzle_dominance_share_score_high": 0.55,
+    "dominance_cycle_episode_min_len_steps": 6.0,
+    "dominance_cycle_dominant_turnout_mix_min": 0.30,
+    "dominance_cycle_weak_turnout_mix_max": 0.06,
+    "dominance_cycle_weak_min_len_steps": 4.0,
+    "dominance_cycle_altruism_share_min": 0.90,
+    "dominance_cycle_altruism_min_len_steps": 4.0,
+    "dominance_cycle_recovery_window_steps": 40.0,
+    "dominance_cycle_weak_selfvote_margin_min": 0.0,
+    "dominance_cycle_weak_selfvote_lead_min_len_steps": 3.0,
+    "dominance_cycle_dominant_turnout_drop_min_frac": 0.20,
+    "dominance_cycle_weak_rebound_mix_ratio_min": 0.85,
+    "dominance_cycle_recovery_share_score_zero_at": 0.02,
+    "dominance_cycle_recovery_share_score_good_min": 0.30
+  },
+  "weights": {
+    "quality_mean": 0.70,
+    "discriminability": 0.0,
+    "seed_robustness": 0.30
+  },
+  "stage_weights": {
+    "viability": 0.50,
+    "quality_bundle": 0.50
+  },
+  "quality_component_weights": {
+    "z_winner_entropy": 1.40,
+    "z_winner_changes": 1.30,
+    "z_competitive_step_share": 1.00,
+    "z_puzzle_dom_balance_conflict": 1.30,
+    "z_group_turnout_range": 0.90,
+    "z_roll3_group_turnout_range": 0.70,
+    "z_roll3_group_turnout_range_max": 0.80,
+    "z_group_std": 0.55,
+    "z_q_delta_group_dispersion_late": 0.70,
+    "z_participant_composition_dynamics": 1.00,
+    "z_pa_gap": 0.55,
+    "z_group_pa_gap": 0.55,
+    "z_turnout_shape": 0.45,
+    "z_turnout_drop_stability": 0.40,
+    "z_turnout_decline_stability": 0.40,
+    "z_dist_std": 0.25,
+    "z_dist_nonzero_share": 0.30,
+    "z_gini_std": 0.20,
+    "z_turnout_std": 0.20,
+    "z_roll20_group_turnout_range": 0.35,
+    "z_roll20_group_turnout_range_max": 0.35,
+    "z_group_turnout_resid": 0.25,
+    "z_q_delta_mean_stability": 0.30,
+    "z_q_delta_late_stability": 0.30,
+    "z_dominance_cycle_recovery": 1.60
+  }
+}

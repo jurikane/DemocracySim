@@ -96,22 +96,22 @@ Merged area-state + election table.
 
 **Primary key:** `(run_seed, rule_idx, step, area_id)`
 
-| column                               |   dtype | notes                                          |
-|--------------------------------------|--------:|------------------------------------------------|
-| run_seed                             |   int32 |                                                |
-| rule_idx                             |   int16 |                                                |
-| step                                 |   int32 |                                                |
-| area_id                              |   int32 |                                                |
-| eligible_voters                      |   int32 | agents eligible for election in this area/step |
-| participants                         |   int32 | number who voted                               |
-| turnout                              | float32 | participants/area_num_agents * 100             |
-| fee_pool                             | float32 | matches simulation internal type               |
-| winning_option_id                    |   int32 | option row index into `model.options`          |
-| elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                          |
-| dist_to_reality                      | float32 | distance(real_order, voted_order)              |
-| puzzle_distance                      | float32 | distance(puzzle_order, voted_order); NaN when puzzle mode is off            |
-| gini_index                           |   int16 | area gini 0–100         |
-| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                  |
+| column                               |   dtype | notes                                                            |
+|--------------------------------------|--------:|------------------------------------------------------------------|
+| run_seed                             |   int32 |                                                                  |
+| rule_idx                             |   int16 |                                                                  |
+| step                                 |   int32 |                                                                  |
+| area_id                              |   int32 |                                                                  |
+| eligible_voters                      |   int32 | agents eligible for election in this area/step                   |
+| participants                         |   int32 | number who voted                                                 |
+| turnout                              | float32 | participants/area_num_agents * 100                               |
+| fee_pool                             | float32 | matches simulation internal type                                 |
+| winning_option_id                    |   int32 | option row index into `model.options`                            |
+| elected_color_0..elected_color_{C-1} |   int16 | `Area.voted_ordering`                                            |
+| dist_to_reality                      | float32 | distance(real_order, voted_order)                                |
+| puzzle_distance                      | float32 | distance(puzzle_order, voted_order); NaN when puzzle mode is off |
+| gini_index                           |   int16 | area gini 0–100                                                  |
+| area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                                    |
 
 ### `agents.parquet`
 
@@ -119,31 +119,31 @@ Agent snapshot table (**agent state only**).
 
 **Primary key:** `(run_seed, rule_idx, step, agent_id)`
 
-| column                     |   dtype | notes                                        |
-|----------------------------|--------:|----------------------------------------------|
-| run_seed                   |   int32 |                                              |
-| rule_idx                   |   int16 |                                              |
-| step                       |   int32 |                                              |
-| agent_id                   |   int32 |                                              |
-| assets                     | float32 | matches simulation internal type             |
-| num_elections_participated |   int32 | cumulative counter across all areas/steps    |
-| personality_group_idx      |   int16 |                                              |
-| eligible_for_election      | boolean | eligibility flag in this area/step election  |
-| participating              | boolean | participation decision in this area/step     |
-| election_fee               | float32 | charged fee in this area/step                |
-| reward_personal            | float32 | reward/penalty amount                        |
-| election_delta_abs         | float32 | realized absolute asset delta                |
-| election_delta_rel         | float32 | realized relative asset delta                |
-| participation_baseline     | float32 | EMA baseline for participation learning      |
-| participation_signal       | float32 | participation learning signal (mode-dependent) |
-| participation_signal_group_component | float32 | centered/group component of participation signal |
-| participation_signal_fee_component | float32 | explicit fee component of participation signal |
-| q_participation            | float32 | learned participation propensity (`q`)       |
-| participation_probability  | float32 | current participation probability from `q`   |
-| altruism_factor               | float32 | agent altruism_factor                        |
-| dissatisfaction_value         | float32 | dissatisfaction (distance)                   |
-| dissatisfaction_baseline      | float32 | EMA baseline for dissatisfaction             |
-| dissatisfaction_signal        | float32 | baseline-corrected dissatisfaction signal    |
+| column                               |   dtype | notes                                          |
+|--------------------------------------|--------:|------------------------------------------------|
+| run_seed                             |   int32 |                                                |
+| rule_idx                             |   int16 |                                                |
+| step                                 |   int32 |                                                |
+| agent_id                             |   int32 |                                                |
+| assets                               | float32 | matches simulation internal type               |
+| num_elections_participated           |   int32 | cumulative counter across all areas/steps      |
+| personality_group_idx                |   int16 |                                                |
+| eligible_for_election                | boolean | eligibility flag in this area/step election    |
+| participating                        | boolean | participation decision in this area/step       |
+| election_fee                         | float32 | charged fee in this area/step                  |
+| reward_personal                      | float32 | reward/penalty amount                          |
+| election_delta_abs                   | float32 | realized absolute asset delta                  |
+| election_delta_rel                   | float32 | realized relative asset delta                  |
+| participation_baseline               | float32 | EMA baseline for participation learning        |
+| participation_signal                 | float32 | participation learning signal (mode-dependent) |
+| participation_signal_group_component | float32 | centered/group component participation signal  |
+| participation_signal_fee_component   | float32 | explicit fee component of participation signal |
+| q_participation                      | float32 | learned participation propensity (`q`)         |
+| participation_probability            | float32 | current participation probability from `q`     |
+| altruism_factor                      | float32 | agent altruism_factor                          |
+| dissatisfaction_value                | float32 | dissatisfaction (distance)                     |
+| dissatisfaction_baseline             | float32 | EMA baseline for dissatisfaction               |
+| dissatisfaction_signal               | float32 | baseline-corrected dissatisfaction signal      |
 
 **Semantics:** the row for step `t` represents the agent’s final state after it
 participated in all elections it was eligible for during step `t`.

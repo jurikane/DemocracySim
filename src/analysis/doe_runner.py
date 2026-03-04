@@ -952,6 +952,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "altruism_satisfaction_theta": (0.70, 1.00),
             "altruism_satisfaction_slope": (6.0, 13.0),
             "altruism_response_gamma": (0.45, 0.95),
+            "election_impact_on_mutation": (2.0, 3.6),
             # Direct puzzle-vs-power lever (knowledge coherence in altruistic voting).
             "known_cells": (16.0, 30.0),
         },
@@ -975,6 +976,54 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "participation_signal_fee_weight": 0.6,
             "participation_signal_group_shrink_k": 1.954833,
             "participation_signal_clip": 0.277565,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 250,
+        },
+    },
+    "phase3_party_recovery_hunt_v1": {
+        "name": "phase3_party_recovery_hunt_v1",
+        # Recovery-focused search profile:
+        # - optimize for dominance-cycle recovery under party learning
+        # - keep proven stable baselines fixed where prior DOEs already converged
+        # - open only the levers that directly affect:
+        #   (1) D satisfaction -> altruism plateaus
+        #   (2) W comeback potential after suppression
+        #   (3) lock-in speed (avoid irreversible early collapse)
+        "ranges": {
+            # Participation lock-in pressure (tightened to avoid runaway freeze-out).
+            "participation_alpha": (0.100, 0.130),
+            "participation_beta": (4.95, 5.45),
+            "reward_rate_personal": (0.225, 0.275),
+            "break_even_distance_common": (0.46, 0.58),
+
+            # Puzzle / power dynamics.
+            "known_cells": (10.0, 17.0),
+            "election_impact_on_mutation": (1.00, 2.90),
+            "puzzle_local_kappa": (70.0, 130.0),
+            "puzzle_shock_prob": (0.03, 0.10),
+            "mu": (0.10, 0.26),
+
+            # Satisfaction -> altruism switch:
+            # keep the switch sharp, but with lower theta access so dominant
+            # groups can realistically hit high altruism plateaus.
+            "altruism_satisfaction_theta": (0.60, 0.75),
+            "altruism_satisfaction_slope": (5.5, 12.0),
+            "altruism_response_gamma": (0.70, 1.00),
+
+            # Party-learning shaping (retain validated fee story; tune only residual pressure).
+            "participation_signal_group_shrink_k": (1.4, 3.9),
+            "participation_signal_clip": (0.24, 0.38),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            "participation_init_q": 0.14,
+            "election_cost_rate": 0.02,
+            "participation_signal_fee_weight": 0.6,
         },
         "frozen_simulation": {
             **DEFAULT_FROZEN_SIM,

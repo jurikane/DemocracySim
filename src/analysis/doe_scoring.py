@@ -43,20 +43,24 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "min_power_recovery_share_conflict": 0.02,
     "puzzle_dominance_share_score_low": 0.65,
     "puzzle_dominance_share_score_high": 0.90,
-    # Explicit lock-in recovery sequence detection (conflict-only):
-    # power lock-in episode (same dominant participant group + power-dominant margin)
-    # -> dominant-group altruism surge
-    # -> puzzle takes over (margin crosses positive) in forward window.
-    "lockin_episode_min_len_steps": 8.0,
-    "lockin_recovery_window_steps": 40.0,
-    "lockin_min_dominant_participant_share": 0.55,
-    "lockin_min_altruism_share": 0.80,
-    "lockin_min_altruism_lift": 0.12,
-    "lockin_margin_power_threshold": 0.0,
-    "lockin_margin_puzzle_recovery_threshold": 0.0,
-    # Soft-score shaping for lock-in recovery share.
-    "lockin_recovery_share_score_zero_at": 0.05,
-    "lockin_recovery_share_score_good_min": 0.40,
+    # Dominance-cycle recovery sequence (explicit turnout-comeback definition):
+    # D lock-in (high turnout dominance) + W suppression (near-zero turnout)
+    # -> sustained D altruism plateau
+    # -> W self-regarding vote takeover + D turnout drop + W turnout rebound.
+    "dominance_cycle_episode_min_len_steps": 6.0,
+    "dominance_cycle_dominant_turnout_mix_min": 0.30,
+    "dominance_cycle_weak_turnout_mix_max": 0.06,
+    "dominance_cycle_weak_min_len_steps": 4.0,
+    "dominance_cycle_altruism_share_min": 0.90,
+    "dominance_cycle_altruism_min_len_steps": 4.0,
+    "dominance_cycle_recovery_window_steps": 40.0,
+    "dominance_cycle_weak_selfvote_margin_min": 0.0,
+    "dominance_cycle_weak_selfvote_lead_min_len_steps": 3.0,
+    "dominance_cycle_dominant_turnout_drop_min_frac": 0.20,
+    "dominance_cycle_weak_rebound_mix_ratio_min": 0.85,
+    # Soft-score shaping for recovery share.
+    "dominance_cycle_recovery_share_score_zero_at": 0.02,
+    "dominance_cycle_recovery_share_score_good_min": 0.30,
     # Turnout shape soft score (step-count independent; avoids deceptive mean-only scoring).
     "turnout_start_score_low": 30.0,
     "turnout_start_score_high": 70.0,
@@ -139,7 +143,7 @@ OPTIONAL_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
     "participant_share_mean_abs_drift_20_w",
     "participant_share_turnover_rate_w",
     "puzzle_dominance_share_conflict",
-    "lockin_recovery_share_conflict",
+    "dominance_cycle_recovery_share",
 )
 
 PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
@@ -167,7 +171,7 @@ PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
     "z_q_delta_group_dispersion_late",
     "z_participant_composition_dynamics",
     "z_puzzle_dom_balance_conflict",
-    "z_lockin_recovery_conflict",
+    "z_dominance_cycle_recovery",
 )
 
 REQUIRED_ROBUST_SCORING_COLUMNS: tuple[str, ...] = (
@@ -647,192 +651,276 @@ def _compute_puzzle_power_step_table(
     return pd.DataFrame(rows).sort_values("step").reset_index(drop=True)
 
 
-def _compute_lockin_recovery_metrics_for_run(
+def _compute_dominance_cycle_recovery_metrics_for_run(
     *,
     run_dir: Path,
-    area_steps: pd.DataFrame,
     agents: pd.DataFrame,
-    burn_in_steps: int,
-    conflict_min_dist: float,
     episode_min_len_steps: int,
+    dominant_turnout_mix_min: float,
+    weak_turnout_mix_max: float,
+    weak_min_len_steps: int,
+    altruism_share_min: float,
+    altruism_min_len_steps: int,
     recovery_window_steps: int,
-    min_dominant_participant_share: float,
-    min_altruism_share: float,
-    min_altruism_lift: float,
-    margin_power_threshold: float,
-    margin_puzzle_recovery_threshold: float,
+    weak_selfvote_margin_min: float,
+    weak_selfvote_lead_min_len_steps: int,
+    dominant_turnout_drop_min_frac: float,
+    weak_rebound_mix_ratio_min: float,
 ) -> dict[str, float]:
     out = {
-        "lockin_episode_count_conflict": 0.0,
-        "lockin_altruism_surge_count_conflict": 0.0,
-        "lockin_recovery_event_count_conflict": 0.0,
-        "lockin_recovery_share_conflict": np.nan,
-        "lockin_altruism_surge_share_conflict": np.nan,
-        "lockin_recovery_lag_mean_steps_conflict": np.nan,
+        "dominance_cycle_episode_count": 0.0,
+        "dominance_cycle_altruism_plateau_count": 0.0,
+        "dominance_cycle_selfvote_takeover_count": 0.0,
+        "dominance_cycle_recovery_event_count": 0.0,
+        "dominance_cycle_recovery_share": np.nan,
+        "dominance_cycle_recovery_lag_mean_steps": np.nan,
     }
-    step_tbl = _compute_puzzle_power_step_table(
-        run_dir=run_dir,
-        area_steps=area_steps,
-        agents=agents,
-        burn_in_steps=burn_in_steps,
-        conflict_min_dist=conflict_min_dist,
-    )
-    if step_tbl is None or len(step_tbl) == 0:
-        return out
-    steps_sorted = sorted(pd.to_numeric(step_tbl["step"], errors="coerce").dropna().astype(int).unique().tolist())
-    if not steps_sorted:
-        return out
 
-    # Dominant participant group by step.
+    def _find_consecutive_runs(steps: list[int], min_len: int) -> list[tuple[int, int]]:
+        if not steps:
+            return []
+        runs: list[tuple[int, int]] = []
+        s0 = steps[0]
+        prev = steps[0]
+        for s in steps[1:]:
+            if s == prev + 1:
+                prev = s
+                continue
+            if (prev - s0 + 1) >= int(min_len):
+                runs.append((int(s0), int(prev)))
+            s0 = s
+            prev = s
+        if (prev - s0 + 1) >= int(min_len):
+            runs.append((int(s0), int(prev)))
+        return runs
+
     ap = agents.copy()
     if "eligible_for_election" in ap.columns:
         ap = ap.loc[ap["eligible_for_election"] == True]
-    req = {"step", "personality_group_idx", "participating"}
+    req = {"step", "agent_id", "personality_group_idx", "participating"}
     if not req <= set(ap.columns):
         return out
+    if len(ap) == 0:
+        return out
+
+    # Stable group sizes (resident denominators) by unique agents.
+    residents = (
+        ap.loc[:, ["agent_id", "personality_group_idx"]]
+        .drop_duplicates(subset=["agent_id"])
+        .groupby("personality_group_idx", as_index=False)
+        .agg(residents=("agent_id", "count"))
+        .sort_values("personality_group_idx")
+    )
+    if len(residents) < 2:
+        return out
+    groups = residents["personality_group_idx"].astype(int).tolist()
+    res_map = {int(r.personality_group_idx): int(r.residents) for r in residents.itertuples(index=False)}
+    total_agents = float(sum(res_map.values()))
+    if total_agents <= 0.0:
+        return out
+
+    # Participants per step/group.
     gp = (
         ap.groupby(["step", "personality_group_idx"], as_index=False)
         .agg(participants=("participating", "sum"))
-        .sort_values(["step", "participants", "personality_group_idx"], ascending=[True, False, True])
+        .sort_values(["step", "personality_group_idx"])
     )
     if len(gp) == 0:
         return out
-    totals = gp.groupby("step", as_index=False).agg(total_participants=("participants", "sum"))
-    top = gp.groupby("step", as_index=False).first()
-    dom = top.merge(totals, on="step", how="left")
-    dom["dominant_participant_share"] = np.where(
-        pd.to_numeric(dom["total_participants"], errors="coerce").to_numpy(dtype=float) > 0.0,
-        pd.to_numeric(dom["participants"], errors="coerce").to_numpy(dtype=float)
-        / pd.to_numeric(dom["total_participants"], errors="coerce").to_numpy(dtype=float),
-        np.nan,
-    )
-    dom = dom.rename(columns={"personality_group_idx": "dominant_group_idx"})
-
-    seq = step_tbl.merge(dom.loc[:, ["step", "dominant_group_idx", "dominant_participant_share"]], on="step", how="left")
-    seq["dominant_group_idx"] = pd.to_numeric(seq["dominant_group_idx"], errors="coerce")
-    if len(seq) == 0:
-        return out
-    seq = seq.sort_values("step").reset_index(drop=True)
-    step_rows = {int(r["step"]): r for _, r in seq.iterrows()}
-
-    cond_vals: list[tuple[int, int]] = []  # (step, dominant_group_idx)
-    for step in steps_sorted:
-        r = step_rows.get(int(step))
-        if r is None:
-            continue
-        conflict = bool(r.get("conflict", False))
-        margin = float(r.get("margin", np.nan))
-        dom_share = float(r.get("dominant_participant_share", np.nan))
-        dom_group = r.get("dominant_group_idx", np.nan)
-        if (not conflict) or (not np.isfinite(margin)) or (margin >= float(margin_power_threshold)):
-            continue
-        if (not np.isfinite(dom_share)) or (dom_share < float(min_dominant_participant_share)):
-            continue
-        if not np.isfinite(dom_group):
-            continue
-        cond_vals.append((int(step), int(dom_group)))
-
-    if not cond_vals:
+    piv = gp.pivot(index="step", columns="personality_group_idx", values="participants").fillna(0.0)
+    piv = piv.sort_index()
+    for g in groups:
+        if g not in piv.columns:
+            piv[g] = 0.0
+    piv = piv.reindex(columns=sorted(piv.columns))
+    steps = piv.index.to_numpy(dtype=int)
+    if steps.size == 0:
         return out
 
-    # Segment into episodes: consecutive steps with same dominant group.
-    episodes: list[tuple[int, int, int]] = []  # (start_step, end_step, dominant_group_idx)
-    seg_start, seg_prev, seg_group = cond_vals[0][0], cond_vals[0][0], cond_vals[0][1]
-    for step, grp in cond_vals[1:]:
-        if (step == seg_prev + 1) and (grp == seg_group):
-            seg_prev = step
-            continue
-        if (seg_prev - seg_start + 1) >= int(episode_min_len_steps):
-            episodes.append((seg_start, seg_prev, seg_group))
-        seg_start, seg_prev, seg_group = step, step, grp
-    if (seg_prev - seg_start + 1) >= int(episode_min_len_steps):
-        episodes.append((seg_start, seg_prev, seg_group))
+    part = piv.to_numpy(dtype=float)
+    col_groups = piv.columns.to_numpy(dtype=int)
+    res_vec = np.asarray([float(res_map.get(int(g), 1)) for g in col_groups], dtype=float)
+    total_part = np.sum(part, axis=1)
+    rel_group = np.divide(part, res_vec[None, :], out=np.zeros_like(part), where=res_vec[None, :] > 0.0)
+    rel_all = np.divide(part, total_agents, out=np.zeros_like(part), where=total_agents > 0.0)
+    turnout_mix = 0.5 * (rel_group + rel_all)
 
-    n_episode = int(len(episodes))
-    if n_episode <= 0:
+    dom_col_idx = np.argmax(part, axis=1)
+    dom_group = col_groups[dom_col_idx]
+    dom_mix = turnout_mix[np.arange(len(steps)), dom_col_idx]
+
+    # Lock-in episodes: same dominant group + high dominant turnout mix.
+    dom_ok = np.isfinite(dom_mix) & (dom_mix >= float(dominant_turnout_mix_min))
+    ep_steps = steps[dom_ok].tolist()
+    if not ep_steps:
+        return out
+    raw_runs = _find_consecutive_runs(ep_steps, min_len=int(episode_min_len_steps))
+    if not raw_runs:
         return out
 
-    # Dominant-group altruistic vote share by step (from vote logs), loaded only
-    # for runs that actually contain lock-in episodes.
+    episodes: list[tuple[int, int, int, int]] = []  # (s0, s1, D, W)
+    step_to_idx = {int(s): int(i) for i, s in enumerate(steps.tolist())}
+    for s0, s1 in raw_runs:
+        idx0 = step_to_idx.get(int(s0))
+        idx1 = step_to_idx.get(int(s1))
+        if idx0 is None or idx1 is None or idx1 < idx0:
+            continue
+        d_vals = np.unique(dom_group[idx0 : idx1 + 1])
+        if d_vals.size != 1:
+            continue
+        d = int(d_vals[0])
+        d_col = int(np.where(col_groups == d)[0][0])
+        other_cols = [i for i, g in enumerate(col_groups.tolist()) if int(g) != d]
+        if not other_cols:
+            continue
+        seg = turnout_mix[idx0 : idx1 + 1, :]
+        weak_col = int(other_cols[int(np.argmin(np.nanmean(seg[:, other_cols], axis=0)))])
+        w = int(col_groups[weak_col])
+        w_vals = seg[:, weak_col]
+        low_steps = [
+            int(steps[idx0 + k])
+            for k, v in enumerate(w_vals.tolist())
+            if np.isfinite(v) and (float(v) <= float(weak_turnout_mix_max))
+        ]
+        if not _find_consecutive_runs(low_steps, min_len=int(weak_min_len_steps)):
+            continue
+        episodes.append((int(s0), int(s1), int(d), int(w)))
+
+    if not episodes:
+        return out
+
+    # Votes by step/group.
     votes_path = run_dir / "votes.parquet"
     if not votes_path.exists():
+        out["dominance_cycle_episode_count"] = float(len(episodes))
         return out
     try:
         votes = pd.read_parquet(votes_path)
     except Exception:
+        out["dominance_cycle_episode_count"] = float(len(episodes))
         return out
     if not {"step", "agent_id", "voted_altruistically"} <= set(votes.columns):
+        out["dominance_cycle_episode_count"] = float(len(episodes))
         return out
+
     group_map = ap.loc[:, ["step", "agent_id", "personality_group_idx"]].drop_duplicates(
         subset=["step", "agent_id"]
     )
     vm = votes.merge(group_map, on=["step", "agent_id"], how="left")
     vm = vm.loc[vm["personality_group_idx"].notna()].copy()
     if len(vm) == 0:
+        out["dominance_cycle_episode_count"] = float(len(episodes))
         return out
     vm["voted_altruistically"] = pd.to_numeric(vm["voted_altruistically"], errors="coerce")
-    altru = (
+    vg = (
         vm.groupby(["step", "personality_group_idx"], as_index=False)
-        .agg(group_altruism_share=("voted_altruistically", "mean"))
+        .agg(
+            total_votes=("voted_altruistically", "count"),
+            altru_votes=("voted_altruistically", "sum"),
+        )
+    )
+    vg["self_votes"] = pd.to_numeric(vg["total_votes"], errors="coerce").to_numpy(dtype=float) - pd.to_numeric(
+        vg["altru_votes"], errors="coerce"
+    ).to_numpy(dtype=float)
+    vg["altru_share"] = np.where(
+        pd.to_numeric(vg["total_votes"], errors="coerce").to_numpy(dtype=float) > 0.0,
+        pd.to_numeric(vg["altru_votes"], errors="coerce").to_numpy(dtype=float)
+        / pd.to_numeric(vg["total_votes"], errors="coerce").to_numpy(dtype=float),
+        np.nan,
     )
     altru_lookup: dict[tuple[int, int], float] = {}
-    for row in altru.itertuples(index=False):
+    self_lookup: dict[tuple[int, int], float] = {}
+    for row in vg.itertuples(index=False):
         st = int(getattr(row, "step"))
         gi = int(getattr(row, "personality_group_idx"))
-        av = float(getattr(row, "group_altruism_share"))
-        if np.isfinite(av):
-            altru_lookup[(st, gi)] = av
+        altru_lookup[(st, gi)] = float(getattr(row, "altru_share"))
+        self_lookup[(st, gi)] = float(getattr(row, "self_votes"))
 
-    n_surge = 0
+    n_episode = int(len(episodes))
+    n_altru = 0
+    n_takeover = 0
     n_recovery = 0
     lags: list[float] = []
-    for s0, s1, gidx in episodes:
-        ep_steps = range(int(s0), int(s1) + 1)
-        baseline_vals = np.asarray([altru_lookup.get((st, int(gidx)), np.nan) for st in ep_steps], dtype=float)
-        baseline = float(np.nanmean(baseline_vals))
-        if not np.isfinite(baseline):
-            baseline = 0.0
+    for s0, s1, d, w in episodes:
+        idx0 = step_to_idx.get(int(s0))
+        idx1 = step_to_idx.get(int(s1))
+        if idx0 is None or idx1 is None or idx1 < idx0:
+            continue
+        d_col = int(np.where(col_groups == int(d))[0][0])
+        w_col = int(np.where(col_groups == int(w))[0][0])
+        d_baseline = float(np.nanmean(turnout_mix[idx0 : idx1 + 1, d_col]))
+        if (not np.isfinite(d_baseline)) or d_baseline <= 0.0:
+            continue
         fut_lo = int(s1 + 1)
         fut_hi = int(s1 + int(recovery_window_steps))
-        if fut_lo > fut_hi:
+        fut = [int(s) for s in steps.tolist() if (int(s) >= fut_lo and int(s) <= fut_hi)]
+        if not fut:
             continue
-        fsteps = list(range(fut_lo, fut_hi + 1))
-        alt_series = np.asarray([altru_lookup.get((st, int(gidx)), np.nan) for st in fsteps], dtype=float)
-        alt_ok_mask = np.isfinite(alt_series) & (alt_series >= float(min_altruism_share)) & (
-            (alt_series - baseline) >= float(min_altruism_lift)
-        )
-        if not bool(np.any(alt_ok_mask)):
-            continue
-        n_surge += 1
-        first_surge_step = int(fsteps[int(np.argmax(alt_ok_mask))])
-        post = seq.loc[
-            (seq["step"] >= int(first_surge_step))
-            & (seq["step"] <= int(fut_hi))
-            & (seq["conflict"] == True)
-        ].copy()
-        if len(post) == 0:
-            continue
-        post_margin = pd.to_numeric(post["margin"], errors="coerce").to_numpy(dtype=float)
-        post_step = pd.to_numeric(post["step"], errors="coerce").to_numpy(dtype=float)
-        mask = np.isfinite(post_margin) & np.isfinite(post_step) & (
-            post_margin > float(margin_puzzle_recovery_threshold)
-        )
-        if not bool(np.any(mask)):
-            continue
-        rec_step = int(post_step[np.argmax(mask)])
-        n_recovery += 1
-        lags.append(float(rec_step - s1))
 
-    out["lockin_episode_count_conflict"] = float(n_episode)
-    out["lockin_altruism_surge_count_conflict"] = float(n_surge)
-    out["lockin_recovery_event_count_conflict"] = float(n_recovery)
-    out["lockin_altruism_surge_share_conflict"] = (
-        float(n_surge) / float(n_episode) if n_episode > 0 else np.nan
-    )
-    out["lockin_recovery_share_conflict"] = (
+        # D altruism plateau.
+        altru_steps = [
+            st for st in fut
+            if np.isfinite(altru_lookup.get((st, int(d)), np.nan))
+            and float(altru_lookup.get((st, int(d)), np.nan)) >= float(altruism_share_min)
+        ]
+        altru_runs = _find_consecutive_runs(altru_steps, min_len=int(altruism_min_len_steps))
+        if not altru_runs:
+            continue
+        n_altru += 1
+        plateau_start = int(altru_runs[0][0])
+
+        after = [st for st in fut if st >= plateau_start]
+        if not after:
+            continue
+        selflead_steps: list[int] = []
+        rebound_steps: set[int] = set()
+        domdrop_steps: set[int] = set()
+        for st in after:
+            i = step_to_idx.get(int(st))
+            if i is None:
+                continue
+            self_w = float(self_lookup.get((int(st), int(w)), 0.0))
+            self_d = float(self_lookup.get((int(st), int(d)), 0.0))
+            if np.isfinite(self_w) and np.isfinite(self_d) and (self_w > self_d + float(weak_selfvote_margin_min)):
+                selflead_steps.append(int(st))
+            d_mix = float(turnout_mix[i, d_col])
+            w_mix = float(turnout_mix[i, w_col])
+            if np.isfinite(d_mix) and np.isfinite(w_mix):
+                if d_mix <= float(d_baseline * (1.0 - float(dominant_turnout_drop_min_frac))):
+                    domdrop_steps.add(int(st))
+                if d_mix > 1e-12 and w_mix >= float(weak_rebound_mix_ratio_min) * d_mix:
+                    rebound_steps.add(int(st))
+
+        takeover_runs = _find_consecutive_runs(selflead_steps, min_len=int(weak_selfvote_lead_min_len_steps))
+        if not takeover_runs:
+            continue
+        n_takeover += 1
+
+        recovered = False
+        rec_step = None
+        for t0, t1 in takeover_runs:
+            run_steps = set(range(int(t0), int(t1) + 1))
+            if not (run_steps & rebound_steps):
+                continue
+            if not ({st for st in after if st <= int(t1)} & domdrop_steps):
+                continue
+            recovered = True
+            rec_step = int(t0)
+            break
+        if not recovered:
+            continue
+        n_recovery += 1
+        if rec_step is not None:
+            lags.append(float(rec_step - int(s1)))
+
+    out["dominance_cycle_episode_count"] = float(n_episode)
+    out["dominance_cycle_altruism_plateau_count"] = float(n_altru)
+    out["dominance_cycle_selfvote_takeover_count"] = float(n_takeover)
+    out["dominance_cycle_recovery_event_count"] = float(n_recovery)
+    out["dominance_cycle_recovery_share"] = (
         float(n_recovery) / float(n_episode) if n_episode > 0 else np.nan
     )
-    out["lockin_recovery_lag_mean_steps_conflict"] = float(np.mean(lags)) if lags else np.nan
+    out["dominance_cycle_recovery_lag_mean_steps"] = float(np.mean(lags)) if lags else np.nan
     return out
 
 
@@ -1319,13 +1407,17 @@ def collect_run_features(
     *,
     burn_in_steps: int = 0,
     puzzle_conflict_min_dist: float = DEFAULT_SCORING_THRESHOLDS["puzzle_conflict_min_dist"],
-    lockin_episode_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["lockin_episode_min_len_steps"]),
-    lockin_recovery_window_steps: int = int(DEFAULT_SCORING_THRESHOLDS["lockin_recovery_window_steps"]),
-    lockin_min_dominant_participant_share: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_dominant_participant_share"],
-    lockin_min_altruism_share: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_altruism_share"],
-    lockin_min_altruism_lift: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_altruism_lift"],
-    lockin_margin_power_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_power_threshold"],
-    lockin_margin_puzzle_recovery_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_puzzle_recovery_threshold"],
+    dominance_cycle_episode_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["dominance_cycle_episode_min_len_steps"]),
+    dominance_cycle_dominant_turnout_mix_min: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_dominant_turnout_mix_min"],
+    dominance_cycle_weak_turnout_mix_max: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_weak_turnout_mix_max"],
+    dominance_cycle_weak_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["dominance_cycle_weak_min_len_steps"]),
+    dominance_cycle_altruism_share_min: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_altruism_share_min"],
+    dominance_cycle_altruism_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["dominance_cycle_altruism_min_len_steps"]),
+    dominance_cycle_recovery_window_steps: int = int(DEFAULT_SCORING_THRESHOLDS["dominance_cycle_recovery_window_steps"]),
+    dominance_cycle_weak_selfvote_margin_min: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_weak_selfvote_margin_min"],
+    dominance_cycle_weak_selfvote_lead_min_len_steps: int = int(DEFAULT_SCORING_THRESHOLDS["dominance_cycle_weak_selfvote_lead_min_len_steps"]),
+    dominance_cycle_dominant_turnout_drop_min_frac: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_dominant_turnout_drop_min_frac"],
+    dominance_cycle_weak_rebound_mix_ratio_min: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_weak_rebound_mix_ratio_min"],
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for run_dir in sorted(doe_root.glob("design_*/rule_*/seed_*/run_0")):
@@ -1346,19 +1438,20 @@ def collect_run_features(
             )
         )
         features.update(
-            _compute_lockin_recovery_metrics_for_run(
+            _compute_dominance_cycle_recovery_metrics_for_run(
                 run_dir=run_dir,
-                area_steps=area,
                 agents=agents,
-                burn_in_steps=int(burn_in_steps),
-                conflict_min_dist=float(puzzle_conflict_min_dist),
-                episode_min_len_steps=int(lockin_episode_min_len_steps),
-                recovery_window_steps=int(lockin_recovery_window_steps),
-                min_dominant_participant_share=float(lockin_min_dominant_participant_share),
-                min_altruism_share=float(lockin_min_altruism_share),
-                min_altruism_lift=float(lockin_min_altruism_lift),
-                margin_power_threshold=float(lockin_margin_power_threshold),
-                margin_puzzle_recovery_threshold=float(lockin_margin_puzzle_recovery_threshold),
+                episode_min_len_steps=int(dominance_cycle_episode_min_len_steps),
+                dominant_turnout_mix_min=float(dominance_cycle_dominant_turnout_mix_min),
+                weak_turnout_mix_max=float(dominance_cycle_weak_turnout_mix_max),
+                weak_min_len_steps=int(dominance_cycle_weak_min_len_steps),
+                altruism_share_min=float(dominance_cycle_altruism_share_min),
+                altruism_min_len_steps=int(dominance_cycle_altruism_min_len_steps),
+                recovery_window_steps=int(dominance_cycle_recovery_window_steps),
+                weak_selfvote_margin_min=float(dominance_cycle_weak_selfvote_margin_min),
+                weak_selfvote_lead_min_len_steps=int(dominance_cycle_weak_selfvote_lead_min_len_steps),
+                dominant_turnout_drop_min_frac=float(dominance_cycle_dominant_turnout_drop_min_frac),
+                weak_rebound_mix_ratio_min=float(dominance_cycle_weak_rebound_mix_ratio_min),
             )
         )
 
@@ -1488,8 +1581,8 @@ def score_designs(
     min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
     puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
     puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
-    lockin_recovery_share_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_zero_at"],
-    lockin_recovery_share_score_good_min: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_good_min"],
+    dominance_cycle_recovery_share_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_recovery_share_score_zero_at"],
+    dominance_cycle_recovery_share_score_good_min: float = DEFAULT_SCORING_THRESHOLDS["dominance_cycle_recovery_share_score_good_min"],
     turnout_start_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_low"],
     turnout_start_score_high: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_high"],
     turnout_end_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_end_score_low"],
@@ -1666,10 +1759,10 @@ def score_designs(
         low=float(puzzle_dominance_share_score_low),
         high=float(puzzle_dominance_share_score_high),
     )
-    primary["z_lockin_recovery_conflict"] = _lower_bound_pref01(
-        pd.to_numeric(primary["lockin_recovery_share_conflict"], errors="coerce"),
-        zero_at=float(lockin_recovery_share_score_zero_at),
-        good_min=float(lockin_recovery_share_score_good_min),
+    primary["z_dominance_cycle_recovery"] = _lower_bound_pref01(
+        pd.to_numeric(primary["dominance_cycle_recovery_share"], errors="coerce"),
+        zero_at=float(dominance_cycle_recovery_share_score_zero_at),
+        good_min=float(dominance_cycle_recovery_share_score_good_min),
     )
     quality_components = list(PRIMARY_QUALITY_COMPONENT_KEYS)
     quality_values = primary[quality_components].copy()
@@ -1873,13 +1966,17 @@ def analyze_doe_root(
         root,
         burn_in_steps=int(burn_in_steps),
         puzzle_conflict_min_dist=float(thr["puzzle_conflict_min_dist"]),
-        lockin_episode_min_len_steps=int(thr["lockin_episode_min_len_steps"]),
-        lockin_recovery_window_steps=int(thr["lockin_recovery_window_steps"]),
-        lockin_min_dominant_participant_share=float(thr["lockin_min_dominant_participant_share"]),
-        lockin_min_altruism_share=float(thr["lockin_min_altruism_share"]),
-        lockin_min_altruism_lift=float(thr["lockin_min_altruism_lift"]),
-        lockin_margin_power_threshold=float(thr["lockin_margin_power_threshold"]),
-        lockin_margin_puzzle_recovery_threshold=float(thr["lockin_margin_puzzle_recovery_threshold"]),
+        dominance_cycle_episode_min_len_steps=int(thr["dominance_cycle_episode_min_len_steps"]),
+        dominance_cycle_dominant_turnout_mix_min=float(thr["dominance_cycle_dominant_turnout_mix_min"]),
+        dominance_cycle_weak_turnout_mix_max=float(thr["dominance_cycle_weak_turnout_mix_max"]),
+        dominance_cycle_weak_min_len_steps=int(thr["dominance_cycle_weak_min_len_steps"]),
+        dominance_cycle_altruism_share_min=float(thr["dominance_cycle_altruism_share_min"]),
+        dominance_cycle_altruism_min_len_steps=int(thr["dominance_cycle_altruism_min_len_steps"]),
+        dominance_cycle_recovery_window_steps=int(thr["dominance_cycle_recovery_window_steps"]),
+        dominance_cycle_weak_selfvote_margin_min=float(thr["dominance_cycle_weak_selfvote_margin_min"]),
+        dominance_cycle_weak_selfvote_lead_min_len_steps=int(thr["dominance_cycle_weak_selfvote_lead_min_len_steps"]),
+        dominance_cycle_dominant_turnout_drop_min_frac=float(thr["dominance_cycle_dominant_turnout_drop_min_frac"]),
+        dominance_cycle_weak_rebound_mix_ratio_min=float(thr["dominance_cycle_weak_rebound_mix_ratio_min"]),
     )
     gated = apply_hard_gates(
         rf,
@@ -1937,8 +2034,8 @@ def analyze_doe_root(
         min_competitive_step_share=float(thr["min_competitive_step_share"]),
         puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
         puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
-        lockin_recovery_share_score_zero_at=float(thr["lockin_recovery_share_score_zero_at"]),
-        lockin_recovery_share_score_good_min=float(thr["lockin_recovery_share_score_good_min"]),
+        dominance_cycle_recovery_share_score_zero_at=float(thr["dominance_cycle_recovery_share_score_zero_at"]),
+        dominance_cycle_recovery_share_score_good_min=float(thr["dominance_cycle_recovery_share_score_good_min"]),
         turnout_start_score_low=float(thr["turnout_start_score_low"]),
         turnout_start_score_high=float(thr["turnout_start_score_high"]),
         turnout_end_score_low=float(thr["turnout_end_score_low"]),
@@ -2024,7 +2121,7 @@ def analyze_doe_root(
                     "participant_share_mean_abs_drift_20_w (mild, size-weighted)",
                     "participant_share_turnover_rate_w (mild, size-weighted)",
                     "puzzle_dominance_share_conflict",
-                    "lockin_recovery_share_conflict (episode: dominant power lock-in -> altruism surge -> puzzle recovery)",
+                    "dominance_cycle_recovery_share (D lock-in + W suppression -> D altruism plateau -> W self-vote takeover + D turnout drop + W rebound)",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",
             },
