@@ -12,7 +12,7 @@ def _run_scenario(
     tmp_path: Path,
     *,
     label: str,
-    bias: float,
+    participation_init_q: float,
     election_cost_rate: float,
     reward_rate_personal: float,
     num_steps: int = 12,
@@ -26,7 +26,7 @@ def _run_scenario(
 
     # Keep this moderate to reduce stochastic noise while remaining fast.
     cfg.model.num_agents = 80
-    cfg.model.bias_toward_participation = float(bias)
+    cfg.model.participation_init_q = float(participation_init_q)
 
     # Disable learning-driven drift so signatures stay stable and interpretable.
     cfg.model.participation_alpha = 0.0
@@ -42,7 +42,7 @@ def _run_scenario(
 
 def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
     """P0 golden scenarios:
-    1) turnout ordering under low/neutral/high participation bias
+    1) turnout ordering under low/neutral/high participation propensity
     2) inequality trajectory flat when economics are disabled
     3) inequality trajectory non-flat when participation cost is active
     """
@@ -52,29 +52,29 @@ def test_golden_scenarios_turnout_and_inequality_signatures() -> None:
         tmp = Path(td)
         low = _run_scenario(
             tmp,
-            label="low_bias",
-            bias=-0.35,
+            label="low_participation",
+            participation_init_q=-3.0,
             election_cost_rate=0.0,
             reward_rate_personal=0.0,
         )
         neutral = _run_scenario(
             tmp,
-            label="neutral_bias",
-            bias=0.0,
+            label="neutral_participation",
+            participation_init_q=0.0,
             election_cost_rate=0.0,
             reward_rate_personal=0.0,
         )
         high = _run_scenario(
             tmp,
-            label="high_bias",
-            bias=0.35,
+            label="high_participation",
+            participation_init_q=3.0,
             election_cost_rate=0.0,
             reward_rate_personal=0.0,
         )
         economy = _run_scenario(
             tmp,
             label="economy_cost_only",
-            bias=0.0,
+            participation_init_q=0.0,
             election_cost_rate=0.05,
             reward_rate_personal=0.0,
         )

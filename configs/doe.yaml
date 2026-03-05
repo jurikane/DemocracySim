@@ -11,7 +11,6 @@ model:
   participation_beta: 1.0
   participation_init_q: 0.0
   participation_q_max: 2.0
-  bias_toward_participation: 0.0
   participation_baseline_alpha: 0.1
   participation_signal_mode: group_centered_delta_rel_plus_fee
   participation_signal_fee_weight: 1.0

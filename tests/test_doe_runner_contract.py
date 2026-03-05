@@ -73,7 +73,6 @@ def test_apply_doe_overrides_sets_frozen_and_run_controls() -> None:
     assert abs(out.model.altruism_static - 0.4) < 1e-12
     assert out.model.participation_q_max == 2.0
     assert out.model.participation_baseline_alpha == 0.1
-    assert out.model.bias_toward_participation == 0.0
     assert out.model.color_patches_steps == 0
 
 

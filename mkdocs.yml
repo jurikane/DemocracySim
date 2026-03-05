@@ -16,7 +16,8 @@ nav:
     - Research:
         - Thesis Contract: research/thesis_contract.md
         - Thesis Model Concepts: research/thesis_model_concepts.md
-        - Visualization Insight Inventory: research/visualization_insight_inventory.md
+        - Visualisation:
+            - Plot Inventory: research/visualisation_plot_inventory.md
         - Concept Deep Dives:
             - Grid State Concept: research/grid_state_concept.md
             - Puzzle Quality Gate Concept: research/puzzle_quality_gate_concept.md

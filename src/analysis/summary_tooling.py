@@ -76,6 +76,7 @@ class _SummaryRenderProfile:
     area_group_opportunity_page: bool
     area_puzzle_gate_page: bool
     area_group_diagnostics_pages: bool
+    area_learning_causal_page: bool
     area_assets_page: bool
     area_group_means_page: bool
     area_dist_to_ref_page: bool
@@ -264,6 +265,7 @@ def generate_run_summary_batch2(
         area_agent_ids=area_agent_ids,
         participation_alpha=_load_participation_alpha_for_run(run_dir=run_dir),
         participation_signal_mode=_load_participation_signal_mode_for_run(run_dir=run_dir),
+        participation_signal_group_shrink_k=_load_participation_signal_group_shrink_k_for_run(run_dir=run_dir),
         altruism_alpha=_load_altruism_alpha_for_run(run_dir=run_dir),
         altruism_learning=_load_altruism_learning_for_run(run_dir=run_dir),
     )
@@ -655,6 +657,7 @@ def _build_area_group_series(
     area_agent_ids: dict[int, list[int]],
     participation_alpha: float = 1.0,
     participation_signal_mode: str = "raw_delta_rel",
+    participation_signal_group_shrink_k: float = 0.0,
     altruism_alpha: float = 1.0,
     altruism_learning: bool = True,
 ) -> pd.DataFrame:
@@ -685,8 +688,16 @@ def _build_area_group_series(
         "abstainers_mean_delta_rel",
         "participants_mean_fee",
         "participants_mean_fee_over_assets",
+        "group_mu_delta_rel",
+        "global_mu_delta_rel",
+        "group_signal_shrink_weight",
+        "group_signal_component",
         "participants_mean_participation_signal",
         "abstainers_mean_participation_signal",
+        "participants_mean_signal_group_component",
+        "participants_mean_signal_fee_component",
+        "abstainers_mean_signal_group_component",
+        "abstainers_mean_signal_fee_component",
         "group_mean_participation_q_delta",
         "participants_mean_participation_q_delta",
         "abstainers_mean_participation_q_delta",
@@ -751,6 +762,8 @@ def _build_area_group_series(
         "election_delta_abs",
         "election_delta_rel",
         "participation_signal",
+        "participation_signal_group_component",
+        "participation_signal_fee_component",
         "dissatisfaction_signal",
         "q_participation",
         "participation_probability",
@@ -774,6 +787,10 @@ def _build_area_group_series(
         state["election_delta_rel"] = np.nan
     if "participation_signal" not in state.columns:
         state["participation_signal"] = np.nan
+    if "participation_signal_group_component" not in state.columns:
+        state["participation_signal_group_component"] = np.nan
+    if "participation_signal_fee_component" not in state.columns:
+        state["participation_signal_fee_component"] = np.nan
     if "dissatisfaction_signal" not in state.columns:
         state["dissatisfaction_signal"] = np.nan
     if "q_participation" not in state.columns:
@@ -787,6 +804,8 @@ def _build_area_group_series(
     state["election_delta_abs"] = state["election_delta_abs"].astype("float32")
     state["election_delta_rel"] = state["election_delta_rel"].astype("float32")
     state["participation_signal"] = state["participation_signal"].astype("float32")
+    state["participation_signal_group_component"] = state["participation_signal_group_component"].astype("float32")
+    state["participation_signal_fee_component"] = state["participation_signal_fee_component"].astype("float32")
     state["dissatisfaction_signal"] = state["dissatisfaction_signal"].astype("float32")
     state["q_participation"] = state["q_participation"].astype("float32")
     state["participation_probability"] = state["participation_probability"].astype("float32")
@@ -914,6 +933,39 @@ def _build_area_group_series(
     out["resident_share"] = resident_share
     out["eligible_share"] = eligible_share
     out["participant_share"] = participant_share
+
+    # Participation-learning causal decomposition anchors:
+    # group mean delta_rel, cross-group mean, shrink weight, and implied group signal component.
+    eligible_mask_for_mu = residents["assets"].to_numpy(dtype=float) > 0.0
+    mu_by_group = (
+        residents.loc[eligible_mask_for_mu]
+        .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)["election_delta_rel"]
+        .mean()
+        .rename(columns={"election_delta_rel": "group_mu_delta_rel"})
+    )
+    mu_global = (
+        mu_by_group.groupby(["step", "area_id"], sort=False, as_index=False)["group_mu_delta_rel"]
+        .mean()
+        .rename(columns={"group_mu_delta_rel": "global_mu_delta_rel"})
+    )
+    out = out.merge(mu_by_group, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(mu_global, on=["step", "area_id"], how="left")
+
+    shrink_k = float(participation_signal_group_shrink_k) if np.isfinite(participation_signal_group_shrink_k) else np.nan
+    eligible_vals = out["eligible"].to_numpy(dtype=float)
+    if np.isfinite(shrink_k) and shrink_k >= 0.0:
+        shrink_weight = np.divide(
+            eligible_vals,
+            eligible_vals + float(shrink_k),
+            out=np.full(len(out), np.nan, dtype=float),
+            where=(eligible_vals + float(shrink_k)) > 0.0,
+        )
+    else:
+        shrink_weight = np.full(len(out), np.nan, dtype=float)
+    out["group_signal_shrink_weight"] = shrink_weight.astype("float32")
+    mu_group_vals = pd.to_numeric(out.get("group_mu_delta_rel"), errors="coerce").to_numpy(dtype=float)
+    mu_global_vals = pd.to_numeric(out.get("global_mu_delta_rel"), errors="coerce").to_numpy(dtype=float)
+    out["group_signal_component"] = (shrink_weight * (mu_group_vals - mu_global_vals)).astype("float32")
 
     # Participant/abstainer incentive diagnostics for calibration plots.
     residents = residents.sort_values(["area_id", "agent_id", "step"]).reset_index(drop=True)
@@ -1058,6 +1110,22 @@ def _build_area_group_series(
         .mean()
         .rename(columns={"participation_signal": "abstainers_mean_participation_signal"})
     )
+    p_sig_components = (
+        residents.loc[p_mask]
+        .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            participants_mean_signal_group_component=("participation_signal_group_component", "mean"),
+            participants_mean_signal_fee_component=("participation_signal_fee_component", "mean"),
+        )
+    )
+    a_sig_components = (
+        residents.loc[a_mask]
+        .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)
+        .agg(
+            abstainers_mean_signal_group_component=("participation_signal_group_component", "mean"),
+            abstainers_mean_signal_fee_component=("participation_signal_fee_component", "mean"),
+        )
+    )
     q_update = (
         residents.groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)[
             "participation_q_update_proxy"
@@ -1132,6 +1200,8 @@ def _build_area_group_series(
     out = out.merge(p_fee, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(p_sig, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(a_sig, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(p_sig_components, on=["step", "area_id", "personality_group_idx"], how="left")
+    out = out.merge(a_sig_components, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(q_delta, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(group_p_delta, on=["step", "area_id", "personality_group_idx"], how="left")
     out = out.merge(q_update, on=["step", "area_id", "personality_group_idx"], how="left")
@@ -1395,8 +1465,16 @@ def _build_area_group_series(
         "abstainers_mean_delta_rel",
         "participants_mean_fee",
         "participants_mean_fee_over_assets",
+        "group_mu_delta_rel",
+        "global_mu_delta_rel",
+        "group_signal_shrink_weight",
+        "group_signal_component",
         "participants_mean_participation_signal",
         "abstainers_mean_participation_signal",
+        "participants_mean_signal_group_component",
+        "participants_mean_signal_fee_component",
+        "abstainers_mean_signal_group_component",
+        "abstainers_mean_signal_fee_component",
         "group_mean_participation_q_delta",
         "participants_mean_participation_q_delta",
         "abstainers_mean_participation_q_delta",
@@ -1476,13 +1554,13 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             area_group_opportunity_page=True,
             area_puzzle_gate_page=False,
             area_group_diagnostics_pages=True,
+            area_learning_causal_page=True,
             area_assets_page=True,
             area_group_means_page=True,
             area_dist_to_ref_page=True,
         )
     if profile == SUMMARY_PROFILE_DEBUG_DOE_COMPACT:
-        # For single-area DOE packets, global/area core pages are mostly duplicates.
-        is_single_area = int(num_areas) <= 1
+        # DOE/debug profile keeps area core + group diagnostics enabled for interpretability.
         return _SummaryRenderProfile(
             name=profile,
             global_colors_and_grids=False,
@@ -1490,12 +1568,13 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             global_per_area_group_distribution=False,
             global_core_metrics=True,
             global_distance_metrics=True,
-            area_core_page=(not is_single_area),
+            area_core_page=True,
             area_puzzle_page=True,
             area_vote_mode_alignment_page=True,
             area_group_opportunity_page=True,
             area_puzzle_gate_page=True,
-            area_group_diagnostics_pages=False,
+            area_group_diagnostics_pages=True,
+            area_learning_causal_page=True,
             area_assets_page=False,
             area_group_means_page=False,
             area_dist_to_ref_page=False,
@@ -1514,6 +1593,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
         area_group_opportunity_page=True,
         area_puzzle_gate_page=False,
         area_group_diagnostics_pages=True,
+        area_learning_causal_page=True,
         area_assets_page=True,
         area_group_means_page=True,
         area_dist_to_ref_page=True,
@@ -1647,6 +1727,11 @@ def _load_participation_signal_mode_for_run(*, run_dir: Path) -> str:
     if not value:
         raise RuntimeError(f"Invalid model config field '{field}': empty string")
     return value
+
+
+def _load_participation_signal_group_shrink_k_for_run(*, run_dir: Path) -> float:
+    """Load model.participation_signal_group_shrink_k from config_used.yaml (strict)."""
+    return _load_required_finite_float_for_run(run_dir=run_dir, field="participation_signal_group_shrink_k")
 
 
 def _load_altruism_learning_for_run(*, run_dir: Path) -> bool:
@@ -2758,23 +2843,68 @@ def _render_area_detail_pdf(
             meta=meta,
         )
         groups_sorted = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist()) if not area_group_series.empty else []
+        group_resident_count_static: dict[int, float] = {}
+        if not area_group_series.empty and groups_sorted:
+            for g in groups_sorted:
+                vals = area_group_series.loc[area_group_series["group_idx"] == g, "residents"].to_numpy(dtype=float)
+                group_resident_count_static[int(g)] = float(np.nanmedian(vals)) if np.isfinite(vals).any() else float("nan")
+
+        def _opp_group_is_small(g: int) -> bool:
+            cnt = group_resident_count_static.get(int(g), float("nan"))
+            return bool(np.isfinite(cnt) and cnt < float(_SMALL_GROUP_MIN_RESIDENTS))
+
+        def _opp_group_alpha(g: int, *, normal: float = 0.95, small: float = 0.14) -> float:
+            return float(small if _opp_group_is_small(int(g)) else normal)
+
+        has_small_opp_groups = any(_opp_group_is_small(int(g)) for g in groups_sorted)
+        major_groups_sorted = [int(g) for g in groups_sorted if not _opp_group_is_small(int(g))]
+        spread_groups_sorted = major_groups_sorted if major_groups_sorted else list(groups_sorted)
+
         has_opp = False
         if not opp_df.empty:
             xs = opp_df["step"].to_numpy(dtype=float)
+            shown_opp_groups = 0
             for g in groups_sorted:
                 c = f"group_{g}_puzzle_opp_dist"
                 if c in opp_df.columns:
                     y = opp_df[c].to_numpy(dtype=float)
                     if np.isfinite(y).any():
                         color = get_group_color(int(g))
-                        axg[0].plot(xs, y, color=color, linewidth=0.9, alpha=0.25)
-                        axg[0].plot(xs, _rolling_mean_nan(y), color=color, linewidth=1.5, alpha=0.98, label=f"g{g}")
+                        is_small = _opp_group_is_small(int(g))
+                        axg[0].plot(
+                            xs,
+                            y,
+                            color=color,
+                            linewidth=0.8 if is_small else 0.9,
+                            alpha=_opp_group_alpha(int(g), normal=0.22, small=0.06),
+                        )
+                        axg[0].plot(
+                            xs,
+                            _rolling_mean_nan(y),
+                            color=color,
+                            linewidth=1.3 if is_small else 1.5,
+                            alpha=_opp_group_alpha(int(g), normal=0.98, small=0.18),
+                            label=f"g{g}" if not is_small else "_nolegend_",
+                        )
+                        if not is_small:
+                            shown_opp_groups += 1
                         has_opp = True
         axg[0].set_title("Group Opportunity Alignment to Puzzle [distance(group ordering, puzzle ordering)]")
         axg[0].set_ylabel("distance [0..1]\n(lower=more aligned)")
         _set_unit_ylim_visible(axg[0])
-        if len(axg[0].lines) > 0:
+        if not opp_df.empty and shown_opp_groups > 0:
             axg[0].legend(loc="best", fontsize=8, ncol=min(5, len(axg[0].lines)))
+        if has_small_opp_groups:
+            axg[0].text(
+                0.01,
+                0.03,
+                f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+                transform=axg[0].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
+            )
 
         has_behavior = False
         opp_rhs = None
@@ -2794,12 +2924,12 @@ def _render_area_detail_pdf(
                     non_alt_share=non_alt_share_vals
                 )
                 .pivot(index="step", columns="group_idx", values="non_alt_share")
-                .reindex(index=steps_g.astype(int), columns=groups_sorted)
+                .reindex(index=steps_g.astype(int), columns=spread_groups_sorted)
                 .astype(float)
             )
             p_turn = (
                 area_group_series.pivot(index="step", columns="group_idx", values="turnout")
-                .reindex(index=steps_g.astype(int), columns=groups_sorted)
+                .reindex(index=steps_g.astype(int), columns=spread_groups_sorted)
                 .astype(float)
             )
             non_alt_mat = p_non_alt_share.to_numpy(dtype=float)
@@ -2836,7 +2966,7 @@ def _render_area_detail_pdf(
                 )
                 has_behavior = True
         if not opp_df.empty:
-            opp_cols = [c for c in opp_df.columns if c.startswith("group_") and c.endswith("_puzzle_opp_dist")]
+            opp_cols = [f"group_{int(g)}_puzzle_opp_dist" for g in spread_groups_sorted if f"group_{int(g)}_puzzle_opp_dist" in opp_df.columns]
             if opp_cols:
                 opp_mat = opp_df[opp_cols].to_numpy(dtype=float)
                 with np.errstate(invalid="ignore"):
@@ -2864,6 +2994,21 @@ def _render_area_detail_pdf(
                 axg[1].legend(h1 + h2, l1 + l2, loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=2)
             else:
                 axg[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=2)
+        if has_small_opp_groups:
+            if major_groups_sorted:
+                note = f"Spread excludes groups with residents < {_SMALL_GROUP_MIN_RESIDENTS}."
+            else:
+                note = f"All groups are < {_SMALL_GROUP_MIN_RESIDENTS}; spread uses all groups."
+            axg[1].text(
+                0.01,
+                0.03,
+                note,
+                transform=axg[1].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
+            )
         if not has_opp:
             axg[0].text(0.5, 0.5, "Opportunity alignment unavailable (requires puzzle distribution logging)", ha="center", va="center")
             axg[0].set_yticks([])
@@ -2896,6 +3041,12 @@ def _render_area_detail_pdf(
                 turnout=turnout,
                 participants=participants,
                 eligible=eligible,
+                suptitle=suptitle,
+            )
+        if render_profile.area_learning_causal_page and (not area_group_series.empty):
+            _render_area_learning_causal_page(
+                pdf=pdf,
+                area_group_series=area_group_series,
                 suptitle=suptitle,
             )
 
@@ -3033,33 +3184,14 @@ def _render_area_group_pages(
     p_dissat = pivot("mean_dissatisfaction")
     p_res_share = pivot("resident_share")
     p_part_share = pivot("participant_share")
-    p_part_reward_count = pivot_optional("participants_reward_count")
-    p_part_punish_count = pivot_optional("participants_punishment_count")
-    p_abs_reward_count = pivot_optional("abstainers_reward_count")
-    p_abs_punish_count = pivot_optional("abstainers_punishment_count")
-    p_learning_intensity = pivot_optional("learning_intensity_rel_mean")
-    p_learning_pressure = pivot_optional("learning_signed_pressure")
     p_part_delta = pivot_optional("participants_mean_delta_rel")
     p_abs_delta = pivot_optional("abstainers_mean_delta_rel")
     p_part_fee = pivot_optional("participants_mean_fee")
     p_part_fee_assets = pivot_optional("participants_mean_fee_over_assets")
-    p_q_update = pivot_optional("group_mean_participation_q_update_proxy")
-    p_q_delta_exact = pivot_optional("group_mean_participation_q_delta")
-    p_p_delta_exact = pivot_optional("group_mean_participation_p_delta")
     p_q_std_within = pivot_optional("group_std_q_participation")
     p_p_std_within = pivot_optional("group_std_participation_probability")
     p_gini_assets_within = pivot_optional("group_gini_assets_within")
     p_gini_diss_within = pivot_optional("group_gini_dissatisfaction_within")
-    p_part_q_update = pivot_optional("participants_mean_participation_q_update_proxy")
-    p_abs_q_update = pivot_optional("abstainers_mean_participation_q_update_proxy")
-    p_part_q_delta_exact = pivot_optional("participants_mean_participation_q_delta")
-    p_abs_q_delta_exact = pivot_optional("abstainers_mean_participation_q_delta")
-    p_part_p_delta_exact = pivot_optional("participants_mean_participation_p_delta")
-    p_abs_p_delta_exact = pivot_optional("abstainers_mean_participation_p_delta")
-    p_alt_q_update = pivot_optional("altruistic_voters_mean_participation_q_update_proxy")
-    p_non_alt_q_update = pivot_optional("non_altruistic_voters_mean_participation_q_update_proxy")
-    p_alt_q_delta_exact = pivot_optional("altruistic_voters_mean_participation_q_delta")
-    p_non_alt_q_delta_exact = pivot_optional("non_altruistic_voters_mean_participation_q_delta")
     p_alt_a_update = pivot_optional("altruistic_voters_mean_altruism_update_proxy")
     p_non_alt_a_update = pivot_optional("non_altruistic_voters_mean_altruism_update_proxy")
     p_alt_a_delta_exact = pivot_optional("altruistic_voters_mean_altruism_delta")
@@ -3382,186 +3514,10 @@ def _render_area_group_pages(
     pdf.savefig(fig6, dpi=140)
     plt.close(fig6)
 
-    # Page 5b: learning-direction and learning-intensity diagnostics by group.
-    fig6b, ax6b = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    ax6b[0].set_title("Learning Direction by Group (toward participation + / away from participation -)")
-    ax6b[0].set_ylabel("direction score [% pts]")
-    has_direction_components = (
-        p_part_reward_count is not None
-        and p_part_punish_count is not None
-        and p_abs_reward_count is not None
-        and p_abs_punish_count is not None
-        and (
-            np.isfinite(p_part_reward_count.to_numpy(dtype=float)).any()
-            or np.isfinite(p_part_punish_count.to_numpy(dtype=float)).any()
-            or np.isfinite(p_abs_reward_count.to_numpy(dtype=float)).any()
-            or np.isfinite(p_abs_punish_count.to_numpy(dtype=float)).any()
-        )
-    )
-    if has_direction_components:
-        for g in groups:
-            part_vals = p_part[g].to_numpy(dtype=float)
-            abs_vals = np.maximum(0.0, p_res[g].to_numpy(dtype=float) - part_vals)
-            reward_vals = p_part_reward_count[g].to_numpy(dtype=float)
-            punish_vals = p_part_punish_count[g].to_numpy(dtype=float)
-            abs_reward_vals = p_abs_reward_count[g].to_numpy(dtype=float)
-            abs_punish_vals = p_abs_punish_count[g].to_numpy(dtype=float)
-            part_reward_share = np.zeros_like(reward_vals, dtype=float)
-            part_punish_share = np.zeros_like(punish_vals, dtype=float)
-            abs_reward_share = np.zeros_like(abs_reward_vals, dtype=float)
-            abs_punish_share = np.zeros_like(abs_punish_vals, dtype=float)
-            np.divide(reward_vals, part_vals, out=part_reward_share, where=part_vals > 0.0)
-            np.divide(punish_vals, part_vals, out=part_punish_share, where=part_vals > 0.0)
-            np.divide(abs_reward_vals, abs_vals, out=abs_reward_share, where=abs_vals > 0.0)
-            np.divide(abs_punish_vals, abs_vals, out=abs_punish_share, where=abs_vals > 0.0)
-            # Direction logic:
-            # + participant reward, - participant punishment,
-            # - abstainer reward, + abstainer punishment.
-            direction_score = 0.5 * (
-                (part_reward_share + abs_punish_share) - (part_punish_share + abs_reward_share)
-            )
-            color = get_group_color(int(g))
-            ax6b[0].plot(
-                steps,
-                direction_score * 100.0,
-                color=color,
-                linewidth=1.0,
-                alpha=0.95,
-                label=f"g{g}",
-            )
-        ax6b[0].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
-        if groups:
-            ax6b[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
-        ax6b[0].text(
-            0.01,
-            0.03,
-            "score = 0.5 * [(P(participant rewarded)+P(abstainer punished))"
-            " - (P(participant punished)+P(abstainer rewarded))]",
-            transform=ax6b[0].transAxes,
-            fontsize=7,
-            ha="left",
-            va="bottom",
-            alpha=0.85,
-        )
-    else:
-        ax6b[0].text(0.5, 0.5, "Direction components unavailable", ha="center", va="center")
-        ax6b[0].set_yticks([])
-
-    ax6b[1].set_title("Learning Pressure by Group (solid) + Relative Intensity vs step-global mean (dotted)")
-    ax6b[1].set_ylabel("signed pressure")
-    has_learning_pressure = (
-        p_learning_pressure is not None
-        and np.isfinite(p_learning_pressure.to_numpy(dtype=float)).any()
-    )
-    has_learning_intensity = (
-        p_learning_intensity is not None
-        and np.isfinite(p_learning_intensity.to_numpy(dtype=float)).any()
-    )
-    if has_learning_pressure:
-        ax6b1_rhs = ax6b[1].twinx() if has_learning_intensity else None
-        rhs_handles = []
-        rhs_labels = []
-        for g in groups:
-            color = get_group_color(int(g))
-            ax6b[1].plot(
-                steps,
-                p_learning_pressure[g].to_numpy(dtype=float),
-                color=color,
-                linewidth=1.0,
-                alpha=0.95,
-                label=f"g{g}",
-            )
-            if ax6b1_rhs is not None:
-                line_rhs = ax6b1_rhs.plot(
-                    steps,
-                    p_learning_intensity[g].to_numpy(dtype=float),
-                    color=color,
-                    linestyle=":",
-                    linewidth=1.7,
-                    alpha=0.85,
-                )
-                rhs_handles.extend(line_rhs)
-                rhs_labels.append(f"g{g} intensity")
-        ax6b[1].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
-        if ax6b1_rhs is not None:
-            ax6b1_rhs.set_ylabel("relative intensity [x step-global mean]")
-            ax6b1_rhs.grid(False)
-        if groups:
-            h1, l1 = ax6b[1].get_legend_handles_labels()
-            if ax6b1_rhs is not None and rhs_handles:
-                ax6b[1].legend(
-                    h1 + rhs_handles,
-                    l1 + rhs_labels,
-                    loc="upper center",
-                    bbox_to_anchor=(0.5, 1.02),
-                    fontsize=7,
-                    ncol=min(4, len(groups) * 2),
-                )
-            else:
-                ax6b[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
-        ax6b[1].text(
-            0.01,
-            0.03,
-            "solid = mean(direction * |delta_abs| / global_mean_abs_delta[action,outcome,step]);"
-            " dotted = mean(|delta_abs| / global_mean_abs_delta[action,outcome,step])",
-            transform=ax6b[1].transAxes,
-            fontsize=7,
-            ha="left",
-            va="bottom",
-            alpha=0.85,
-        )
-    else:
-        ax6b[1].text(0.5, 0.5, "Learning pressure unavailable", ha="center", va="center")
-        ax6b[1].set_yticks([])
-    for a in ax6b:
-        a.grid(True, alpha=0.25)
-        a.set_xlabel("step")
-    fig6b.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
-    fig6b.tight_layout()
-    pdf.savefig(fig6b, dpi=140)
-    plt.close(fig6b)
-
-    # Page 6 (Page B): learning feedback signals by group.
-    fig7, ax7 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    q_group_plot = p_q_delta_exact if p_q_delta_exact is not None else p_q_update
-    q_group_is_exact = p_q_delta_exact is not None
-    ax7[0].set_title(
-        "Participation Learning Shift by Group "
-        f"({'exact Δq' if q_group_is_exact else 'proxy'})"
-    )
-    ax7[0].set_ylabel("Δq (more+ / less-)" if q_group_is_exact else "delta_q proxy (more+ / less-)")
-    if q_group_plot is not None:
-        for g in groups:
-            color = get_group_color(int(g))
-            ax7[0].plot(
-                steps,
-                q_group_plot[g].to_numpy(dtype=float),
-                color=color,
-                linewidth=1.8,
-                alpha=0.9,
-                label=f"g{g}",
-            )
-        ax7[0].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.8)
-        if groups:
-            ax7[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
-        if not q_group_is_exact:
-            ax7[0].text(
-                0.01,
-                0.03,
-                "Proxy = participation_alpha * q_push_proxy "
-                "(party: signal, legacy: action_sign*signal).",
-                transform=ax7[0].transAxes,
-                fontsize=7,
-                ha="left",
-                va="bottom",
-                alpha=0.85,
-            )
-    else:
-        ax7[0].text(0.5, 0.5, "Participation learning shift proxy unavailable", ha="center", va="center")
-        ax7[0].set_yticks([])
-
-    ax7[1].set_title("Participation Dropout Share by Group [% switched participating->abstaining]")
-    ax7[1].set_ylabel("%")
+    # Page 6 (Page B): participation dropout by group.
+    fig7, ax7 = plt.subplots(1, 1, figsize=(11.69, 8.27), sharex=True)
+    ax7.set_title("Participation Dropout Share by Group [% switched participating->abstaining]")
+    ax7.set_ylabel("%")
     has_part_drop = (
         p_part_to_abs_switch is not None
         and np.isfinite(p_part_to_abs_switch.to_numpy(dtype=float)).any()
@@ -3570,7 +3526,7 @@ def _render_area_group_pages(
         shown_groups = 0
         for g in groups:
             is_small = _group_is_small(int(g))
-            ax7[1].plot(
+            ax7.plot(
                 steps,
                 p_part_to_abs_switch[g].to_numpy(dtype=float) * 100.0,
                 color=get_group_color(int(g)),
@@ -3580,26 +3536,25 @@ def _render_area_group_pages(
             )
             if not is_small:
                 shown_groups += 1
-        _set_percent_ylim_visible(ax7[1])
+        _set_percent_ylim_visible(ax7)
         if shown_groups > 0:
-            ax7[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+            ax7.legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
         if has_small_groups:
-            ax7[1].text(
+            ax7.text(
                 0.01,
                 0.03,
                 f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
-                transform=ax7[1].transAxes,
+                transform=ax7.transAxes,
                 fontsize=7,
                 ha="left",
                 va="bottom",
                 alpha=0.85,
             )
     else:
-        ax7[1].text(0.5, 0.5, "Participation dropout share unavailable", ha="center", va="center")
-        ax7[1].set_yticks([])
-    for a in ax7:
-        a.grid(True, alpha=0.25)
-        a.set_xlabel("step")
+        ax7.text(0.5, 0.5, "Participation dropout share unavailable", ha="center", va="center")
+        ax7.set_yticks([])
+    ax7.grid(True, alpha=0.25)
+    ax7.set_xlabel("step")
     fig7.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
     fig7.tight_layout()
     pdf.savefig(fig7, dpi=140)
@@ -3663,81 +3618,6 @@ def _render_area_group_pages(
     fig7b.tight_layout()
     pdf.savefig(fig7b, dpi=140)
     plt.close(fig7b)
-
-    # Page 8 (Page B-extra): participation-q-update proxy split views.
-    fig8, ax8 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    q_part_plot = p_part_q_delta_exact if p_part_q_delta_exact is not None else p_part_q_update
-    q_abs_plot = p_abs_q_delta_exact if p_abs_q_delta_exact is not None else p_abs_q_update
-    q_split_is_exact = (p_part_q_delta_exact is not None) and (p_abs_q_delta_exact is not None)
-    ax8[0].set_title(
-        "Participation Shift by Group "
-        f"({'exact Δq' if q_split_is_exact else 'proxy'}; solid=participants, dotted=abstainers)"
-    )
-    ax8[0].set_ylabel("Δq" if q_split_is_exact else "delta_q proxy")
-    if q_part_plot is not None and q_abs_plot is not None:
-        for g in groups:
-            color = get_group_color(int(g))
-            ax8[0].plot(
-                steps,
-                q_part_plot[g].to_numpy(dtype=float),
-                color=color,
-                linewidth=0.9,
-                alpha=0.9,
-                label=f"g{g}",
-            )
-            ax8[0].plot(
-                steps,
-                q_abs_plot[g].to_numpy(dtype=float),
-                color=color,
-                linestyle=":",
-                linewidth=1.8,
-                alpha=0.9,
-            )
-        ax8[0].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.8)
-        if groups:
-            ax8[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
-    else:
-        ax8[0].text(0.5, 0.5, "Participant/abstainer shift data unavailable", ha="center", va="center")
-        ax8[0].set_yticks([])
-
-    q_alt_plot = p_alt_q_delta_exact if p_alt_q_delta_exact is not None else p_alt_q_update
-    q_non_alt_plot = p_non_alt_q_delta_exact if p_non_alt_q_delta_exact is not None else p_non_alt_q_update
-    q_mode_split_is_exact = (p_alt_q_delta_exact is not None) and (p_non_alt_q_delta_exact is not None)
-    ax8[1].set_title(
-        "Participation Shift by Group "
-        f"({'exact Δq' if q_mode_split_is_exact else 'proxy'}; solid=altruistic voters, dotted=non-altruistic voters)"
-    )
-    ax8[1].set_ylabel("Δq" if q_mode_split_is_exact else "delta_q proxy")
-    if q_alt_plot is not None and q_non_alt_plot is not None:
-        for g in groups:
-            color = get_group_color(int(g))
-            ax8[1].plot(
-                steps,
-                q_alt_plot[g].to_numpy(dtype=float),
-                color=color,
-                linewidth=0.9,
-                alpha=0.9,
-                label=f"g{g}",
-            )
-            ax8[1].plot(
-                steps,
-                q_non_alt_plot[g].to_numpy(dtype=float),
-                color=color,
-                linestyle=":",
-                linewidth=1.8,
-                alpha=0.9,
-            )
-        ax8[1].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.8)
-    else:
-        ax8[1].text(0.5, 0.5, "Altruistic/non-altruistic shift data unavailable", ha="center", va="center")
-        ax8[1].set_yticks([])
-    for a in ax8:
-        a.grid(True, alpha=0.25)
-        a.set_xlabel("step")
-    fig8.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
-    fig8.tight_layout()
-    pdf.savefig(fig8, dpi=140)
-    plt.close(fig8)
 
     # Page 9: vote-mode switching share views by group.
     fig9, ax9 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
@@ -3971,6 +3851,318 @@ def _render_area_group_pages(
     plt.close(fig10)
 
     # Group means page is rendered later from _render_area_detail_pdf after dist_to_ref.
+
+
+def _render_area_learning_causal_page(
+    *,
+    pdf: PdfPages,
+    area_group_series: pd.DataFrame,
+    suptitle: str,
+) -> None:
+    groups = sorted(int(v) for v in area_group_series["group_idx"].dropna().unique().tolist())
+    steps = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
+    if len(groups) == 0 or steps.size == 0:
+        return
+
+    pivot = lambda col: (
+        area_group_series.pivot(index="step", columns="group_idx", values=col)
+        .reindex(index=steps.astype(int), columns=groups)
+        .astype(float)
+    )
+    pivot_optional = lambda col: pivot(col) if col in area_group_series.columns else None
+
+    p_res = pivot("residents")
+    p_mu = pivot_optional("group_mu_delta_rel")
+    p_mu_bar = pivot_optional("global_mu_delta_rel")
+    p_w = pivot_optional("group_signal_shrink_weight")
+    p_r = pivot_optional("group_signal_component")
+    p_part_sig = pivot_optional("participants_mean_participation_signal")
+    p_abs_sig = pivot_optional("abstainers_mean_participation_signal")
+    p_part_sig_group = pivot_optional("participants_mean_signal_group_component")
+    p_part_sig_fee = pivot_optional("participants_mean_signal_fee_component")
+    p_part_dq = pivot_optional("participants_mean_participation_q_delta")
+    p_abs_dq = pivot_optional("abstainers_mean_participation_q_delta")
+    p_part_dq_proxy = pivot_optional("participants_mean_participation_q_update_proxy")
+    p_abs_dq_proxy = pivot_optional("abstainers_mean_participation_q_update_proxy")
+
+    group_resident_count_static: dict[int, float] = {}
+    for g in groups:
+        vals = p_res[g].to_numpy(dtype=float)
+        group_resident_count_static[int(g)] = float(np.nanmedian(vals)) if np.isfinite(vals).any() else float("nan")
+
+    def _group_is_small(g: int) -> bool:
+        cnt = group_resident_count_static.get(int(g), float("nan"))
+        return bool(np.isfinite(cnt) and cnt < float(_SMALL_GROUP_MIN_RESIDENTS))
+
+    def _group_alpha(g: int, *, normal: float = 0.9, small: float = 0.16) -> float:
+        return float(small if _group_is_small(int(g)) else normal)
+
+    has_small_groups = any(_group_is_small(int(g)) for g in groups)
+
+    # Page 1/2: panels 1 + 2 (full-width rows).
+    fig1, axes1 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+    ax1 = np.asarray(axes1).ravel()
+
+    # Panel 1: mu_g vs mu_bar.
+    ax1[0].set_title("Participation Learning Base: group mu_g vs mu_bar")
+    ax1[0].set_ylabel("delta_rel [%]")
+    has_mu = p_mu is not None and np.isfinite(p_mu.to_numpy(dtype=float)).any()
+    mu_bar_vals = None
+    if has_mu:
+        for g in groups:
+            y = p_mu[g].to_numpy(dtype=float) * 100.0
+            ax1[0].plot(
+                steps,
+                y,
+                color=get_group_color(int(g)),
+                linewidth=1.0,
+                alpha=_group_alpha(int(g)),
+                label=f"g{g}" if not _group_is_small(int(g)) else "_nolegend_",
+            )
+        if p_mu_bar is not None and np.isfinite(p_mu_bar.to_numpy(dtype=float)).any():
+            mu_bar_vals = np.nanmean(p_mu_bar.to_numpy(dtype=float), axis=1)
+        else:
+            mu_bar_vals = np.nanmean(p_mu.to_numpy(dtype=float), axis=1)
+        ax1[0].plot(
+            steps,
+            mu_bar_vals * 100.0,
+            color="black",
+            linestyle="--",
+            linewidth=1.4,
+            alpha=0.95,
+            label="mu_bar (cross-group mean)",
+        )
+        ax1[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups) + 1))
+    else:
+        ax1[0].text(0.5, 0.5, "group_mu/global_mu unavailable", ha="center", va="center")
+        ax1[0].set_yticks([])
+
+    # Panel 2: group component with shrink weight context.
+    ax1[1].set_title("Group Component: r_g = w_g * (mu_g - mu_bar)")
+    ax1[1].set_ylabel("signal component")
+    has_component = p_r is not None and np.isfinite(p_r.to_numpy(dtype=float)).any()
+    if has_component:
+        for g in groups:
+            y = p_r[g].to_numpy(dtype=float)
+            ax1[1].plot(
+                steps,
+                y,
+                color=get_group_color(int(g)),
+                linewidth=1.0,
+                alpha=_group_alpha(int(g)),
+                label=f"g{g}" if not _group_is_small(int(g)) else "_nolegend_",
+            )
+    elif has_mu and (p_w is not None) and np.isfinite(p_w.to_numpy(dtype=float)).any():
+        mu_mat = p_mu.to_numpy(dtype=float)
+        if mu_bar_vals is None:
+            mu_bar_vals = np.nanmean(mu_mat, axis=1)
+        w_mat = p_w.to_numpy(dtype=float)
+        for i, g in enumerate(groups):
+            y = w_mat[:, i] * (mu_mat[:, i] - mu_bar_vals)
+            ax1[1].plot(
+                steps,
+                y,
+                color=get_group_color(int(g)),
+                linewidth=1.0,
+                alpha=_group_alpha(int(g)),
+                label=f"g{g}" if not _group_is_small(int(g)) else "_nolegend_",
+            )
+        has_component = True
+    if has_component:
+        ax1[1].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+    else:
+        ax1[1].text(0.5, 0.5, "group signal component unavailable", ha="center", va="center")
+        ax1[1].set_yticks([])
+
+    if p_w is not None and np.isfinite(p_w.to_numpy(dtype=float)).any():
+        ax1_rhs = ax1[1].twinx()
+        w_mat = p_w.to_numpy(dtype=float)
+        w_mean = np.nanmean(w_mat, axis=1)
+        w_min = np.nanmin(w_mat, axis=1)
+        w_max = np.nanmax(w_mat, axis=1)
+        ax1_rhs.fill_between(steps, w_min, w_max, color="gray", alpha=0.14, linewidth=0.0)
+        ax1_rhs.plot(steps, w_mean, color="black", linestyle="--", linewidth=1.0, alpha=0.9, label="mean w_g")
+        _set_unit_ylim_visible(ax1_rhs)
+        ax1_rhs.set_ylabel("shrink weight w_g")
+        ax1_rhs.grid(False)
+
+    for a in ax1:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+    if has_small_groups:
+        fig1.text(
+            0.01,
+            0.01,
+            f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+            fontsize=7,
+            ha="left",
+            va="bottom",
+            alpha=0.85,
+        )
+    fig1.suptitle(suptitle + " | Participation Learning Causal Decomposition (1/2)", fontsize=11)
+    fig1.tight_layout()
+    pdf.savefig(fig1, dpi=140)
+    plt.close(fig1)
+
+    # Page 2/2: panels 3 + 4 (full-width rows).
+    fig2, axes2 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
+    ax2 = np.asarray(axes2).ravel()
+
+    # Panel 3: signal decomposition by subpopulation.
+    ax2[0].set_title("Signal Decomposition by Group")
+    ax2[0].set_ylabel("signal")
+    has_signal = False
+    if p_part_sig is not None and np.isfinite(p_part_sig.to_numpy(dtype=float)).any():
+        for g in groups:
+            ax2[0].plot(
+                steps,
+                p_part_sig[g].to_numpy(dtype=float),
+                color=get_group_color(int(g)),
+                linestyle="-",
+                linewidth=1.0,
+                alpha=_group_alpha(int(g)),
+            )
+        has_signal = True
+    if p_abs_sig is not None and np.isfinite(p_abs_sig.to_numpy(dtype=float)).any():
+        for g in groups:
+            ax2[0].plot(
+                steps,
+                p_abs_sig[g].to_numpy(dtype=float),
+                color=get_group_color(int(g)),
+                linestyle="--",
+                linewidth=1.1,
+                alpha=_group_alpha(int(g), normal=0.85, small=0.12),
+            )
+        has_signal = True
+    if p_part_sig_group is not None and np.isfinite(p_part_sig_group.to_numpy(dtype=float)).any():
+        for g in groups:
+            ax2[0].plot(
+                steps,
+                p_part_sig_group[g].to_numpy(dtype=float),
+                color=get_group_color(int(g)),
+                linestyle=":",
+                linewidth=1.0,
+                alpha=_group_alpha(int(g), normal=0.7, small=0.10),
+            )
+        has_signal = True
+    if p_part_sig_fee is not None and np.isfinite(p_part_sig_fee.to_numpy(dtype=float)).any():
+        for g in groups:
+            ax2[0].plot(
+                steps,
+                p_part_sig_fee[g].to_numpy(dtype=float),
+                color=get_group_color(int(g)),
+                linestyle="-.",
+                linewidth=0.95,
+                alpha=_group_alpha(int(g), normal=0.8, small=0.11),
+            )
+        has_signal = True
+    if has_signal:
+        ax2[0].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+        group_handles = [
+            Line2D([0], [0], color=get_group_color(int(g)), linewidth=1.6, label=f"g{g}")
+            for g in groups
+            if not _group_is_small(int(g))
+        ]
+        style_handles = [
+            Line2D([0], [0], color="black", linestyle="-", linewidth=1.1, label="participants total signal"),
+            Line2D([0], [0], color="black", linestyle="--", linewidth=1.1, label="abstainers total signal"),
+            Line2D([0], [0], color="black", linestyle=":", linewidth=1.1, label="group component"),
+            Line2D([0], [0], color="black", linestyle="-.", linewidth=1.1, label="participant fee component"),
+        ]
+        if group_handles:
+            leg_groups = ax2[0].legend(
+                handles=group_handles,
+                loc="upper center",
+                bbox_to_anchor=(0.5, 1.02),
+                fontsize=7,
+                ncol=min(5, len(group_handles)),
+                title="groups",
+            )
+            ax2[0].add_artist(leg_groups)
+        ax2[0].legend(handles=style_handles, loc="upper left", fontsize=7, title="line style")
+    else:
+        ax2[0].text(0.5, 0.5, "participation signal decomposition unavailable", ha="center", va="center")
+        ax2[0].set_yticks([])
+
+    # Panel 4: exact delta-q effect by subpopulation.
+    use_exact = (
+        p_part_dq is not None
+        and p_abs_dq is not None
+        and (
+            np.isfinite(p_part_dq.to_numpy(dtype=float)).any()
+            or np.isfinite(p_abs_dq.to_numpy(dtype=float)).any()
+        )
+    )
+    p_part_effect = p_part_dq if use_exact else p_part_dq_proxy
+    p_abs_effect = p_abs_dq if use_exact else p_abs_dq_proxy
+    ax2[1].set_title(
+        "Participation Update Effect by Group "
+        f"({'exact Δq' if use_exact else 'proxy'})"
+    )
+    ax2[1].set_ylabel("Δq")
+    has_effect = (
+        p_part_effect is not None
+        and p_abs_effect is not None
+        and (
+            np.isfinite(p_part_effect.to_numpy(dtype=float)).any()
+            or np.isfinite(p_abs_effect.to_numpy(dtype=float)).any()
+        )
+    )
+    if has_effect:
+        for g in groups:
+            color = get_group_color(int(g))
+            ax2[1].plot(
+                steps,
+                p_part_effect[g].to_numpy(dtype=float),
+                color=color,
+                linestyle="-",
+                linewidth=1.0,
+                alpha=_group_alpha(int(g)),
+                label=f"g{g}" if not _group_is_small(int(g)) else "_nolegend_",
+            )
+            ax2[1].plot(
+                steps,
+                p_abs_effect[g].to_numpy(dtype=float),
+                color=color,
+                linestyle="--",
+                linewidth=1.1,
+                alpha=_group_alpha(int(g), normal=0.85, small=0.12),
+            )
+        ax2[1].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+        if use_exact:
+            ax2[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+        else:
+            ax2[1].text(
+                0.01,
+                0.03,
+                "Proxy mode: participation_alpha * q_push_proxy.",
+                transform=ax2[1].transAxes,
+                fontsize=7,
+                ha="left",
+                va="bottom",
+                alpha=0.85,
+            )
+    else:
+        ax2[1].text(0.5, 0.5, "participation update effect unavailable", ha="center", va="center")
+        ax2[1].set_yticks([])
+
+    for a in ax2:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+    if has_small_groups:
+        fig2.text(
+            0.01,
+            0.01,
+            f"Groups with residents < {_SMALL_GROUP_MIN_RESIDENTS} are plotted transparent.",
+            fontsize=7,
+            ha="left",
+            va="bottom",
+            alpha=0.85,
+        )
+    fig2.suptitle(suptitle + " | Participation Learning Causal Decomposition (2/2)", fontsize=11)
+    fig2.tight_layout()
+    pdf.savefig(fig2, dpi=140)
+    plt.close(fig2)
 
 
 def _render_area_group_means_page(
@@ -4748,17 +4940,25 @@ def _render_area_puzzle_gate_page(
     )
     x = area_series["step"].to_numpy(dtype=float)
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
-    ax = np.asarray(axes).ravel()
-
     status_ok = bool(metrics["gate_puzzle_anti_monopoly"])
     status_txt = "PASS" if status_ok else "FAIL"
     status_color = "tab:green" if status_ok else "tab:red"
     conf_eligible = bool(metrics["gate_conflict_eligible"])
     metric_ready = bool(metrics["puzzle_metric_available"])
 
-    ax[0].axis("off")
-    ax[0].text(
+    d_out_puz = np.asarray(metrics["d_out_puz"], dtype=float)
+    d_out_pow = np.asarray(metrics["d_out_pow"], dtype=float)
+    d_puz_pow = np.asarray(metrics["d_puz_pow"], dtype=float)
+    d_grid_pow = np.asarray(dist_decomp.get("dist_grid_power", np.full_like(d_puz_pow, np.nan, dtype=float)), dtype=float)
+    conflict_mask = np.asarray(metrics["conflict_mask"], dtype=bool)
+    margin = np.asarray(metrics["margin"], dtype=float)
+
+    # Page A: gate status + puzzle concentration signals.
+    figa, axa = plt.subplots(1, 2, figsize=(11.69, 8.27))
+    axa = np.asarray(axa).ravel()
+
+    axa[0].axis("off")
+    axa[0].text(
         0.02,
         0.98,
         "Puzzle Anti-Monopoly Gate",
@@ -4767,7 +4967,7 @@ def _render_area_puzzle_gate_page(
         fontsize=12,
         fontweight="bold",
     )
-    ax[0].text(
+    axa[0].text(
         0.02,
         0.80,
         status_txt,
@@ -4787,79 +4987,111 @@ def _render_area_puzzle_gate_page(
         f"valid_rows: {int(metrics['valid_rows'])}",
         f"conflict_rows: {int(metrics['conflict_rows'])}",
     ]
-    ax[0].text(0.02, 0.60, "\n".join(lines), ha="left", va="top", fontsize=9)
+    axa[0].text(0.02, 0.60, "\n".join(lines), ha="left", va="top", fontsize=9)
 
     max_share = np.asarray(metrics["puzzle_max_share"], dtype=float)
     entropy = np.asarray(metrics["puzzle_entropy_norm"], dtype=float)
     if np.isfinite(max_share).any():
-        ax[1].plot(x, max_share, color="tab:red", linewidth=1.4, label="max puzzle color share")
+        axa[1].plot(x, max_share, color="tab:red", linewidth=1.4, label="max puzzle color share")
     if np.isfinite(entropy).any():
-        ax1b = ax[1].twinx()
+        ax1b = axa[1].twinx()
         ax1b.plot(x, entropy, color="tab:blue", linestyle="--", linewidth=1.2, label="puzzle entropy (norm)")
         ax1b.set_ylim(-0.02, 1.02)
         ax1b.set_ylabel("entropy [0..1]", color="tab:blue")
         ax1b.tick_params(axis="y", colors="tab:blue")
-        h1, l1 = ax[1].get_legend_handles_labels()
+        h1, l1 = axa[1].get_legend_handles_labels()
         h2, l2 = ax1b.get_legend_handles_labels()
         if h1 or h2:
-            ax[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
-    elif len(ax[1].lines) > 0:
-        ax[1].legend(loc="best", fontsize=8)
-    ax[1].set_title("Puzzle Concentration Signals")
-    ax[1].set_ylabel("max share [0..1]", color="tab:red")
-    ax[1].tick_params(axis="y", colors="tab:red")
-    _set_unit_ylim_visible(ax[1])
-    ax[1].grid(True, alpha=0.25)
-    ax[1].set_xlabel("step")
+            axa[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
+    elif len(axa[1].lines) > 0:
+        axa[1].legend(loc="best", fontsize=8)
+    axa[1].set_title("Puzzle Concentration Signals")
+    axa[1].set_ylabel("max share [0..1]", color="tab:red")
+    axa[1].tick_params(axis="y", colors="tab:red")
+    _set_unit_ylim_visible(axa[1])
+    axa[1].grid(True, alpha=0.25)
+    axa[1].set_xlabel("step")
 
-    d_out_puz = np.asarray(metrics["d_out_puz"], dtype=float)
-    d_out_pow = np.asarray(metrics["d_out_pow"], dtype=float)
-    d_puz_pow = np.asarray(metrics["d_puz_pow"], dtype=float)
-    conflict_mask = np.asarray(metrics["conflict_mask"], dtype=bool)
-    ax[2].plot(x, d_out_puz, color="black", linestyle="--", linewidth=1.2, label="outcome↔puzzle")
-    ax[2].plot(x, d_out_pow, color="tab:red", linewidth=1.1, label="outcome↔power")
-    ax[2].plot(x, d_puz_pow, color="tab:blue", linewidth=1.1, label="puzzle↔power")
-    ax[2].axhline(
+    figa.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Overview)", fontsize=11)
+    figa.tight_layout()
+    pdf.savefig(figa, dpi=140)
+    plt.close(figa)
+
+    # Page B: split decomposition (3 panels) to avoid overload.
+    figb, axb = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
+    axb = np.asarray(axb).ravel()
+
+    if np.isfinite(d_out_puz).any() or np.isfinite(d_out_pow).any():
+        if np.isfinite(d_out_puz).any():
+            axb[0].plot(x, d_out_puz, color="black", linestyle="--", linewidth=1.3, label="outcome↔puzzle")
+        if np.isfinite(d_out_pow).any():
+            axb[0].plot(x, d_out_pow, color="tab:red", linewidth=1.2, label="outcome↔power")
+        if conflict_mask.any():
+            axb[0].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
+        if len(axb[0].lines) > 0:
+            axb[0].legend(loc="best", fontsize=8)
+    else:
+        axb[0].text(0.5, 0.5, "Outcome distance series unavailable", ha="center", va="center")
+        axb[0].set_yticks([])
+    axb[0].set_title("Puzzle / Power Distance Decomposition A: Outcome↔Puzzle and Outcome↔Power")
+    axb[0].set_ylabel("distance [0..1]")
+    _set_unit_ylim_visible(axb[0])
+
+    has_pairwise = False
+    if np.isfinite(d_puz_pow).any():
+        has_pairwise = True
+        axb[1].plot(x, d_puz_pow, color="tab:blue", linewidth=1.2, label="puzzle↔power")
+    if np.isfinite(d_grid_pow).any():
+        has_pairwise = True
+        axb[1].plot(x, d_grid_pow, color="tab:orange", linewidth=1.2, linestyle=":", label="grid↔power")
+    axb[1].axhline(
         float(metrics["conflict_min_dist"]),
         color="tab:blue",
         linestyle=":",
-        linewidth=1.2,
+        linewidth=1.15,
         label="conflict threshold",
     )
     if conflict_mask.any():
-        ax[2].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.08, step="mid")
-    ax[2].set_title("Puzzle/Power Distance Signals")
-    ax[2].set_ylabel("distance [0..1]")
-    _set_unit_ylim_visible(ax[2])
-    ax[2].grid(True, alpha=0.25)
-    ax[2].set_xlabel("step")
-    if len(ax[2].lines) > 0:
-        ax[2].legend(loc="best", fontsize=8)
+        axb[1].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
+    if has_pairwise:
+        axb[1].legend(loc="best", fontsize=8)
+    else:
+        axb[1].text(0.5, 0.5, "Pairwise puzzle/power diagnostics unavailable", ha="center", va="center")
+        axb[1].set_yticks([])
+    axb[1].set_title("Puzzle / Power Distance Decomposition B: Puzzle↔Power and Grid↔Power")
+    axb[1].set_ylabel("distance [0..1]")
+    _set_unit_ylim_visible(axb[1])
 
-    margin = np.asarray(metrics["margin"], dtype=float)
-    ax[3].plot(x, margin, color="purple", linewidth=1.1, label="margin = outcome↔power - outcome↔puzzle")
-    ax[3].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
-    if conflict_mask.any():
-        ax[3].scatter(
-            x[conflict_mask],
-            margin[conflict_mask],
-            s=8,
-            color="purple",
-            alpha=0.65,
-            label="conflict steps",
-        )
-    ax[3].set_title("Margin Around Puzzle vs Power")
-    ax[3].set_ylabel("margin [-1..1]")
-    ax[3].set_ylim(-1.02, 1.02)
-    ax[3].grid(True, alpha=0.25)
-    ax[3].set_xlabel("step")
-    if len(ax[3].lines) > 0:
-        ax[3].legend(loc="best", fontsize=8)
+    if np.isfinite(margin).any():
+        axb[2].plot(x, margin, color="purple", linewidth=1.15, label="margin = outcome↔power - outcome↔puzzle")
+        axb[2].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+        if conflict_mask.any():
+            axb[2].scatter(
+                x[conflict_mask],
+                margin[conflict_mask],
+                s=9,
+                color="purple",
+                alpha=0.65,
+                label="conflict steps",
+            )
+        if len(axb[2].lines) > 0:
+            axb[2].legend(loc="best", fontsize=8)
+    else:
+        axb[2].text(0.5, 0.5, "Margin unavailable", ha="center", va="center")
+        axb[2].set_yticks([])
+    axb[2].set_title("Puzzle / Power Distance Decomposition C: Margin Around Puzzle vs Power")
+    axb[2].set_ylabel("margin [-1..1]")
+    axb[2].set_ylim(-1.02, 1.02)
 
-    fig.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate", fontsize=11)
-    fig.tight_layout()
-    pdf.savefig(fig, dpi=140)
-    plt.close(fig)
+    for a in axb:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
+
+    figb.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Distance Decomposition)", fontsize=11)
+    figb.tight_layout()
+    pdf.savefig(figb, dpi=140)
+    plt.close(figb)
+
 
 
 def _compute_group_puzzle_opportunity_distances(

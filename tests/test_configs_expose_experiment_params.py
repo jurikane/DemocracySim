@@ -11,7 +11,6 @@ REQUIRED_MODEL_KEYS = {
     "participation_beta",
     "participation_init_q",
     "participation_q_max",
-    "bias_toward_participation",
     # Personal preference intensity distribution
     "personal_preference_peakedness",
     # Adaptive altruism learning

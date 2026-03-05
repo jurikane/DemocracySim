@@ -31,7 +31,6 @@ def test_build_model_params_exposes_seed_control() -> None:
         participation_beta=1.0,
         participation_init_q=0.0,
         participation_q_max=50.0,
-        bias_toward_participation=0.0,
         altruism_alpha=0.05,
         altruism_init=0.5,
         altruism_clip_min=0.0,

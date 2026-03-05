@@ -23,7 +23,7 @@ def _make_run(tmp_path: Path) -> Path:
     return out
 
 
-def test_resolve_debug_profile_single_area_disables_duplicate_area_core() -> None:
+def test_resolve_debug_profile_single_area_keeps_area_core_and_group_diagnostics() -> None:
     profile = _resolve_summary_render_profile(
         profile=SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
         num_areas=1,
@@ -31,12 +31,13 @@ def test_resolve_debug_profile_single_area_disables_duplicate_area_core() -> Non
     assert profile.global_core_metrics
     assert profile.global_distance_metrics
     assert not profile.global_colors_and_grids
-    assert not profile.area_core_page
+    assert profile.area_core_page
     assert profile.area_puzzle_page
     assert profile.area_vote_mode_alignment_page
     assert profile.area_group_opportunity_page
     assert profile.area_puzzle_gate_page
-    assert not profile.area_group_diagnostics_pages
+    assert profile.area_group_diagnostics_pages
+    assert profile.area_learning_causal_page
     assert not profile.area_assets_page
     assert not profile.area_group_means_page
     assert not profile.area_dist_to_ref_page
@@ -90,4 +91,5 @@ def test_full_profile_keeps_full_render_flags() -> None:
     assert profile.global_per_area_group_distribution
     assert not profile.area_puzzle_gate_page
     assert profile.area_group_diagnostics_pages
+    assert profile.area_learning_causal_page
     assert profile.area_dist_to_ref_page

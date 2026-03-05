@@ -47,7 +47,6 @@ _ALLOWED_KW = {
     "participation_beta",
     "participation_init_q",
     "participation_q_max",
-    "bias_toward_participation",
     "participation_baseline_alpha",
     "participation_signal_mode",
     "participation_signal_fee_weight",
@@ -181,13 +180,6 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             min_value=0.0,
             max_value=5.0,
             step=0.1,
-        ),
-        "bias_toward_participation": mesa.visualization.Slider(
-            name="Bias toward participation",
-            value=model_cfg.bias_toward_participation,
-            min_value=0.0,
-            max_value=0.5,
-            step=0.01,
         ),
         "participation_baseline_alpha": mesa.visualization.Slider(
             name="Participation baseline alpha (EMA)",

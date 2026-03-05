@@ -110,6 +110,8 @@ def test_build_area_group_series_learning_signal_diagnostics() -> None:
             "election_fee": [1.0, 0.0, 2.0, 0.0],
             "election_delta_rel": [0.10, -0.05, 0.20, -0.10],
             "participation_signal": [0.10, -0.02, 0.07, -0.03],
+            "participation_signal_group_component": [0.14, -0.02, 0.11, -0.03],
+            "participation_signal_fee_component": [-0.04, 0.0, -0.04, 0.0],
             "dissatisfaction_signal": [0.03, 0.01, -0.04, -0.02],
         }
     )
@@ -122,7 +124,12 @@ def test_build_area_group_series_learning_signal_diagnostics() -> None:
         }
     )
     area_agent_ids = {0: [0, 1, 2, 3]}
-    out = _build_area_group_series(agents=agents, votes=votes, area_agent_ids=area_agent_ids)
+    out = _build_area_group_series(
+        agents=agents,
+        votes=votes,
+        area_agent_ids=area_agent_ids,
+        participation_signal_group_shrink_k=0.0,
+    )
     row_g0 = out[(out["step"] == 1) & (out["area_id"] == 0) & (out["group_idx"] == 0)].iloc[0]
     row_g1 = out[(out["step"] == 1) & (out["area_id"] == 0) & (out["group_idx"] == 1)].iloc[0]
 
@@ -130,6 +137,22 @@ def test_build_area_group_series_learning_signal_diagnostics() -> None:
     assert abs(float(row_g0["abstainers_mean_participation_signal"]) - (-0.02)) < 1e-6
     assert abs(float(row_g1["participants_mean_participation_signal"]) - 0.07) < 1e-6
     assert abs(float(row_g1["abstainers_mean_participation_signal"]) - (-0.03)) < 1e-6
+    assert abs(float(row_g0["participants_mean_signal_group_component"]) - 0.14) < 1e-6
+    assert abs(float(row_g0["participants_mean_signal_fee_component"]) - (-0.04)) < 1e-6
+    assert abs(float(row_g0["abstainers_mean_signal_group_component"]) - (-0.02)) < 1e-6
+    assert abs(float(row_g0["abstainers_mean_signal_fee_component"]) - 0.0) < 1e-6
+    assert abs(float(row_g1["participants_mean_signal_group_component"]) - 0.11) < 1e-6
+    assert abs(float(row_g1["participants_mean_signal_fee_component"]) - (-0.04)) < 1e-6
+    assert abs(float(row_g1["abstainers_mean_signal_group_component"]) - (-0.03)) < 1e-6
+    assert abs(float(row_g1["abstainers_mean_signal_fee_component"]) - 0.0) < 1e-6
+    assert abs(float(row_g0["group_mu_delta_rel"]) - 0.025) < 1e-6
+    assert abs(float(row_g1["group_mu_delta_rel"]) - 0.05) < 1e-6
+    assert abs(float(row_g0["global_mu_delta_rel"]) - 0.0375) < 1e-6
+    assert abs(float(row_g1["global_mu_delta_rel"]) - 0.0375) < 1e-6
+    assert abs(float(row_g0["group_signal_shrink_weight"]) - 1.0) < 1e-6
+    assert abs(float(row_g1["group_signal_shrink_weight"]) - 1.0) < 1e-6
+    assert abs(float(row_g0["group_signal_component"]) - (-0.0125)) < 1e-6
+    assert abs(float(row_g1["group_signal_component"]) - 0.0125) < 1e-6
     assert abs(float(row_g0["group_mean_participation_q_update_proxy"]) - 0.06) < 1e-6
     assert abs(float(row_g1["group_mean_participation_q_update_proxy"]) - 0.05) < 1e-6
     assert abs(float(row_g0["altruistic_voters_mean_dissatisfaction_signal"]) - 0.03) < 1e-6

@@ -229,7 +229,6 @@ class ParticipationModel(mesa.Model):
         participation_beta,
         participation_init_q,
         participation_q_max,
-        bias_toward_participation,
         participation_baseline_alpha,
         participation_signal_mode,
         participation_signal_fee_weight,
@@ -250,10 +249,6 @@ class ParticipationModel(mesa.Model):
         self.participation_q_max = float(participation_q_max)
         if not np.isfinite(self.participation_q_max) or self.participation_q_max < 0.0:
             raise ValueError("participation_q_max must be finite and >= 0.")
-
-        self.bias_toward_participation = float(bias_toward_participation)
-        if not np.isfinite(self.bias_toward_participation) or not (-1.0 <= self.bias_toward_participation <= 1.0):
-            raise ValueError("bias_toward_participation must be finite and in [-1,1].")
 
         self.participation_baseline_alpha = ensure_rate_0_1(
             "participation_baseline_alpha", participation_baseline_alpha
@@ -459,7 +454,6 @@ class ParticipationModel(mesa.Model):
         participation_beta: float = 1.0,
         participation_init_q: float = 0.0,
         participation_q_max: float = 2.0,
-        bias_toward_participation: float = 0.0,
         participation_baseline_alpha: float = 0.1,
         participation_signal_mode: str = "raw_delta_rel",
         participation_signal_fee_weight: float = 1.0,
@@ -514,7 +508,6 @@ class ParticipationModel(mesa.Model):
             participation_beta=participation_beta,
             participation_init_q=participation_init_q,
             participation_q_max=participation_q_max,
-            bias_toward_participation=bias_toward_participation,
             participation_baseline_alpha=participation_baseline_alpha,
             participation_signal_mode=participation_signal_mode,
             participation_signal_fee_weight=participation_signal_fee_weight,

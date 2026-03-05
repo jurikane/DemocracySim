@@ -55,21 +55,11 @@ The default decision policy is probabilistic:
     sigmoid(x) = 1 / (1 + exp(-x))
     ```
 
-2. Add an exogenous bias in **probability space** (not in logit space) and clip:
+2. Sample participation with the model RNG:
 
     ```text
-    p' = clip(p + bias_toward_participation, 0, 1)
+    participate ~ Bernoulli(p)
     ```
-
-3. Sample participation with the model RNG:
-
-    ```text
-    participate ~ Bernoulli(p')
-    ```
-
-Design note: additive bias is a simple “civic duty / default norm” knob that is intentionally
-separable from learning. It can be restricted in the UI (e.g. `[0, 0.5]`) even if the model
-allows a broader conceptual range (e.g. `[-1, 1]`) for controlled baselines.
 
 ## Learning Signal Modes
 
@@ -180,7 +170,6 @@ Participation learning knobs (ModelConfig):
 - `participation_beta` (>= 0): sensitivity of probability to q (steepness of sigmoid)
 - `participation_init_q` (finite): initial q for all agents
 - `participation_q_max` (>= 0): symmetric clipping bound for q; `0` disables clipping
-- `bias_toward_participation` (in `[-1,1]`): additive probability bias after sigmoid, then clipped to `[0,1]`
 - `participation_baseline_alpha` (in `[0,1]`): EMA step size for the logged participation baseline trace
 
 Scale note (relative signals):
@@ -236,7 +225,7 @@ The following tests lock the contract:
   - `tests/test_participation_beta_contract.py`
   - `tests/test_participation_init_q_contract.py`
   - `tests/test_participation_q_max_contract.py`
-  - `tests/test_bias_toward_participation_contract.py`
+  - `tests/test_participation_decision_contract.py`
   - `tests/test_participation_baseline_alpha_contract.py`
   - `tests/test_no_participation_debug_snapshot.py` (no-participation step keeps participation debug semantics consistent)
 - Interaction tests exercising multi-knob behavior under controlled RNG:

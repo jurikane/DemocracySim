@@ -32,10 +32,6 @@ class DefaultParticipationStrategy:
 
     def decide_participation(self, agent: Any, area: Any) -> bool:
         p = agent.participation_probability()
-        bias = float(agent.model.bias_toward_participation)
-        if bias != 0.0:
-            # Simple additive bias in probability space.
-            p = float(np.clip(p + bias, 0.0, 1.0))
         # determinism + stream isolation: participation has its own RNG stream.
         return bool(agent.model.participation_rng.random() < p)
 

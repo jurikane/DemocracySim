@@ -46,7 +46,6 @@ DEFAULT_DOE_RANGES: dict[str, tuple[float, float]] = {
 DEFAULT_FROZEN_MODEL: dict[str, Any] = {
     "distance_idx": 0,
     "participation_q_max": 2.0,
-    "bias_toward_participation": 0.0,
     "altruism_mode": "satisfaction",
     "altruism_response_gamma": 1.0,
     "altruism_learning": False,
@@ -1024,6 +1023,56 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "participation_init_q": 0.14,
             "election_cost_rate": 0.02,
             "participation_signal_fee_weight": 0.6,
+            "num_personality_groups": 7,
+        },
+        "frozen_simulation": {
+            **DEFAULT_FROZEN_SIM,
+            "num_steps": 160,
+        },
+    },
+    "phase3_party_recovery_hunt_v2": {
+        "name": "phase3_party_recovery_hunt_v2",
+        # Recovery-focused v2:
+        # v1/v2 scans showed many runs reaching:
+        #   D dominance + high D altruism + D turnout drop
+        # but still missing sustained W turnout rebound.
+        # This profile opens rebound-relevant levers while keeping
+        # already-stable baselines tight.
+        "ranges": {
+            # Participation responsiveness:
+            # slightly wider than v1 to allow stronger comeback dynamics.
+            "participation_alpha": (0.100, 0.150),
+            "participation_beta": (4.60, 5.30),
+            "reward_rate_personal": (0.235, 0.300),
+            "break_even_distance_common": (0.46, 0.56),
+
+            # Puzzle / power dynamics (avoid too-fast re-locking).
+            "known_cells": (10.0, 16.0),
+            "election_impact_on_mutation": (1.00, 2.20),
+            "puzzle_local_kappa": (70.0, 130.0),
+            "puzzle_shock_prob": (0.05, 0.12),
+            "mu": (0.10, 0.22),
+
+            # Satisfaction -> altruism switch:
+            # lower theta access + high slope + memory to sustain altruistic plateaus.
+            "altruism_satisfaction_theta": (0.56, 0.72),
+            "altruism_satisfaction_slope": (8.0, 14.0),
+            "altruism_response_gamma": (0.50, 0.90),
+
+            # Participation signal shaping:
+            # weaker size-shrink for small groups + higher cap for stronger rebound pushes.
+            "participation_signal_fee_weight": (0.35, 0.80),
+            "participation_signal_group_shrink_k": (0.80, 2.80),
+            "participation_signal_clip": (0.28, 0.55),
+        },
+        "frozen_model": {
+            **DEFAULT_FROZEN_MODEL,
+            "altruism_mode": "satisfaction",
+            "altruism_learning": False,
+            "participation_signal_mode": "group_relative_delta_rel_party",
+            "participation_init_q": 0.14,
+            "election_cost_rate": 0.02,
+            "num_personality_groups": 2
         },
         "frozen_simulation": {
             **DEFAULT_FROZEN_SIM,
