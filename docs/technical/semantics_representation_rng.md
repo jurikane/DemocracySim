@@ -1,88 +1,36 @@
 # Semantics, Representations & RNG
 
-This document holds the contracts for:
-step semantics, representation safety, and reproducibility policy.
+This page defines step semantics and reproducibility conventions.
 
-## Runtime Semantics (Authoritative)
+## Step Semantics
 
-Recorded step `t` represents the **election-time state**:
+Recorded step `t` is the election-time state.
 
-- mutation from election `t-1` is applied at start of step `t`
-- elections/rewards/learning run on that state
-- mutation from election `t` is applied at start of step `t+1`
+Execution order:
 
-Consequences:
+1. Scheduler advances to `t`.
+2. Mutation from election `t-1` is applied (for `t > 1`).
+3. Elections/rewards/learning for `t` run.
+4. Step-level data is collected and logged.
 
-- logged `steps.parquet` / `area_steps.parquet` are election-time aligned
-- grid snapshots and table series must refer to the same step meaning
-- live run, headless run, and replay must expose the same state for the same seed
+## Units
 
-Authoritative execution order:
+- Turnout is stored in percent (`0..100`).
+- Gini-based inequality metrics are stored on a percent-like scale (`0..100`).
 
-1. `CustomScheduler.step` increments to `t`
-2. if `t > 1`, mutation from election `t-1` is applied
-3. area elections + rewards/learning for `t` are executed
-4. `ParticipationModel.step` collects DataCollector row for `t`
-5. headless logger writes `steps/area_steps` for `t` and optional `grid_t`
+## Representation Conventions
 
-Turnout and Gini unit policy:
+- `Ordering`: permutation of option IDs (`0..n-1`).
+- `Distribution`: non-negative vector summing to 1.
+- `ScoreVector`: finite 1D vector in `[0,1]`.
 
-- turnout is stored in percent (`0..100`)
-- gini is stored on a percent-like scale (`0..100`)
+## Tie Handling
 
-## Representation Contracts
+- Decision-critical tie breaks use seeded RNG.
+- Same seed reproduces the same tie outcomes.
 
-Core vector concepts:
+## RNG Policy
 
-- `Ordering`: permutation of option ids (`0..n-1`)
-- `Distribution`: non-negative vector summing to 1
-- `ScoreVector`: finite 1D vector in `[0,1]` (thesis contract)
-
-Fail-loud policy:
-
-- invalid vectors must raise at representation entry points
-- malformed vote vectors are not silently accepted
-
-Tie policy:
-
-- deterministic id-based tie-breaking is biased in decision-critical paths
-- decision-critical conversions require explicit RNG on ties
-- if tie-breaking happens without RNG in non-critical helpers, it is warning-visible
-
-## RNG Determinism Policy
-
-- Run seed derivation is deterministic (`run_seed = base_seed + run_id`)
-- Simulation RNG stream is isolated from visualization/debug streams
-- Participation decisions and voting/tie-breaking consume separate RNG streams
-  (voting RNG consumption must not perturb participation paths)
-- same config + same seed must reproduce identical core outputs
-
-## Why This Matters for Thesis Validity
-
-- Silent pre/post-mutation drift can invalidate time-series interpretation.
-- Ambiguous vector semantics can produce plausible but wrong elections/rewards.
-- Non-isolated RNG usage can break reproducibility without obvious errors.
-
-## Test Coverage (What Is Locked By Pytests)
-
-Semantics and units:
-
-- `tests/test_step_semantics_mutation_timing.py`
-- `tests/test_turnout_units_schema_v2.py`
-- `tests/test_live_headless_replay_equivalence.py`
-- `tests/test_cp00_step_timing_single_source.py`
-
-Representation contracts:
-
-- `tests/test_representation_entrypoints_fuzz.py`
-- `tests/test_representation_conversions.py`
-- `tests/test_representations_contract.py`
-- `tests/test_representation_contracts_core.py`
-
-RNG and tie behavior:
-
-- `tests/test_headless_determinism.py`
-- `tests/test_rng_stream_isolation.py`
-- `tests/test_cp10_rng_stream_isolation_participation_voting.py`
-- `tests/test_tie_break_fairness.py`
-- `tests/test_rule_tie_seed_contract.py`
+- `run_seed = base_seed + run_id`.
+- Core simulation RNG is deterministic for fixed config/seed.
+- Participation and voting paths are isolated to avoid accidental coupling.
