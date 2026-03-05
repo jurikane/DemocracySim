@@ -39,7 +39,7 @@ nav:
         - Run Control & Output: technical/run_control_output.md
         - Learning:
             - Participation Learning: technical/participation_learning.md
-            - Altruism Learning: technical/altruism_learning.md
+            - Altruism Voting Behavior: technical/altruism_learning.md
         #- Installation Instructions: technical/installation_instructions.md
         - API Reference:
             - Model (Environment): technical/api/Model.md

@@ -1,5 +1,5 @@
 {
-  "version": "thesis-recovery-v4-moderate-selector",
+  "version": "thesis-recovery-v5-altruism-bonus",
   "strict_completeness": true,
   "thresholds": {
     "min_winner_change_rate_post_burnin": 0.02,
@@ -10,15 +10,6 @@
     "min_power_recovery_share_conflict": 0.04,
     "puzzle_dominance_share_score_low": 0.30,
     "puzzle_dominance_share_score_high": 0.55,
-    "lockin_episode_min_len_steps": 8.0,
-    "lockin_recovery_window_steps": 40.0,
-    "lockin_min_dominant_participant_share": 0.55,
-    "lockin_min_altruism_share": 0.80,
-    "lockin_min_altruism_lift": 0.12,
-    "lockin_margin_power_threshold": 0.0,
-    "lockin_margin_puzzle_recovery_threshold": 0.0,
-    "lockin_recovery_share_score_zero_at": 0.05,
-    "lockin_recovery_share_score_good_min": 0.40,
     "moderate_min_group_size": 6.0,
     "moderate_takeover_loss_frac_min": 0.50,
     "moderate_takeover_capture_frac_min": 0.50,
@@ -27,6 +18,8 @@
     "moderate_min_steps": 5.0,
     "moderate_min_peak_share": 0.00,
     "moderate_length_bonus_max": 0.15,
+    "moderate_altruism_bonus_weight": 0.20,
+    "moderate_altruism_bonus_floor": 0.60,
     "moderate_selector_quality_gate_zero_at": 0.58,
     "moderate_selector_quality_gate_good_min": 0.72
   },

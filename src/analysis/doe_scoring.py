@@ -57,6 +57,21 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     # Soft-score shaping for lock-in recovery share.
     "lockin_recovery_share_score_zero_at": 0.05,
     "lockin_recovery_share_score_good_min": 0.40,
+    # Moderate turnout-share cannibalization-and-rebound recovery signal.
+    # Phase-1 (A eats B) is stricter; Phase-2 (B eats back) has slightly lower bars.
+    "moderate_min_group_size": 6.0,
+    "moderate_takeover_loss_frac_min": 0.50,
+    "moderate_takeover_capture_frac_min": 0.50,
+    "moderate_rebound_loss_frac_min": 0.35,
+    "moderate_rebound_share_vs_a_peak_min": 0.40,
+    "moderate_min_steps": 5.0,
+    "moderate_min_peak_share": 0.00,
+    "moderate_length_bonus_max": 0.15,
+    "moderate_altruism_bonus_weight": 0.0,
+    "moderate_altruism_bonus_floor": 0.60,
+    # Quality gate for the (light) moderate selector bonus.
+    "moderate_selector_quality_gate_zero_at": 0.58,
+    "moderate_selector_quality_gate_good_min": 0.72,
     # Turnout shape soft score (step-count independent; avoids deceptive mean-only scoring).
     "turnout_start_score_low": 30.0,
     "turnout_start_score_high": 70.0,
@@ -76,9 +91,10 @@ DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
 }
 
 DEFAULT_SCORING_WEIGHTS: dict[str, float] = {
-    "quality_mean": 0.45,
-    "discriminability": 0.35,
-    "seed_robustness": 0.20,
+    "quality_mean": 0.67,
+    "discriminability": 0.0,
+    "seed_robustness": 0.30,
+    "moderate_recovery_selector": 0.03,
 }
 
 DEFAULT_STAGE_WEIGHTS: dict[str, float] = {
@@ -140,6 +156,9 @@ OPTIONAL_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
     "participant_share_turnover_rate_w",
     "puzzle_dominance_share_conflict",
     "lockin_recovery_share_conflict",
+    "moderate_recovery_strength_run",
+    "moderate_recovery_event_count",
+    "moderate_recovery_pair_coverage",
 )
 
 PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
@@ -167,7 +186,6 @@ PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
     "z_q_delta_group_dispersion_late",
     "z_participant_composition_dynamics",
     "z_puzzle_dom_balance_conflict",
-    "z_lockin_recovery_conflict",
 )
 
 REQUIRED_ROBUST_SCORING_COLUMNS: tuple[str, ...] = (
@@ -323,6 +341,21 @@ def _max_true_stretch(mask: np.ndarray) -> int:
         else:
             cur = 0
     return int(best)
+
+
+def _first_true_streak(mask: np.ndarray, min_len: int) -> tuple[int, int] | None:
+    cur = 0
+    start = 0
+    for i, v in enumerate(mask):
+        if bool(v):
+            if cur == 0:
+                start = i
+            cur += 1
+            if cur >= int(min_len):
+                return int(start), int(i)
+        else:
+            cur = 0
+    return None
 
 
 def _winner_changes(win_ids: np.ndarray) -> int:
@@ -836,6 +869,221 @@ def _compute_lockin_recovery_metrics_for_run(
     return out
 
 
+def _compute_moderate_recovery_metrics_for_run(
+    *,
+    run_dir: Path,
+    agents: pd.DataFrame,
+    min_group_size: int,
+    takeover_loss_frac_min: float,
+    takeover_capture_frac_min: float,
+    rebound_loss_frac_min: float,
+    rebound_share_vs_a_peak_min: float,
+    min_steps: int,
+    min_peak_share: float,
+    length_bonus_max: float,
+    altruism_bonus_weight: float,
+    altruism_bonus_floor: float,
+) -> dict[str, float]:
+    out = {
+        "moderate_recovery_event_count": 0.0,
+        "moderate_recovery_pair_count": 0.0,
+        "moderate_recovery_pair_coverage": 0.0,
+        "moderate_recovery_strength_best": 0.0,
+        "moderate_recovery_strength_top3_mean": 0.0,
+        "moderate_recovery_strength_run": 0.0,
+    }
+    req = {"step", "agent_id", "personality_group_idx", "participating"}
+    if not req <= set(agents.columns):
+        return out
+
+    ap = agents.copy()
+    if "eligible_for_election" in ap.columns:
+        ap = ap.loc[ap["eligible_for_election"] == True]
+    if len(ap) == 0:
+        return out
+
+    group_sizes = (
+        ap.loc[:, ["agent_id", "personality_group_idx"]]
+        .drop_duplicates(subset=["agent_id"])
+        .groupby("personality_group_idx")
+        .size()
+        .sort_index()
+    )
+    groups = [int(g) for g in group_sizes[group_sizes >= int(min_group_size)].index.tolist()]
+    if len(groups) < 2:
+        return out
+
+    steps = np.arange(int(ap["step"].min()), int(ap["step"].max()) + 1, dtype=int)
+    if steps.size < max(4, int(min_steps) + 2):
+        return out
+    step0 = int(steps[0])
+    gidx = {int(g): i for i, g in enumerate(groups)}
+    n_steps = int(steps.size)
+    n_groups = int(len(groups))
+
+    turnout_rel = np.zeros((n_steps, n_groups), dtype=np.float64)
+    participants = (
+        ap.loc[ap["participating"] == True]
+        .groupby(["step", "personality_group_idx"])
+        .size()
+    )
+    for (st, grp), n_part in participants.items():
+        gi = gidx.get(int(grp))
+        if gi is None:
+            continue
+        si = int(st) - step0
+        if 0 <= si < n_steps:
+            turnout_rel[si, gi] = float(n_part) / float(group_sizes[int(grp)])
+
+    group_sizes_vec = np.asarray([float(group_sizes[int(g)]) for g in groups], dtype=np.float64)
+    turnout_counts = turnout_rel * group_sizes_vec.reshape(1, -1)
+    total_counts = turnout_counts.sum(axis=1, keepdims=True)
+    safe_total = np.where(total_counts > 1e-12, total_counts, 1.0)
+    turnout_share = turnout_counts / safe_total
+
+    altru_lookup: dict[tuple[int, int], float] = {}
+    abw = float(max(0.0, altruism_bonus_weight))
+    abf = float(np.clip(altruism_bonus_floor, 0.0, 0.99))
+    if abw > 0.0:
+        votes_path = run_dir / "votes.parquet"
+        if votes_path.exists():
+            try:
+                votes = pd.read_parquet(votes_path, columns=["step", "agent_id", "voted_altruistically"])
+                amap = ap.loc[:, ["step", "agent_id", "personality_group_idx"]].drop_duplicates(
+                    subset=["step", "agent_id"]
+                )
+                vm = votes.merge(amap, on=["step", "agent_id"], how="inner")
+                if len(vm) > 0:
+                    vm["voted_altruistically"] = pd.to_numeric(vm["voted_altruistically"], errors="coerce")
+                    g = (
+                        vm.groupby(["step", "personality_group_idx"], as_index=False)
+                        .agg(group_altruism_share=("voted_altruistically", "mean"))
+                    )
+                    for row in g.itertuples(index=False):
+                        st = int(getattr(row, "step"))
+                        gi = int(getattr(row, "personality_group_idx"))
+                        av = float(getattr(row, "group_altruism_share"))
+                        if np.isfinite(av):
+                            altru_lookup[(st, gi)] = av
+            except Exception:
+                altru_lookup = {}
+
+    event_strengths: list[float] = []
+    pair_hits: set[tuple[int, int]] = set()
+    min_steps_i = int(max(1, min_steps))
+    length_bonus_max_f = float(max(0.0, length_bonus_max))
+    eps = 1e-12
+
+    for a_j, a_group in enumerate(groups):
+        for b_j, b_group in enumerate(groups):
+            if a_j == b_j:
+                continue
+            b_peak_idx = int(np.argmax(turnout_share[:, b_j]))
+            b_peak = float(turnout_share[b_peak_idx, b_j])
+            if b_peak < float(min_peak_share):
+                continue
+            a_at_b_peak = float(turnout_share[b_peak_idx, a_j])
+
+            after_b_peak = np.arange(b_peak_idx + 1, n_steps, dtype=int)
+            if after_b_peak.size == 0:
+                continue
+            b_vals = turnout_share[after_b_peak, b_j]
+            a_vals = turnout_share[after_b_peak, a_j]
+            b_loss = b_peak - b_vals
+            a_gain = a_vals - a_at_b_peak
+            phase1_mask = (
+                (b_loss >= float(takeover_loss_frac_min) * b_peak)
+                & (a_gain >= float(takeover_capture_frac_min) * b_loss)
+            )
+            phase1_streak = _first_true_streak(phase1_mask, min_steps_i)
+            if phase1_streak is None:
+                continue
+            s1, e1 = phase1_streak
+            t1_start = int(after_b_peak[s1])
+            t1_end = int(after_b_peak[e1])
+
+            post1 = np.arange(t1_end + 1, n_steps, dtype=int)
+            if post1.size == 0:
+                continue
+            a_post = turnout_share[post1, a_j]
+            a_peak_rel_idx = int(np.argmax(a_post))
+            t_a_peak = int(post1[a_peak_rel_idx])
+            a_peak = float(turnout_share[t_a_peak, a_j])
+            if a_peak < float(min_peak_share):
+                continue
+
+            after_a_peak = np.arange(t_a_peak + 1, n_steps, dtype=int)
+            if after_a_peak.size == 0:
+                continue
+            a_after = turnout_share[after_a_peak, a_j]
+            b_after = turnout_share[after_a_peak, b_j]
+            phase2_mask = (
+                ((a_peak - a_after) >= float(rebound_loss_frac_min) * a_peak)
+                & (b_after >= float(rebound_share_vs_a_peak_min) * a_peak)
+            )
+            phase2_streak = _first_true_streak(phase2_mask, min_steps_i)
+            if phase2_streak is None:
+                continue
+            s2, e2 = phase2_streak
+            t2_start = int(after_a_peak[s2])
+            t2_end = int(after_a_peak[e2])
+
+            b_loss_frac = float((b_peak - turnout_share[t1_end, b_j]) / max(b_peak, eps))
+            a_capture_frac = float(
+                max(0.0, turnout_share[t1_end, a_j] - a_at_b_peak)
+                / max(max(0.0, b_peak - turnout_share[t1_end, b_j]), eps)
+            )
+            a_loss_frac = float((a_peak - turnout_share[t2_end, a_j]) / max(a_peak, eps))
+            b_rebound_vs_a_peak = float(turnout_share[t2_end, b_j] / max(a_peak, eps))
+
+            phase1_strength = float(
+                np.clip(0.60 * b_loss_frac + 0.40 * np.clip(a_capture_frac, 0.0, 1.0), 0.0, 1.0)
+            )
+            phase2_strength = float(
+                np.clip(0.60 * a_loss_frac + 0.40 * np.clip(b_rebound_vs_a_peak, 0.0, 1.0), 0.0, 1.0)
+            )
+            peak_factor = float(np.clip(min(b_peak, a_peak) / 0.25, 0.0, 1.0))
+            len1 = int(t1_end - t1_start + 1)
+            len2 = int(t2_end - t2_start + 1)
+            len_ratio = float(max(0.0, min(len1, len2) - min_steps_i) / float(max(min_steps_i, 1)))
+            len_boost = float(1.0 + length_bonus_max_f * np.clip(len_ratio, 0.0, 1.0))
+            altruism_boost = 1.0
+            if abw > 0.0 and altru_lookup:
+                a_vals = np.asarray(
+                    [altru_lookup.get((int(step0 + st), int(b_group)), np.nan) for st in range(t2_start, t2_end + 1)],
+                    dtype=float,
+                )
+                a_mean = float(np.nanmean(a_vals)) if np.isfinite(a_vals).any() else np.nan
+                if np.isfinite(a_mean):
+                    align = float(np.clip((a_mean - abf) / max(1e-12, 1.0 - abf), 0.0, 1.0))
+                    altruism_boost = float(1.0 + abw * align)
+            ev_strength = float(
+                np.clip(np.sqrt(phase1_strength * phase2_strength) * peak_factor * len_boost * altruism_boost, 0.0, 1.0)
+            )
+            if ev_strength <= 0.0:
+                continue
+            event_strengths.append(ev_strength)
+            pair_hits.add((int(a_group), int(b_group)))
+
+    if not event_strengths:
+        return out
+    event_arr = np.asarray(sorted(event_strengths, reverse=True), dtype=float)
+    topk = event_arr[: min(3, event_arr.size)]
+    best = float(event_arr[0])
+    top3 = float(np.mean(topk))
+    denom_pairs = float(n_groups * max(n_groups - 1, 1))
+    pair_cov = float(len(pair_hits)) / denom_pairs if denom_pairs > 0.0 else 0.0
+    run_strength = float(np.clip((0.65 * best + 0.35 * top3) * (0.6 + 0.4 * np.sqrt(pair_cov)), 0.0, 1.0))
+
+    out["moderate_recovery_event_count"] = float(event_arr.size)
+    out["moderate_recovery_pair_count"] = float(len(pair_hits))
+    out["moderate_recovery_pair_coverage"] = float(pair_cov)
+    out["moderate_recovery_strength_best"] = float(best)
+    out["moderate_recovery_strength_top3_mean"] = float(top3)
+    out["moderate_recovery_strength_run"] = float(run_strength)
+    return out
+
+
 def compute_run_features_from_tables(
     area_steps: pd.DataFrame,
     agents: pd.DataFrame,
@@ -1326,6 +1574,16 @@ def collect_run_features(
     lockin_min_altruism_lift: float = DEFAULT_SCORING_THRESHOLDS["lockin_min_altruism_lift"],
     lockin_margin_power_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_power_threshold"],
     lockin_margin_puzzle_recovery_threshold: float = DEFAULT_SCORING_THRESHOLDS["lockin_margin_puzzle_recovery_threshold"],
+    moderate_min_group_size: int = int(DEFAULT_SCORING_THRESHOLDS["moderate_min_group_size"]),
+    moderate_takeover_loss_frac_min: float = DEFAULT_SCORING_THRESHOLDS["moderate_takeover_loss_frac_min"],
+    moderate_takeover_capture_frac_min: float = DEFAULT_SCORING_THRESHOLDS["moderate_takeover_capture_frac_min"],
+    moderate_rebound_loss_frac_min: float = DEFAULT_SCORING_THRESHOLDS["moderate_rebound_loss_frac_min"],
+    moderate_rebound_share_vs_a_peak_min: float = DEFAULT_SCORING_THRESHOLDS["moderate_rebound_share_vs_a_peak_min"],
+    moderate_min_steps: int = int(DEFAULT_SCORING_THRESHOLDS["moderate_min_steps"]),
+    moderate_min_peak_share: float = DEFAULT_SCORING_THRESHOLDS["moderate_min_peak_share"],
+    moderate_length_bonus_max: float = DEFAULT_SCORING_THRESHOLDS["moderate_length_bonus_max"],
+    moderate_altruism_bonus_weight: float = DEFAULT_SCORING_THRESHOLDS["moderate_altruism_bonus_weight"],
+    moderate_altruism_bonus_floor: float = DEFAULT_SCORING_THRESHOLDS["moderate_altruism_bonus_floor"],
 ) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for run_dir in sorted(doe_root.glob("design_*/rule_*/seed_*/run_0")):
@@ -1359,6 +1617,22 @@ def collect_run_features(
                 min_altruism_lift=float(lockin_min_altruism_lift),
                 margin_power_threshold=float(lockin_margin_power_threshold),
                 margin_puzzle_recovery_threshold=float(lockin_margin_puzzle_recovery_threshold),
+            )
+        )
+        features.update(
+            _compute_moderate_recovery_metrics_for_run(
+                run_dir=run_dir,
+                agents=agents,
+                min_group_size=int(moderate_min_group_size),
+                takeover_loss_frac_min=float(moderate_takeover_loss_frac_min),
+                takeover_capture_frac_min=float(moderate_takeover_capture_frac_min),
+                rebound_loss_frac_min=float(moderate_rebound_loss_frac_min),
+                rebound_share_vs_a_peak_min=float(moderate_rebound_share_vs_a_peak_min),
+                min_steps=int(moderate_min_steps),
+                min_peak_share=float(moderate_min_peak_share),
+                length_bonus_max=float(moderate_length_bonus_max),
+                altruism_bonus_weight=float(moderate_altruism_bonus_weight),
+                altruism_bonus_floor=float(moderate_altruism_bonus_floor),
             )
         )
 
@@ -1488,8 +1762,8 @@ def score_designs(
     min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
     puzzle_dominance_share_score_low: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_low"],
     puzzle_dominance_share_score_high: float = DEFAULT_SCORING_THRESHOLDS["puzzle_dominance_share_score_high"],
-    lockin_recovery_share_score_zero_at: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_zero_at"],
-    lockin_recovery_share_score_good_min: float = DEFAULT_SCORING_THRESHOLDS["lockin_recovery_share_score_good_min"],
+    moderate_selector_quality_gate_zero_at: float = DEFAULT_SCORING_THRESHOLDS["moderate_selector_quality_gate_zero_at"],
+    moderate_selector_quality_gate_good_min: float = DEFAULT_SCORING_THRESHOLDS["moderate_selector_quality_gate_good_min"],
     turnout_start_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_low"],
     turnout_start_score_high: float = DEFAULT_SCORING_THRESHOLDS["turnout_start_score_high"],
     turnout_end_score_low: float = DEFAULT_SCORING_THRESHOLDS["turnout_end_score_low"],
@@ -1666,11 +1940,6 @@ def score_designs(
         low=float(puzzle_dominance_share_score_low),
         high=float(puzzle_dominance_share_score_high),
     )
-    primary["z_lockin_recovery_conflict"] = _lower_bound_pref01(
-        pd.to_numeric(primary["lockin_recovery_share_conflict"], errors="coerce"),
-        zero_at=float(lockin_recovery_share_score_zero_at),
-        good_min=float(lockin_recovery_share_score_good_min),
-    )
     quality_components = list(PRIMARY_QUALITY_COMPONENT_KEYS)
     quality_values = primary[quality_components].copy()
     if quality_component_weights is None:
@@ -1705,11 +1974,26 @@ def score_designs(
             pass_rate=("passes_hard_gates", "mean"),
             quality_mean=("run_quality_viable", "mean"),
             quality_std=("run_quality_viable", "std"),
+            moderate_recovery_strength_mean=("moderate_recovery_strength_run", "mean"),
         )
         .fillna({"quality_std": 0.0})
     )
     by_design["quality_mean"] = pd.to_numeric(by_design["quality_mean"], errors="coerce").fillna(0.0)
     by_design["seed_robustness"] = _norm01(by_design["quality_std"], higher_better=False)
+    by_design["moderate_recovery_strength_mean"] = pd.to_numeric(
+        by_design["moderate_recovery_strength_mean"], errors="coerce"
+    ).fillna(0.0)
+    by_design["moderate_recovery_strength_norm"] = _norm01(
+        by_design["moderate_recovery_strength_mean"], higher_better=True
+    )
+    by_design["moderate_recovery_quality_gate"] = _lower_bound_pref01(
+        by_design["quality_mean"],
+        zero_at=float(moderate_selector_quality_gate_zero_at),
+        good_min=float(moderate_selector_quality_gate_good_min),
+    )
+    by_design["moderate_recovery_selector"] = (
+        by_design["moderate_recovery_strength_norm"] * by_design["moderate_recovery_quality_gate"]
+    ).clip(0.0, 1.0)
 
     robust = df.loc[df["rule_name"] == str(robust_rule_name)].copy()
     disc_active = False
@@ -1751,25 +2035,29 @@ def score_designs(
     out["n_matched_seed_pairs"] = pd.to_numeric(out["n_matched_seed_pairs"], errors="coerce").fillna(0).astype(int)
 
     w_q = float(w["quality_mean"])
-    w_d = float(w["discriminability"])
+    # Keep discriminability as a diagnostic only, never as a selection signal.
+    w_d = 0.0
     w_r = float(w["seed_robustness"])
-    if not disc_active:
-        w_d = 0.0
-        denom = w_q + w_r
-        if denom > 0.0:
-            w_q = w_q / denom
-            w_r = w_r / denom
-        else:
-            w_q = 1.0
-            w_r = 0.0
+    w_m = float(w.get("moderate_recovery_selector", 0.0))
+    denom = w_q + w_r + w_m
+    if denom > 0.0:
+        w_q = w_q / denom
+        w_r = w_r / denom
+        w_m = w_m / denom
+    else:
+        w_q = 0.70
+        w_r = 0.30
+        w_m = 0.0
 
     out["weight_quality_effective"] = float(w_q)
     out["weight_discriminability_effective"] = float(w_d)
     out["weight_seed_robustness_effective"] = float(w_r)
+    out["weight_moderate_recovery_selector_effective"] = float(w_m)
     out["quality_bundle"] = (
         w_q * out["quality_mean"]
         + w_d * out["discriminability"]
         + w_r * out["seed_robustness"]
+        + w_m * out["moderate_recovery_selector"]
     )
     s_viability = float(sw.get("viability", 0.6))
     s_quality = float(sw.get("quality_bundle", 0.4))
@@ -1802,6 +2090,7 @@ def score_designs(
                 "quality_mean": float(w_q),
                 "discriminability": float(w_d),
                 "seed_robustness": float(w_r),
+                "moderate_recovery_selector": float(w_m),
             },
             "effective_stage_weights": {
                 "viability": float(s_viability),
@@ -1880,6 +2169,16 @@ def analyze_doe_root(
         lockin_min_altruism_lift=float(thr["lockin_min_altruism_lift"]),
         lockin_margin_power_threshold=float(thr["lockin_margin_power_threshold"]),
         lockin_margin_puzzle_recovery_threshold=float(thr["lockin_margin_puzzle_recovery_threshold"]),
+        moderate_min_group_size=int(thr["moderate_min_group_size"]),
+        moderate_takeover_loss_frac_min=float(thr["moderate_takeover_loss_frac_min"]),
+        moderate_takeover_capture_frac_min=float(thr["moderate_takeover_capture_frac_min"]),
+        moderate_rebound_loss_frac_min=float(thr["moderate_rebound_loss_frac_min"]),
+        moderate_rebound_share_vs_a_peak_min=float(thr["moderate_rebound_share_vs_a_peak_min"]),
+        moderate_min_steps=int(thr["moderate_min_steps"]),
+        moderate_min_peak_share=float(thr["moderate_min_peak_share"]),
+        moderate_length_bonus_max=float(thr["moderate_length_bonus_max"]),
+        moderate_altruism_bonus_weight=float(thr["moderate_altruism_bonus_weight"]),
+        moderate_altruism_bonus_floor=float(thr["moderate_altruism_bonus_floor"]),
     )
     gated = apply_hard_gates(
         rf,
@@ -1937,8 +2236,8 @@ def analyze_doe_root(
         min_competitive_step_share=float(thr["min_competitive_step_share"]),
         puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
         puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
-        lockin_recovery_share_score_zero_at=float(thr["lockin_recovery_share_score_zero_at"]),
-        lockin_recovery_share_score_good_min=float(thr["lockin_recovery_share_score_good_min"]),
+        moderate_selector_quality_gate_zero_at=float(thr["moderate_selector_quality_gate_zero_at"]),
+        moderate_selector_quality_gate_good_min=float(thr["moderate_selector_quality_gate_good_min"]),
         turnout_start_score_low=float(thr["turnout_start_score_low"]),
         turnout_start_score_high=float(thr["turnout_start_score_high"]),
         turnout_end_score_low=float(thr["turnout_end_score_low"]),
@@ -1994,8 +2293,9 @@ def analyze_doe_root(
                 "dropped_incomplete_designs": int(score_meta["dropped_incomplete_designs"]),
                 "optional_metric_diagnostics": score_meta["optional_metric_diagnostics"],
                 "score_formula": (
-                    "score_total = s_v*pass_rate + s_q*(w_q*quality_mean + "
-                    "w_d*discriminability + w_r*seed_robustness)"
+                    "score_total = s_v*pass_rate + "
+                    "s_q*(w_q*quality_mean + w_r*seed_robustness + "
+                    "w_m*moderate_recovery_selector)"
                 ),
                 "quality_components": [
                     "turnout_std",
@@ -2024,7 +2324,7 @@ def analyze_doe_root(
                     "participant_share_mean_abs_drift_20_w (mild, size-weighted)",
                     "participant_share_turnover_rate_w (mild, size-weighted)",
                     "puzzle_dominance_share_conflict",
-                    "lockin_recovery_share_conflict (episode: dominant power lock-in -> altruism surge -> puzzle recovery)",
+                    "moderate_recovery_selector (light, quality-gated bonus; A-eats-B then B-eats-back strength)",
                 ],
                 "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic).",
             },

@@ -243,19 +243,19 @@ Output artifacts (written to DOE root by default):
 Use queued representative runs for top/mid/bottom visual validation:
 
 ```bash
-python -m scripts.doe_hil_review --print-commands
+python -m tools.doe.doe_hil_review --print-commands
 ```
 
 Populate AI interpretation text for selected queue rows:
 
 ```bash
-python -m scripts.doe_hil_review --populate-ai
+python -m tools.doe.doe_hil_review --populate-ai
 ```
 
 Execute fast summary generation for selected queue rows:
 
 ```bash
-python -m scripts.doe_hil_review --bucket top --limit 5 --run-fast
+python -m tools.doe.doe_hil_review --bucket top --limit 5 --run-fast
 ```
 
 Recommended HIL queue columns:
@@ -322,7 +322,7 @@ Important semantic note:
 Build DOE inference artifacts from existing DOE outputs:
 
 ```bash
-python -m scripts.doe_inference --doe-root data/simulation_output/doe_<timestamp> --bootstrap-reps 500 --random-seed 11
+python -m tools.research.doe_inference --doe-root data/simulation_output/doe_<timestamp> --bootstrap-reps 500 --random-seed 11
 ```
 
 Outputs:
