@@ -1,82 +1,62 @@
-# Thesis Contract: Voting Rules, Participation, and Inequality Dynamics
+# Thesis Scope and Experimental Baseline
 
 Research question:
-How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
+ow do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
 
-Execution-level freeze and gate control:
+Related documents:
 
 - `docs/research/execution_scope_freeze.md`
-
-Concept model documentation:
-
 - `docs/research/thesis_model_concepts.md`
 
-## Current Contract (Implemented Truth)
+## 1. Scientific Scope
 
-### Scientific scope
+The thesis studies a fixed simulation environment where voting rule is the primary intentionally varied factor in confirmatory rule-comparison runs.
 
-This thesis studies a fixed simulation environment where only the voting-rule arm is intentionally varied for rule-comparison runs. The model includes adaptive participation behavior and adaptive altruism under a fixed update regime.
+Participation and altruism are adaptive, but their update mechanisms are fixed within a given experiment set.
 
-### Baseline mechanics currently implemented
+## 2. Baseline Model Settings
 
-- Quality target mode baseline: `quality_target_mode=puzzle`
-- Participation signal regime baseline: `participation_signal_mode=group_relative_delta_rel_party`
-- Altruism baseline family: `altruism_mode=satisfaction`
-  - with satisfaction-response parameters (`altruism_satisfaction_theta`, `altruism_satisfaction_slope`) and response gain (`altruism_response_gamma`)
-- Implemented voting rules (rule index contract):
-  - `0=majority`
-  - `1=approval`
-  - `2=utilitarian`
-  - `3=borda`
-  - `4=random` (reference arm)
+Current baseline family:
 
-### Outcome focus (current)
+- `quality_target_mode = puzzle`
+- `participation_signal_mode = group_relative_delta_rel_party`
+- `altruism_mode = satisfaction`
+- satisfaction-response parameters:
+  - `altruism_satisfaction_theta`
+  - `altruism_satisfaction_slope`
+  - `altruism_response_gamma`
 
-Primary thesis outcome families are tracked as time series and run-level summaries:
+Implemented voting rules:
 
-- Participation dynamics (`turnout`)
-- Resource inequality dynamics (`gini_assets` from `steps.gini_index`)
-- Experiential inequality dynamics (`gini_dissatisfaction` from `agents.dissatisfaction_value`)
-- Outcome quality trajectory (`dist_to_reality` aggregated from `area_steps`)
+- `0 = majority`
+- `1 = approval`
+- `2 = utilitarian`
+- `3 = borda`
+- `4 = random` (reference arm)
 
-Interpretation constraint:
+## 3. Primary Outcomes
 
-- `assets` is simulation resource/capacity state, not literal income.
+Primary outcome families are evaluated as time-series and run-level summaries:
 
-Secondary descriptive lenses (non-confirmatory):
+- participation dynamics (`turnout`)
+- resource inequality (`gini_assets` from `steps.gini_index`)
+- experiential inequality (`gini_dissatisfaction` from `agents.dissatisfaction_value`)
+- outcome-quality trajectory (`dist_to_reality` aggregated from `area_steps`)
 
-- group-level turnout and participation-composition diagnostics (majority/minority dynamics by personality group)
-- participation and inequality co-movement diagnostics across time
+Interpretation note:
 
-### Exclusions (current)
+- `assets` denotes simulation resource/capacity state, not literal income.
 
-Out of scope for confirmatory claims:
+## 4. Secondary Descriptive Analyses
 
-- strategic voting mechanisms
-- empirical validation against real election data
-- normative policy prescription
-- strong claims about optimal democratic design
+Secondary (non-confirmatory) views include:
 
-## Freeze-Target Contract (Decided, May Include Pending Items)
+- group-level turnout and participation-composition dynamics
+- participation/inequality co-movement patterns
 
-### Voting-rule arm design
+## 5. Out of Scope for Confirmatory Claims
 
-- Keep canonical implemented arm family as the primary confirmatory family.
-- Keep `random` voting rule as a reference arm:
-  - semantics: uniform full random ranking per election
-  - deterministic replay under fixed seed
-  - role: reference family (non-confirmatory unless reclassified later)
-
-### Independent-variable discipline
-
-For final thesis experiments, voting rule remains the only intentionally varied independent variable in the confirmatory comparison matrix.
-
-### Contract layering rule
-
-Core docs are allowed to include freeze-target items before implementation, but every non-implemented item must be explicitly marked pending with dependency tracking.
-
-## Implementation Status Notes
-
-- Random reference arm is implemented in runtime, metadata, and analysis paths.
-- Core doc/summary drift checks are implemented for current summary-key coverage.
-- Final D0 thesis-lead sign-off is tracked in internal freeze records before Gate C closure.
+- strategic voting equilibria
+- empirical calibration against real election datasets
+- normative policy prescriptions
+- claims of globally optimal democratic design
