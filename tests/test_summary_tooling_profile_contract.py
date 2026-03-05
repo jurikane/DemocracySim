@@ -29,6 +29,7 @@ def test_resolve_debug_profile_single_area_keeps_area_core_and_group_diagnostics
         num_areas=1,
     )
     assert profile.global_core_metrics
+    assert profile.global_step_volatility_page
     assert profile.global_distance_metrics
     assert not profile.global_colors_and_grids
     assert profile.area_core_page
@@ -89,6 +90,7 @@ def test_full_profile_keeps_full_render_flags() -> None:
     assert profile.global_colors_and_grids
     assert profile.global_static_overview
     assert profile.global_per_area_group_distribution
+    assert profile.global_step_volatility_page
     assert not profile.area_puzzle_gate_page
     assert profile.area_group_diagnostics_pages
     assert profile.area_learning_causal_page

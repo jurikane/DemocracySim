@@ -37,16 +37,28 @@ Current weighted aggregation for `dist_to_reality_t`:
 Current `global_summary` keys emitted by `summary_tooling`:
 
 - `turnout_mean`, `turnout_final`
+- `turnout_volatility`
 - `gini_assets_mean`, `gini_assets_final`
+- `gini_assets_volatility`
 - `gini_dissatisfaction_mean`, `gini_dissatisfaction_final`
+- `gini_dissatisfaction_volatility`
 - `mean_dissatisfaction_mean`, `mean_dissatisfaction_final`
 - `dist_to_reality_mean`, `dist_to_reality_final`
+- `dist_to_reality_volatility`
 - `diversity_entropy_mean`, `diversity_entropy_final`
 
 Not emitted in current sidecar summary:
 
-- `turnout_volatility`
-- analogous volatility endpoints for other primary metrics
+- none
+
+Volatility definition (adjacent-step):
+
+- step_volatility_l1(x) = mean_t |x_t - x_{t-1}| over finite adjacent pairs
+- normalized volatility in sidecar summary:
+  - turnout/gini series: divide by 100 (series are 0..100)
+  - distance series (dist_to_reality): divide by 1
+- no clamping is applied in formula layer
+- if fewer than one finite adjacent pair exists: NaN
 
 ### Current secondary descriptive metrics
 
@@ -115,7 +127,7 @@ For each primary time series and each run, use fixed estimands:
 Status in freeze-target:
 
 - `mean_over_time`, `late_mean`, `early_late_delta`: required for thesis inference layer.
-- `volatility`: allowed but currently pending implementation in sidecar outputs.
+- `volatility`: implemented in sidecar outputs for primary outcomes.
 
 ### Inference-family guardrails
 
@@ -132,5 +144,5 @@ Status in freeze-target:
 
 - Sidecar summary keys are intentionally limited to currently emitted implementation outputs.
 - Freeze-target inference endpoints are fixed at the formula level and are computed in the thesis inference layer from logged artifacts.
-- Volatility endpoints remain optional and are promoted only if explicitly required before final runs.
+- Volatility endpoints are available in sidecar outputs and can be used directly by the thesis inference layer.
 - Final endpoint and multiplicity lock-in is recorded in internal freeze notes before final execution.

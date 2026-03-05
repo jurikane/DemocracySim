@@ -1,7 +1,7 @@
 # Thesis Scope and Experimental Baseline
 
 Research question:
-ow do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
+How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?
 
 Related documents:
 

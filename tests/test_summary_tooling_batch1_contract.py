@@ -6,8 +6,10 @@ import json
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from scripts.run_headless import run_once
+from src.analysis.thesis_endpoints import step_volatility_l1_normalized
 from src.analysis.summary_tooling import generate_run_summary_batch1
 from src.config.loader import load_config
 from src.utils.metrics import gini_index_0_100
@@ -58,6 +60,7 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
     global_df = pd.read_csv(artifacts.global_series_csv)
     area_df = pd.read_csv(artifacts.area_series_csv)
     stats = json.loads(artifacts.summary_stats_json.read_text(encoding="utf-8"))
+    global_summary = stats["global_summary"]
 
     global_required = {
         "step",
@@ -108,6 +111,13 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
     assert area_required.issubset(set(area_df.columns))
     assert stats["shape"]["num_steps"] == len(global_df)
     assert stats["shape"]["num_areas"] == int(area_df["area_id"].nunique())
+    for key in (
+        "turnout_volatility",
+        "gini_assets_volatility",
+        "gini_dissatisfaction_volatility",
+        "dist_to_reality_volatility",
+    ):
+        assert key in global_summary
 
 
 def test_batch1_summary_formulas_match_logged_artifacts(tmp_path: Path) -> None:
@@ -179,4 +189,23 @@ def test_batch1_summary_formulas_match_logged_artifacts(tmp_path: Path) -> None:
         steps["gini_index"].to_numpy(dtype=float),
         rtol=0.0,
         atol=1e-6,
+    )
+
+    stats = json.loads(artifacts.summary_stats_json.read_text(encoding="utf-8"))
+    gs = stats["global_summary"]
+    assert float(gs["turnout_volatility"]) == pytest.approx(
+        step_volatility_l1_normalized(summary_global["turnout"].to_numpy(dtype=float), value_range=100.0),
+        abs=1e-6,
+    )
+    assert float(gs["gini_assets_volatility"]) == pytest.approx(
+        step_volatility_l1_normalized(summary_global["gini_assets"].to_numpy(dtype=float), value_range=100.0),
+        abs=1e-6,
+    )
+    assert float(gs["gini_dissatisfaction_volatility"]) == pytest.approx(
+        step_volatility_l1_normalized(summary_global["gini_dissatisfaction"].to_numpy(dtype=float), value_range=100.0),
+        abs=1e-6,
+    )
+    assert float(gs["dist_to_reality_volatility"]) == pytest.approx(
+        step_volatility_l1_normalized(summary_global["dist_to_reality"].to_numpy(dtype=float), value_range=1.0),
+        abs=1e-6,
     )

@@ -30,6 +30,10 @@ from src.analysis.reference_benchmarks import (
     rawlsian_ref_minimax_l2sq,
     egalitarian_refs_mean_plus_lambda_gini,
 )
+from src.analysis.thesis_endpoints import (
+    step_volatility_l1_normalized,
+    time_mean,
+)
 from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
@@ -69,6 +73,7 @@ class _SummaryRenderProfile:
     global_static_overview: bool
     global_per_area_group_distribution: bool
     global_core_metrics: bool
+    global_step_volatility_page: bool
     global_distance_metrics: bool
     area_core_page: bool
     area_puzzle_page: bool
@@ -1547,6 +1552,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             global_static_overview=True,
             global_per_area_group_distribution=True,
             global_core_metrics=True,
+            global_step_volatility_page=True,
             global_distance_metrics=True,
             area_core_page=True,
             area_puzzle_page=True,
@@ -1567,6 +1573,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             global_static_overview=False,
             global_per_area_group_distribution=False,
             global_core_metrics=True,
+            global_step_volatility_page=True,
             global_distance_metrics=True,
             area_core_page=True,
             area_puzzle_page=True,
@@ -1586,6 +1593,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
         global_static_overview=True,
         global_per_area_group_distribution=True,
         global_core_metrics=True,
+        global_step_volatility_page=True,
         global_distance_metrics=True,
         area_core_page=True,
         area_puzzle_page=True,
@@ -1996,11 +2004,6 @@ def _build_summary_stats(
     meta: dict[str, Any],
     static: dict[str, Any],
 ) -> dict[str, Any]:
-    def _safe_mean(series: pd.Series) -> float:
-        arr = series.to_numpy(dtype=float)
-        finite = arr[np.isfinite(arr)]
-        return float(np.mean(finite)) if finite.size > 0 else float("nan")
-
     def _safe_final(series: pd.Series) -> float:
         arr = series.to_numpy(dtype=float)
         if arr.size == 0:
@@ -2021,17 +2024,33 @@ def _build_summary_stats(
             "num_colors": int(static.get("num_colors", 0)),
         },
         "global_summary": {
-            "turnout_mean": _safe_mean(global_series["turnout"]),
+            "turnout_mean": time_mean(global_series["turnout"].to_numpy(dtype=float)),
             "turnout_final": _safe_final(global_series["turnout"]),
-            "gini_assets_mean": _safe_mean(global_series["gini_assets"]),
+            "turnout_volatility": step_volatility_l1_normalized(
+                global_series["turnout"].to_numpy(dtype=float),
+                value_range=100.0,
+            ),
+            "gini_assets_mean": time_mean(global_series["gini_assets"].to_numpy(dtype=float)),
             "gini_assets_final": _safe_final(global_series["gini_assets"]),
-            "gini_dissatisfaction_mean": _safe_mean(global_series["gini_dissatisfaction"]),
+            "gini_assets_volatility": step_volatility_l1_normalized(
+                global_series["gini_assets"].to_numpy(dtype=float),
+                value_range=100.0,
+            ),
+            "gini_dissatisfaction_mean": time_mean(global_series["gini_dissatisfaction"].to_numpy(dtype=float)),
             "gini_dissatisfaction_final": _safe_final(global_series["gini_dissatisfaction"]),
-            "mean_dissatisfaction_mean": _safe_mean(global_series["mean_dissatisfaction"]),
+            "gini_dissatisfaction_volatility": step_volatility_l1_normalized(
+                global_series["gini_dissatisfaction"].to_numpy(dtype=float),
+                value_range=100.0,
+            ),
+            "mean_dissatisfaction_mean": time_mean(global_series["mean_dissatisfaction"].to_numpy(dtype=float)),
             "mean_dissatisfaction_final": _safe_final(global_series["mean_dissatisfaction"]),
-            "dist_to_reality_mean": _safe_mean(global_series["dist_to_reality"]),
+            "dist_to_reality_mean": time_mean(global_series["dist_to_reality"].to_numpy(dtype=float)),
             "dist_to_reality_final": _safe_final(global_series["dist_to_reality"]),
-            "diversity_entropy_mean": _safe_mean(global_series["diversity_first_choice_entropy"]),
+            "dist_to_reality_volatility": step_volatility_l1_normalized(
+                global_series["dist_to_reality"].to_numpy(dtype=float),
+                value_range=1.0,
+            ),
+            "diversity_entropy_mean": time_mean(global_series["diversity_first_choice_entropy"].to_numpy(dtype=float)),
             "diversity_entropy_final": _safe_final(global_series["diversity_first_choice_entropy"]),
         },
     }
@@ -2256,7 +2275,9 @@ def _render_combined_global_summary_pdf(
         if render_profile.global_per_area_group_distribution:
             _append_per_area_group_distribution_pages(pdf=pdf, static=static, meta=meta)
         if render_profile.global_core_metrics:
-            _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta)
+            _render_global_core_metrics_page(pdf=pdf, global_series=global_series, meta=meta, static=static)
+        if render_profile.global_step_volatility_page:
+            _render_global_step_volatility_page(pdf=pdf, global_series=global_series, meta=meta, static=static)
         if render_profile.global_distance_metrics:
             _render_global_distance_page(pdf=pdf, global_series=global_series)
 
@@ -2655,63 +2676,17 @@ def _render_area_detail_pdf(
             pdf.savefig(fig2p, dpi=140)
         plt.close(fig2p)
 
-        # Page 2b: split decomposition detail (less visual overload than all traces in one axis).
-        fig2pd, axes2pd = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
-        axpd = np.asarray(axes2pd).ravel()
-        puzzle_vals = area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float)
-        outcome_power_vals = dist_decomp["dist_outcome_power"].astype(float)
-        puzzle_power_vals = dist_decomp["dist_puzzle_power"].astype(float)
-        grid_power_vals = dist_decomp["dist_grid_power"].astype(float)
-        margin_vals = outcome_power_vals - puzzle_vals
-
-        axpd[0].plot(x, puzzle_vals, color="black", linestyle="--", linewidth=1.6, label="outcome↔puzzle")
-        axpd[0].plot(x, outcome_power_vals, color="tab:red", linewidth=1.4, label="outcome↔power")
-        if np.isfinite(puzzle_threshold):
-            axpd[0].axhline(
-                puzzle_threshold,
-                color="#4a4a4a",
-                linestyle=":",
-                linewidth=1.2,
-                label="threshold",
-            )
-        axpd[0].set_title("Decomposition A: Outcome↔Puzzle / Outcome↔Power")
-        axpd[0].set_ylabel("distance [0..1]")
-        _set_unit_ylim_visible(axpd[0])
-        if len(axpd[0].lines) > 0:
-            axpd[0].legend(loc="upper right", fontsize=8, ncol=2)
-
-        if np.isfinite(puzzle_power_vals).any():
-            axpd[1].plot(x, puzzle_power_vals, color="tab:blue", linestyle="-.", linewidth=1.35, label="puzzle↔power")
-        if np.isfinite(grid_power_vals).any():
-            axpd[1].plot(x, grid_power_vals, color="tab:orange", linestyle=":", linewidth=1.35, label="grid↔power")
-        axpd[1].set_title("Decomposition B: Puzzle↔Power / Grid↔Power")
-        axpd[1].set_ylabel("distance [0..1]")
-        _set_unit_ylim_visible(axpd[1])
-        if len(axpd[1].lines) > 0:
-            axpd[1].legend(loc="upper right", fontsize=8)
-        else:
-            axpd[1].text(0.5, 0.5, "No puzzle↔power/grid↔power diagnostics logged", ha="center", va="center")
-            axpd[1].set_yticks([])
-
-        if np.isfinite(margin_vals).any():
-            axpd[2].plot(x, margin_vals, color="purple", linewidth=1.2, alpha=0.95, label="puzzle_power_margin")
-            axpd[2].axhline(0.0, color="purple", linestyle=":", linewidth=1.0, alpha=0.85)
-            axpd[2].legend(loc="upper right", fontsize=8)
-        else:
-            axpd[2].text(0.5, 0.5, "Margin unavailable", ha="center", va="center")
-            axpd[2].set_yticks([])
-        axpd[2].set_title("Decomposition C: Puzzle-Power Margin (>0 means puzzle closer)")
-        axpd[2].set_ylabel("margin")
-        axpd[2].set_ylim(-1.02, 1.02)
-
-        for a in axpd:
-            a.grid(True, alpha=0.25)
-            a.set_xlabel("step")
-        fig2pd.suptitle(suptitle + " | Puzzle/Power split", fontsize=11)
-        fig2pd.tight_layout()
+        # Page 2b: use the newer puzzle/power decomposition page (formerly rendered later),
+        # replacing the legacy split-decomposition page to avoid duplicate content.
         if render_profile.area_puzzle_page:
-            pdf.savefig(fig2pd, dpi=140)
-        plt.close(fig2pd)
+            _render_area_puzzle_gate_page(
+                pdf=pdf,
+                area_series=area_series,
+                dist_decomp=dist_decomp,
+                suptitle=suptitle,
+                include_overview=False,
+                include_decomposition=True,
+            )
 
         # Page 3: vote-mode alignment diagnostics (with support/coverage context).
         fig2m, axes2m = plt.subplots(
@@ -3030,6 +3005,8 @@ def _render_area_detail_pdf(
                 area_series=area_series,
                 dist_decomp=dist_decomp,
                 suptitle=suptitle,
+                include_overview=True,
+                include_decomposition=False,
             )
 
         # Following pages (group diagnostics etc.) come after the core area + puzzle analysis pages.
@@ -4254,7 +4231,13 @@ def _compute_area_weighted_means_from_group_series(*, area_group_series: pd.Data
         return None
     return pd.DataFrame(rows).sort_values("step").reset_index(drop=True)
 
-def _render_global_core_metrics_page(*, pdf: PdfPages, global_series: pd.DataFrame, meta: dict[str, Any]) -> None:
+def _render_global_core_metrics_page(
+    *,
+    pdf: PdfPages,
+    global_series: pd.DataFrame,
+    meta: dict[str, Any],
+    static: dict[str, Any],
+) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27), sharex=True)
     x = global_series["step"].to_numpy(dtype=float)
     ax = axes.ravel()
@@ -4270,11 +4253,133 @@ def _render_global_core_metrics_page(*, pdf: PdfPages, global_series: pd.DataFra
     ax[3].plot(x, global_series["mean_dissatisfaction"].to_numpy(dtype=float), color="tab:orange")
     ax[3].set_title("Mean Dissatisfaction")
     _set_unit_ylim_visible(ax[3])
+
+    vol_lines = [
+        (
+            "turnout_volatility",
+            step_volatility_l1_normalized(global_series["turnout"].to_numpy(dtype=float), value_range=100.0),
+        ),
+        (
+            "gini_assets_volatility",
+            step_volatility_l1_normalized(global_series["gini_assets"].to_numpy(dtype=float), value_range=100.0),
+        ),
+        (
+            "gini_dissatisfaction_volatility",
+            step_volatility_l1_normalized(global_series["gini_dissatisfaction"].to_numpy(dtype=float), value_range=100.0),
+        ),
+        (
+            "dist_to_reality_volatility",
+            step_volatility_l1_normalized(global_series["dist_to_reality"].to_numpy(dtype=float), value_range=1.0),
+        ),
+    ]
+    vol_text = "Adjacent-step volatility (mean |Δ|)\n" + "\n".join(
+        f"{k}: {v:.3f}" if np.isfinite(v) else f"{k}: nan" for k, v in vol_lines
+    )
+    ax[3].text(
+        0.02,
+        0.98,
+        vol_text,
+        va="top",
+        ha="left",
+        fontsize=8,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.5", alpha=0.9),
+        transform=ax[3].transAxes,
+    )
     for a in ax:
         a.grid(True, alpha=0.25)
         a.set_xlabel("step")
-    title = f"Global Core Metrics | run_seed={meta['run']['run_seed']} | rule={meta['run'].get('rule_name')}"
+    num_areas = int(static.get("num_areas", 0))
+    scope = "Global (= area_0 aggregate; n_areas=1)" if num_areas == 1 else f"Global aggregate (n_areas={num_areas})"
+    title = f"Global Core Metrics | run_seed={meta['run']['run_seed']} | rule={meta['run'].get('rule_name')}\n{scope}"
     fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+    pdf.savefig(fig, dpi=140)
+    plt.close(fig)
+
+
+def _adjacent_abs_change_series(values: np.ndarray) -> np.ndarray:
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    if arr.size == 0:
+        return np.asarray([], dtype=float)
+    out = np.full(arr.shape, np.nan, dtype=float)
+    if arr.size == 1:
+        return out
+    cur = arr[1:]
+    prev = arr[:-1]
+    mask = np.isfinite(cur) & np.isfinite(prev)
+    out[1:] = np.where(mask, np.abs(cur - prev), np.nan)
+    return out
+
+
+def _render_global_step_volatility_page(
+    *,
+    pdf: PdfPages,
+    global_series: pd.DataFrame,
+    meta: dict[str, Any],
+    static: dict[str, Any],
+) -> None:
+    fig, axes = plt.subplots(4, 2, figsize=(11.69, 8.27), sharex=True)
+    x = global_series["step"].to_numpy(dtype=float)
+    rows = [
+        ("turnout", "Turnout [%]", "tab:blue", "percent"),
+        ("gini_assets", "Gini Assets [0..100]", "tab:red", "percent"),
+        ("gini_dissatisfaction", "Gini Dissatisfaction [0..100]", "tab:purple", "percent"),
+        ("dist_to_reality", "dist_to_reality [0..1]", "tab:green", "unit"),
+    ]
+    for r, (col, title, color, scale_kind) in enumerate(rows):
+        y = global_series[col].to_numpy(dtype=float)
+        delta = _adjacent_abs_change_series(y)
+        left = axes[r, 0]
+        right = axes[r, 1]
+
+        left.plot(x, y, color=color, linewidth=1.8)
+        left.set_title(f"{title} level")
+        if scale_kind == "percent":
+            _set_percent_ylim_visible(left)
+        else:
+            _set_unit_ylim_visible(left)
+        left.set_ylabel("value")
+        left.grid(True, alpha=0.25)
+
+        right.plot(x, delta, color=color, linewidth=0.95, alpha=0.25, label="|Δ| per step")
+        right.plot(
+            x,
+            _rolling_mean_nan(delta),
+            color=color,
+            linewidth=1.6,
+            alpha=0.95,
+            label=f"rolling mean ({_SMOOTH_WINDOW_STEPS})",
+        )
+        mean_delta = float(np.nanmean(delta)) if np.isfinite(delta).any() else np.nan
+        if np.isfinite(mean_delta):
+            right.axhline(
+                mean_delta,
+                color="black",
+                linestyle="--",
+                linewidth=1.0,
+                alpha=0.85,
+                label=f"mean |Δ| = {mean_delta:.3f}",
+            )
+        finite_delta = delta[np.isfinite(delta)]
+        if finite_delta.size > 0:
+            ymax = float(np.nanmax(finite_delta))
+            right.set_ylim(0.0, max(1e-6, 1.12 * ymax))
+        else:
+            right.set_ylim(0.0, 1.0)
+        right.set_title(f"{title} adjacent-step volatility (mean |Δ|)")
+        right.set_ylabel("|Δ|")
+        right.grid(True, alpha=0.25)
+        right.legend(loc="upper right", fontsize=7)
+
+    for a in axes[-1, :]:
+        a.set_xlabel("step")
+
+    num_areas = int(static.get("num_areas", 0))
+    scope = "Global (= area_0 aggregate; n_areas=1)" if num_areas == 1 else f"Global aggregate (n_areas={num_areas})"
+    fig.suptitle(
+        f"Global Step Volatility | run_seed={meta['run']['run_seed']} | rule={meta['run'].get('rule_name')}\n{scope}",
+        fontsize=12,
+    )
     fig.tight_layout()
     pdf.savefig(fig, dpi=140)
     plt.close(fig)
@@ -4933,6 +5038,8 @@ def _render_area_puzzle_gate_page(
     area_series: pd.DataFrame,
     dist_decomp: dict[str, np.ndarray],
     suptitle: str,
+    include_overview: bool = True,
+    include_decomposition: bool = True,
 ) -> None:
     metrics = _compute_area_puzzle_anti_monopoly_gate_metrics(
         area_series=area_series,
@@ -4954,143 +5061,145 @@ def _render_area_puzzle_gate_page(
     margin = np.asarray(metrics["margin"], dtype=float)
 
     # Page A: gate status + puzzle concentration signals.
-    figa, axa = plt.subplots(1, 2, figsize=(11.69, 8.27))
-    axa = np.asarray(axa).ravel()
+    if include_overview:
+        figa, axa = plt.subplots(1, 2, figsize=(11.69, 8.27))
+        axa = np.asarray(axa).ravel()
 
-    axa[0].axis("off")
-    axa[0].text(
-        0.02,
-        0.98,
-        "Puzzle Anti-Monopoly Gate",
-        ha="left",
-        va="top",
-        fontsize=12,
-        fontweight="bold",
-    )
-    axa[0].text(
-        0.02,
-        0.80,
-        status_txt,
-        ha="left",
-        va="top",
-        fontsize=24,
-        color=status_color,
-        fontweight="bold",
-    )
-    lines = [
-        f"metrics_available: {metric_ready}",
-        f"conflict_eligible: {conf_eligible}",
-        f"conflict_share: {float(metrics['puzzle_conflict_step_share']):.3f} (>= {float(metrics['min_conflict_share']):.3f})",
-        f"dominance_share_conflict: {float(metrics['puzzle_dominance_share_conflict']):.3f} (<= {float(metrics['max_dominance_share_conflict']):.3f})",
-        f"recovery_share_conflict: {float(metrics['power_recovery_share_conflict']):.3f} (>= {float(metrics['min_recovery_share_conflict']):.3f})",
-        f"margin_mean_conflict: {float(metrics['puzzle_power_margin_mean_conflict']):.3f}",
-        f"valid_rows: {int(metrics['valid_rows'])}",
-        f"conflict_rows: {int(metrics['conflict_rows'])}",
-    ]
-    axa[0].text(0.02, 0.60, "\n".join(lines), ha="left", va="top", fontsize=9)
+        axa[0].axis("off")
+        axa[0].text(
+            0.02,
+            0.98,
+            "Puzzle Anti-Monopoly Gate",
+            ha="left",
+            va="top",
+            fontsize=12,
+            fontweight="bold",
+        )
+        axa[0].text(
+            0.02,
+            0.80,
+            status_txt,
+            ha="left",
+            va="top",
+            fontsize=24,
+            color=status_color,
+            fontweight="bold",
+        )
+        lines = [
+            f"metrics_available: {metric_ready}",
+            f"conflict_eligible: {conf_eligible}",
+            f"conflict_share: {float(metrics['puzzle_conflict_step_share']):.3f} (>= {float(metrics['min_conflict_share']):.3f})",
+            f"dominance_share_conflict: {float(metrics['puzzle_dominance_share_conflict']):.3f} (<= {float(metrics['max_dominance_share_conflict']):.3f})",
+            f"recovery_share_conflict: {float(metrics['power_recovery_share_conflict']):.3f} (>= {float(metrics['min_recovery_share_conflict']):.3f})",
+            f"margin_mean_conflict: {float(metrics['puzzle_power_margin_mean_conflict']):.3f}",
+            f"valid_rows: {int(metrics['valid_rows'])}",
+            f"conflict_rows: {int(metrics['conflict_rows'])}",
+        ]
+        axa[0].text(0.02, 0.60, "\n".join(lines), ha="left", va="top", fontsize=9)
 
-    max_share = np.asarray(metrics["puzzle_max_share"], dtype=float)
-    entropy = np.asarray(metrics["puzzle_entropy_norm"], dtype=float)
-    if np.isfinite(max_share).any():
-        axa[1].plot(x, max_share, color="tab:red", linewidth=1.4, label="max puzzle color share")
-    if np.isfinite(entropy).any():
-        ax1b = axa[1].twinx()
-        ax1b.plot(x, entropy, color="tab:blue", linestyle="--", linewidth=1.2, label="puzzle entropy (norm)")
-        ax1b.set_ylim(-0.02, 1.02)
-        ax1b.set_ylabel("entropy [0..1]", color="tab:blue")
-        ax1b.tick_params(axis="y", colors="tab:blue")
-        h1, l1 = axa[1].get_legend_handles_labels()
-        h2, l2 = ax1b.get_legend_handles_labels()
-        if h1 or h2:
-            axa[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
-    elif len(axa[1].lines) > 0:
-        axa[1].legend(loc="best", fontsize=8)
-    axa[1].set_title("Puzzle Concentration Signals")
-    axa[1].set_ylabel("max share [0..1]", color="tab:red")
-    axa[1].tick_params(axis="y", colors="tab:red")
-    _set_unit_ylim_visible(axa[1])
-    axa[1].grid(True, alpha=0.25)
-    axa[1].set_xlabel("step")
+        max_share = np.asarray(metrics["puzzle_max_share"], dtype=float)
+        entropy = np.asarray(metrics["puzzle_entropy_norm"], dtype=float)
+        if np.isfinite(max_share).any():
+            axa[1].plot(x, max_share, color="tab:red", linewidth=1.4, label="max puzzle color share")
+        if np.isfinite(entropy).any():
+            ax1b = axa[1].twinx()
+            ax1b.plot(x, entropy, color="tab:blue", linestyle="--", linewidth=1.2, label="puzzle entropy (norm)")
+            ax1b.set_ylim(-0.02, 1.02)
+            ax1b.set_ylabel("entropy [0..1]", color="tab:blue")
+            ax1b.tick_params(axis="y", colors="tab:blue")
+            h1, l1 = axa[1].get_legend_handles_labels()
+            h2, l2 = ax1b.get_legend_handles_labels()
+            if h1 or h2:
+                axa[1].legend(h1 + h2, l1 + l2, loc="best", fontsize=8)
+        elif len(axa[1].lines) > 0:
+            axa[1].legend(loc="best", fontsize=8)
+        axa[1].set_title("Puzzle Concentration Signals")
+        axa[1].set_ylabel("max share [0..1]", color="tab:red")
+        axa[1].tick_params(axis="y", colors="tab:red")
+        _set_unit_ylim_visible(axa[1])
+        axa[1].grid(True, alpha=0.25)
+        axa[1].set_xlabel("step")
 
-    figa.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Overview)", fontsize=11)
-    figa.tight_layout()
-    pdf.savefig(figa, dpi=140)
-    plt.close(figa)
+        figa.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Overview)", fontsize=11)
+        figa.tight_layout()
+        pdf.savefig(figa, dpi=140)
+        plt.close(figa)
 
     # Page B: split decomposition (3 panels) to avoid overload.
-    figb, axb = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
-    axb = np.asarray(axb).ravel()
+    if include_decomposition:
+        figb, axb = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
+        axb = np.asarray(axb).ravel()
 
-    if np.isfinite(d_out_puz).any() or np.isfinite(d_out_pow).any():
-        if np.isfinite(d_out_puz).any():
-            axb[0].plot(x, d_out_puz, color="black", linestyle="--", linewidth=1.3, label="outcome↔puzzle")
-        if np.isfinite(d_out_pow).any():
-            axb[0].plot(x, d_out_pow, color="tab:red", linewidth=1.2, label="outcome↔power")
+        if np.isfinite(d_out_puz).any() or np.isfinite(d_out_pow).any():
+            if np.isfinite(d_out_puz).any():
+                axb[0].plot(x, d_out_puz, color="black", linestyle="--", linewidth=1.3, label="outcome↔puzzle")
+            if np.isfinite(d_out_pow).any():
+                axb[0].plot(x, d_out_pow, color="tab:red", linewidth=1.2, label="outcome↔power")
+            if conflict_mask.any():
+                axb[0].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
+            if len(axb[0].lines) > 0:
+                axb[0].legend(loc="best", fontsize=8)
+        else:
+            axb[0].text(0.5, 0.5, "Outcome distance series unavailable", ha="center", va="center")
+            axb[0].set_yticks([])
+        axb[0].set_title("Puzzle / Power Distance Decomposition A: Outcome↔Puzzle and Outcome↔Power")
+        axb[0].set_ylabel("distance [0..1]")
+        _set_unit_ylim_visible(axb[0])
+
+        has_pairwise = False
+        if np.isfinite(d_puz_pow).any():
+            has_pairwise = True
+            axb[1].plot(x, d_puz_pow, color="tab:blue", linewidth=1.2, label="puzzle↔power")
+        if np.isfinite(d_grid_pow).any():
+            has_pairwise = True
+            axb[1].plot(x, d_grid_pow, color="tab:orange", linewidth=1.2, linestyle=":", label="grid↔power")
+        axb[1].axhline(
+            float(metrics["conflict_min_dist"]),
+            color="tab:blue",
+            linestyle=":",
+            linewidth=1.15,
+            label="conflict threshold",
+        )
         if conflict_mask.any():
-            axb[0].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
-        if len(axb[0].lines) > 0:
-            axb[0].legend(loc="best", fontsize=8)
-    else:
-        axb[0].text(0.5, 0.5, "Outcome distance series unavailable", ha="center", va="center")
-        axb[0].set_yticks([])
-    axb[0].set_title("Puzzle / Power Distance Decomposition A: Outcome↔Puzzle and Outcome↔Power")
-    axb[0].set_ylabel("distance [0..1]")
-    _set_unit_ylim_visible(axb[0])
+            axb[1].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
+        if has_pairwise:
+            axb[1].legend(loc="best", fontsize=8)
+        else:
+            axb[1].text(0.5, 0.5, "Pairwise puzzle/power diagnostics unavailable", ha="center", va="center")
+            axb[1].set_yticks([])
+        axb[1].set_title("Puzzle / Power Distance Decomposition B: Puzzle↔Power and Grid↔Power")
+        axb[1].set_ylabel("distance [0..1]")
+        _set_unit_ylim_visible(axb[1])
 
-    has_pairwise = False
-    if np.isfinite(d_puz_pow).any():
-        has_pairwise = True
-        axb[1].plot(x, d_puz_pow, color="tab:blue", linewidth=1.2, label="puzzle↔power")
-    if np.isfinite(d_grid_pow).any():
-        has_pairwise = True
-        axb[1].plot(x, d_grid_pow, color="tab:orange", linewidth=1.2, linestyle=":", label="grid↔power")
-    axb[1].axhline(
-        float(metrics["conflict_min_dist"]),
-        color="tab:blue",
-        linestyle=":",
-        linewidth=1.15,
-        label="conflict threshold",
-    )
-    if conflict_mask.any():
-        axb[1].fill_between(x, 0.0, 1.0, where=conflict_mask, color="tab:blue", alpha=0.06, step="mid")
-    if has_pairwise:
-        axb[1].legend(loc="best", fontsize=8)
-    else:
-        axb[1].text(0.5, 0.5, "Pairwise puzzle/power diagnostics unavailable", ha="center", va="center")
-        axb[1].set_yticks([])
-    axb[1].set_title("Puzzle / Power Distance Decomposition B: Puzzle↔Power and Grid↔Power")
-    axb[1].set_ylabel("distance [0..1]")
-    _set_unit_ylim_visible(axb[1])
+        if np.isfinite(margin).any():
+            axb[2].plot(x, margin, color="purple", linewidth=1.15, label="margin = outcome↔power - outcome↔puzzle")
+            axb[2].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
+            if conflict_mask.any():
+                axb[2].scatter(
+                    x[conflict_mask],
+                    margin[conflict_mask],
+                    s=9,
+                    color="purple",
+                    alpha=0.65,
+                    label="conflict steps",
+                )
+            if len(axb[2].lines) > 0:
+                axb[2].legend(loc="best", fontsize=8)
+        else:
+            axb[2].text(0.5, 0.5, "Margin unavailable", ha="center", va="center")
+            axb[2].set_yticks([])
+        axb[2].set_title("Puzzle / Power Distance Decomposition C: Margin Around Puzzle vs Power")
+        axb[2].set_ylabel("margin [-1..1]")
+        axb[2].set_ylim(-1.02, 1.02)
 
-    if np.isfinite(margin).any():
-        axb[2].plot(x, margin, color="purple", linewidth=1.15, label="margin = outcome↔power - outcome↔puzzle")
-        axb[2].axhline(0.0, color="black", linestyle=":", linewidth=1.0, alpha=0.85)
-        if conflict_mask.any():
-            axb[2].scatter(
-                x[conflict_mask],
-                margin[conflict_mask],
-                s=9,
-                color="purple",
-                alpha=0.65,
-                label="conflict steps",
-            )
-        if len(axb[2].lines) > 0:
-            axb[2].legend(loc="best", fontsize=8)
-    else:
-        axb[2].text(0.5, 0.5, "Margin unavailable", ha="center", va="center")
-        axb[2].set_yticks([])
-    axb[2].set_title("Puzzle / Power Distance Decomposition C: Margin Around Puzzle vs Power")
-    axb[2].set_ylabel("margin [-1..1]")
-    axb[2].set_ylim(-1.02, 1.02)
+        for a in axb:
+            a.grid(True, alpha=0.25)
+            a.set_xlabel("step")
 
-    for a in axb:
-        a.grid(True, alpha=0.25)
-        a.set_xlabel("step")
-
-    figb.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Distance Decomposition)", fontsize=11)
-    figb.tight_layout()
-    pdf.savefig(figb, dpi=140)
-    plt.close(figb)
+        figb.suptitle(suptitle + " | Puzzle Anti-Monopoly Gate (Distance Decomposition)", fontsize=11)
+        figb.tight_layout()
+        pdf.savefig(figb, dpi=140)
+        plt.close(figb)
 
 
 
