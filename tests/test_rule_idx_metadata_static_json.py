@@ -49,10 +49,31 @@ def test_static_json_includes_rule_name_mapping(v2_run_dir: Path) -> None:
     assert vr.get("selected_impl_name") == impl[idx]
 
 
-def test_static_json_supports_random_rule_idx(tmp_path: Path) -> None:
+def test_static_json_supports_schulze_and_random_rule_indices(tmp_path: Path) -> None:
     cfg = load_config("toy.yaml")
+
+    cfg_schulze = cfg.model_copy(deep=True)
+    cfg_schulze.model.rule_idx = 4
+    cfg_schulze.simulation.num_steps = 2
+    cfg_schulze.simulation.store_grid = False
+
+    out_schulze = tmp_path / "run_schulze"
+    run_once(0, cfg_schulze, out_dir=out_schulze)
+
+    static_schulze = json.loads((out_schulze / "static.json").read_text())
+    vr_s = static_schulze.get("voting_rules") or {}
+    names_s = vr_s.get("names") or []
+    impl_s = vr_s.get("impl_names") or []
+    idx_s = int(vr_s.get("selected_idx", -1))
+
+    assert idx_s == 4
+    assert len(names_s) >= 6
+    assert len(impl_s) >= 6
+    assert str(names_s[idx_s]).lower() == "schulze"
+    assert str(impl_s[idx_s]) == "schulze_rule"
+
     cfg_for_run = cfg.model_copy(deep=True)
-    cfg_for_run.model.rule_idx = 4
+    cfg_for_run.model.rule_idx = 5
     cfg_for_run.simulation.num_steps = 2
     cfg_for_run.simulation.store_grid = False
 
@@ -65,8 +86,8 @@ def test_static_json_supports_random_rule_idx(tmp_path: Path) -> None:
     impl = vr.get("impl_names") or []
     idx = int(vr.get("selected_idx", -1))
 
-    assert idx == 4
-    assert len(names) >= 5
-    assert len(impl) >= 5
+    assert idx == 5
+    assert len(names) >= 6
+    assert len(impl) >= 6
     assert str(names[idx]).lower() == "random"
     assert str(impl[idx]) == "random_rule"

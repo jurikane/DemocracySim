@@ -4,7 +4,7 @@ import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
 from src.utils.social_welfare_functions import (majority_rule, approval_voting,
-                                                utilitarian_rule, borda_rule, random_rule)
+                                                utilitarian_rule, borda_rule, schulze_rule, random_rule)
 from src.utils.distance_functions import (
     spearman_fr_order,
     kendall_tau_order,
@@ -32,8 +32,8 @@ from src.utils.rng import (
 )
 
 # Voting rules to be accessible by index
-social_welfare_functions = [majority_rule, approval_voting, utilitarian_rule, borda_rule, random_rule]
-social_welfare_function_short_names = ["Majority", "Approval", "Utilitarian", "Borda", "Random"]
+social_welfare_functions = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
+social_welfare_function_short_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze", "Random"]
 # Distance functions
 # (explicitly ordering-based)
 distance_functions = [spearman_fr_order, kendall_tau_order]

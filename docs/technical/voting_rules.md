@@ -8,7 +8,17 @@ This page documents the implemented voting rules and their runtime behavior.
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`
+- `schulze_rule`
 - `random_rule`
+
+Rule indices (`rule_idx`) used in config/runtime:
+
+- `0` majority
+- `1` approval
+- `2` utilitarian
+- `3` borda
+- `4` schulze
+- `5` random
 
 Optional variant:
 
@@ -39,3 +49,9 @@ If no agents participate in an area election, no new aggregate ranking is comput
 
 - Ties are resolved with seeded RNG in decision-critical rule paths.
 - Same seed yields reproducible outcomes.
+
+## Schulze Notes
+
+- `schulze_rule` operates on option candidates (same candidate set as other rules).
+- Pairwise comparisons use strict score inequality (`<`); exact equal scores are neutral.
+- If candidate count exceeds `120` options, Schulze fails fast with a clear error.

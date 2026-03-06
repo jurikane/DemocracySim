@@ -193,7 +193,7 @@ Vote signal table (participants only). This is the single source of
 ## Stability Guarantees
 
 - Schema-v2 remains structurally stable for thesis freeze (no field pruning as cleanup strategy).
-- Random reference arm (`rule_idx=4`) is included without schema-structure changes.
+- Schulze is included as `rule_idx=4`; random reference arm uses `rule_idx=5`.
 - Runtime artifact contract remains:
   - typed parquet static overlays are authoritative (`static_cell_areas.parquet`, `static_cell_agents.parquet`)
   - first and last election-time grids are always present

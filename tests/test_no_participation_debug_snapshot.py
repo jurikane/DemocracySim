@@ -11,7 +11,7 @@ class _NeverParticipate:
         return False
 
 
-@pytest.mark.parametrize("rule_idx", [0, 1, 2, 3])
+@pytest.mark.parametrize("rule_idx", [0, 1, 2, 3, 4, 5])
 def test_no_participation_debug_snapshot_records_outcome_fields(rule_idx: int) -> None:
     model, _ = create_test_model(
         seed=123,

@@ -14,6 +14,7 @@ Implemented rules (schema B1):
 - approval_voting_custom (legacy adaptive approval mapping; non-canonical)
 - utilitarian_rule (minimize total disagreement)
 - borda_rule (positional scoring derived from per-voter orderings)
+- schulze_rule (pairwise strongest-path ranking on options)
 - random_rule (uniform full random ranking, seed-deterministic)
 """
 
@@ -27,6 +28,7 @@ from src.utils.representations import validate_ordering, scores_to_ordering
 # Canonical approval mapping threshold on normalized disagreement scores in [0,1].
 # Lower score = better; approve if score <= tau.
 APPROVAL_THRESHOLD_TAU = 0.5
+SCHULZE_MAX_OPTIONS = 120
 
 
 def complete_ranking(
@@ -280,6 +282,76 @@ def borda_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarra
     # Higher totals => better.
     rand = rng.random(m)
     ordering = np.lexsort((rand, -totals))
+    validate_ordering(ordering, m)
+    return ordering
+
+
+def schulze_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+    """Schulze method on option candidates using pairwise strongest paths.
+
+    Semantics:
+    - Candidates are option ids (columns of `pref_table`).
+    - Lower score = better. For voter `v`, candidate `i` is preferred to `j` iff
+      `pref_table[v, i] < pref_table[v, j]` (strict comparison).
+    - Exact score ties are neutral and contribute to neither side.
+
+    Complexity:
+    - O(n * m^2 + m^3), with n voters and m candidates.
+    - Guarded by `SCHULZE_MAX_OPTIONS` for predictable runtime.
+    """
+    if pref_table.ndim != 2:
+        raise ValueError("pref_table must be 2D")
+    n, m = pref_table.shape
+    if m <= 0:
+        return np.asarray([], dtype=np.int64)
+    if n <= 0:
+        return np.arange(m, dtype=np.int64)
+    if m > SCHULZE_MAX_OPTIONS:
+        raise ValueError(
+            f"Schulze disabled above max options={SCHULZE_MAX_OPTIONS} (got {m})."
+        )
+    if not np.all(np.isfinite(pref_table)):
+        raise ValueError("pref_table must contain only finite values")
+
+    # Pairwise preference counts: d[i,j] = number of voters preferring i over j.
+    d = np.zeros((m, m), dtype=np.int64)
+    for v in range(n):
+        row = np.asarray(pref_table[v], dtype=np.float64)
+        pref = row[:, None] < row[None, :]
+        d += pref.astype(np.int64)
+
+    # Strongest paths initialization.
+    p = np.zeros((m, m), dtype=np.int64)
+    for i in range(m):
+        for j in range(m):
+            if i != j and d[i, j] > d[j, i]:
+                p[i, j] = d[i, j]
+
+    # Floyd-Warshall style strongest-path closure.
+    for i in range(m):
+        for j in range(m):
+            if i == j:
+                continue
+            pji = p[j, i]
+            if pji <= 0:
+                continue
+            for k in range(m):
+                if k == i or k == j:
+                    continue
+                via = p[i, k]
+                if via <= 0:
+                    continue
+                cand = pji if pji < via else via
+                if cand > p[j, k]:
+                    p[j, k] = cand
+
+    # Total-order tie stack for deterministic + unbiased final ranking.
+    wins = np.sum(p > p.T, axis=1).astype(np.int64)
+    path_margin = np.sum(p - p.T, axis=1).astype(np.int64)
+    pairwise_support = np.sum(d, axis=1).astype(np.int64)
+    rand = rng.random(m)
+
+    ordering = np.lexsort((rand, -pairwise_support, -path_margin, -wins)).astype(np.int64)
     validate_ordering(ordering, m)
     return ordering
 

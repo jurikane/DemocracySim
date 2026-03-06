@@ -15,6 +15,7 @@
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`
+- `schulze_rule`
 - `random_rule`
 
 ## Main Runtime and Analysis Entry Points

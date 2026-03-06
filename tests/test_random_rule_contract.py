@@ -8,6 +8,7 @@ from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
     majority_rule,
+    schulze_rule,
     random_rule,
     utilitarian_rule,
 )
@@ -50,15 +51,16 @@ def test_random_rule_winner_distribution_is_approximately_uniform() -> None:
     assert float(np.max(np.abs(counts - expected))) <= 55.0, counts.tolist()
 
 
-def test_random_rule_appended_without_changing_canonical_rule_order() -> None:
+def test_random_rule_index_shift_keeps_canonical_order_and_inserts_schulze() -> None:
     names = [fn.__name__ for fn in social_welfare_functions]
-    assert names[:4] == [
+    assert names[:5] == [
         "majority_rule",
         "approval_voting",
         "utilitarian_rule",
         "borda_rule",
+        "schulze_rule",
     ]
-    assert names[4] == "random_rule"
+    assert names[5] == "random_rule"
 
     pref = np.asarray(
         [
@@ -71,6 +73,6 @@ def test_random_rule_appended_without_changing_canonical_rule_order() -> None:
         dtype=np.float64,
     )
 
-    canonical = [majority_rule, approval_voting, utilitarian_rule, borda_rule]
+    canonical = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
     winners = [int(np.asarray(fn(pref.copy(), rng=np.random.default_rng(77)), dtype=np.int64)[0]) for fn in canonical]
-    assert winners == [1, 0, 0, 0]
+    assert winners == [1, 0, 0, 0, 1]

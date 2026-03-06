@@ -9,6 +9,7 @@ from src.analysis.doe_runner import (
     build_run_plan,
     get_doe_profile,
     midpoint_params_from_ranges,
+    rule_label,
     sample_design_points,
     select_farthest_seeds_from_descriptors,
     select_stratified_seeds,
@@ -229,3 +230,8 @@ def test_write_run_manifest(tmp_path: Path) -> None:
     text = p.read_text(encoding="utf-8")
     assert "params_hash" in text
     assert "approval" in text
+
+
+def test_rule_label_mapping_includes_schulze_before_random() -> None:
+    assert rule_label(4) == "schulze"
+    assert rule_label(5) == "random"
