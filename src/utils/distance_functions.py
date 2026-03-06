@@ -213,7 +213,6 @@ def spearman_distance(rank_arr_1: FloatArray, rank_arr_2: FloatArray) -> float:
     Returns:
         float: The Spearman distance
     """
-    # TODO: remove these tests (comment out) on actual simulations
     assert rank_arr_1.size == rank_arr_2.size, \
         "Rank arrays must have the same length"
     if rank_arr_1.size > 0:

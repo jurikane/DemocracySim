@@ -26,8 +26,8 @@ class ColorCell(Agent):
         self._row = pos[1]
         self.color = initial_color  # The cell's current color (int)
         self._next_color = None
-        self.agents = []    # TODO change to using mesas AgentSet class!
-        self.areas = []    # TODO change to using mesas AgentSet class!
+        self.agents = []    
+        self.areas = []    
         self.is_border_cell = False
         # Add it to the models grid
         grid = getattr(model, "grid", None)

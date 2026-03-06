@@ -128,22 +128,34 @@ def main() -> None:
     print(f"Wrote: {out['top_designs_json']}")
 
     if not bool(args.skip_review_bundle):
-        bundle = build_doe_review_bundle(
-            doe_root=root,
-            out_dir=Path(args.bundle_out_dir) if args.bundle_out_dir is not None else None,
-            per_bucket=int(args.bundle_per_bucket),
-            rule_name=str(args.bundle_rule_name or primary_rule),
-            summary_profile=str(args.bundle_summary_profile),
-            render_summaries=True,
-            allow_fallback_scores=bool(args.bundle_allow_fallback_scores),
-        )
-        print(f"Wrote: {bundle.bundle_root}")
-        print(f"Wrote: {bundle.queue_csv}")
-        print(f"Wrote: {bundle.bucket_manifest_csv}")
-        print(f"Wrote: {bundle.knob_ranges_csv}")
-        print(f"Wrote: {bundle.knob_correlations_csv}")
-        print(f"Wrote: {bundle.knob_effects_csv}")
-        print(f"Wrote: {bundle.analysis_summary_pdf}")
+        required = [
+            root / "doe_design_scores.csv",
+            root / "doe_run_features.csv",
+            root / "doe_design_points.csv",
+        ]
+        missing = [p.name for p in required if not p.exists()]
+        if missing:
+            print(
+                "Skipping review bundle: missing required DOE files: "
+                + ", ".join(sorted(missing))
+            )
+        else:
+            bundle = build_doe_review_bundle(
+                doe_root=root,
+                out_dir=Path(args.bundle_out_dir) if args.bundle_out_dir is not None else None,
+                per_bucket=int(args.bundle_per_bucket),
+                rule_name=str(args.bundle_rule_name or primary_rule),
+                summary_profile=str(args.bundle_summary_profile),
+                render_summaries=True,
+                allow_fallback_scores=bool(args.bundle_allow_fallback_scores),
+            )
+            print(f"Wrote: {bundle.bundle_root}")
+            print(f"Wrote: {bundle.queue_csv}")
+            print(f"Wrote: {bundle.bucket_manifest_csv}")
+            print(f"Wrote: {bundle.knob_ranges_csv}")
+            print(f"Wrote: {bundle.knob_correlations_csv}")
+            print(f"Wrote: {bundle.knob_effects_csv}")
+            print(f"Wrote: {bundle.analysis_summary_pdf}")
 
 
 if __name__ == "__main__":

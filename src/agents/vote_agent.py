@@ -35,11 +35,8 @@ def combine_and_normalize(arr_1: np.ndarray, arr_2: np.ndarray, factor: float):
 
     Returns:
         result (np.array): Normalized weighted linear combination.
-
-    Example:
-        TODO
     """
-    # Ensure f is between 0 and 1 TODO: remove this on simulations to speed up
+    # Ensure f is between 0 and 1
     if not (0 <= factor <= 1):
         raise ValueError("Factor f must be between 0 and 1")
     # Linear combination

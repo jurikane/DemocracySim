@@ -336,7 +336,6 @@ class Area(Agent):
                 a.participation_baseline = (1.0 - alpha) * baseline + alpha * signal
             a.participation_signal = float(signal)
             a.apply_participation_q_push(float(q_push))
-        # TODO put those two loops together
         # Surprise-learning altruism update (participant-only, optional).
         if str(getattr(self.model, "altruism_mode", "static")) == "surprise_learning":
             for a in self.agents:
@@ -1018,13 +1017,10 @@ class Area(Agent):
             return
         # Take some number of cells to mutate (i.e., 5 %)
         n_to_mutate = int(self.model.mu * self.num_cells)
-        # TODO/Idea: What if the voter_turnout determines the mutation rate?
+        # Idea for future: What if the voter_turnout determines the mutation rate?
         cells_to_mutate = self.model.random.sample(self.cells, n_to_mutate)
         # Use voted ordering to pick colors in descending order
         # To pre-select colors for all cells to mutate
-        # TODO: Think about this: should we take local color-structure
-        #  into account - like in color patches - to avoid colors mutating into
-        #  very random structures? # Middendorf
         colors = self.model.np_random.choice(self.voted_ordering,
                                              size=n_to_mutate,
                                              p=self.model.color_probs)

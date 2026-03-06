@@ -1,4 +1,4 @@
-# Thesis Measurement Spec (Core Contract)
+# Thesis Measurement Spec
 
 This document defines how thesis metrics are computed and interpreted.
 It is coupled with:
@@ -7,7 +7,7 @@ It is coupled with:
 - `docs/research/metric_glossary.md`
 - `docs/research/execution_scope_freeze.md`
 
-## Current Contract (Implemented Truth)
+## Contract
 
 ### Data sources (logged artifacts only)
 
@@ -18,7 +18,7 @@ It is coupled with:
 - `meta.yaml`
 - `static.json`
 
-### Current primary time-series definitions
+### Primary time-series definitions
 
 - `turnout_pct_t` from `steps.turnout` (0..100)
 - `gini_assets_t` from `steps.gini_index` (0..100)
@@ -32,9 +32,9 @@ Current weighted aggregation for `dist_to_reality_t`:
 - denominator: `sum_a eligible_voters(a,t)`
 - if denominator is zero: `NaN`
 
-### Current emitted run-level summaries (`summary_stats.json`)
+### Run-level summaries (`summary_stats.json`)
 
-Current `global_summary` keys emitted by `summary_tooling`:
+`global_summary` keys:
 
 - `turnout_mean`, `turnout_final`
 - `turnout_volatility`
@@ -47,20 +47,16 @@ Current `global_summary` keys emitted by `summary_tooling`:
 - `dist_to_reality_volatility`
 - `diversity_entropy_mean`, `diversity_entropy_final`
 
-Not emitted in current sidecar summary:
-
-- none
-
 Volatility definition (adjacent-step):
 
 - step_volatility_l1(x) = mean_t |x_t - x_{t-1}| over finite adjacent pairs
-- normalized volatility in sidecar summary:
+- normalization:
   - turnout/gini series: divide by 100 (series are 0..100)
   - distance series (dist_to_reality): divide by 1
 - no clamping is applied in formula layer
 - if fewer than one finite adjacent pair exists: NaN
 
-### Current secondary descriptive metrics
+### Secondary descriptive metrics
 
 - `mean_altruism_t` from `steps.mean_altruism` (mechanism diagnostic; non-confirmatory)
 - `diversity_first_choice_entropy_t` from `votes.rank_1_option_id`
@@ -76,7 +72,7 @@ These are descriptive benchmark comparisons, not normative optimality claims.
 
 Group-level descriptive diagnostics (non-confirmatory) may additionally be computed in analysis artifacts to inspect majority/minority participation composition over time.
 
-### Current benchmark reference computation contract
+### Benchmark reference computation contract
 
 Reference families currently used in analysis:
 
@@ -106,28 +102,24 @@ NaN policy:
 - global benchmark distance is `NaN` only if the global agent set is empty
 - no-vote steps still produce defined distances based on color distributions
 
-### Current consistency checks (must hold)
+### Consistency checks (must hold)
 
 - `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a area_num_agents(a)` (if denominator is zero, turnout is `0`)
 - `area_steps.participants(a,t) == count(votes rows for (a,t))`
 - one `agents` row per `(agent_id, step)`
 - no `NaN/inf` in thesis-critical emitted series (except explicitly allowed `NaN` semantics like denominator-zero `dist_to_reality_t`)
 
-## Freeze-Target Contract (Decided, May Include Pending Items)
+## Inference Contract
 
 ### Thesis inference endpoints (design contract)
 
-For each primary time series and each run, use fixed estimands:
+The thesis endpoint set is the run-level summary contract:
 
-- `mean_over_time`
-- `late_mean` (last 20% of steps)
-- `early_late_delta = late_mean - early_mean` (first 20% vs last 20%)
-- `volatility` (step-change instability metric)
+- means/finals for turnout, inequality, dissatisfaction, and quality
+- adjacent-step volatility for turnout, inequality, and quality
+- diversity entropy mean/final
 
-Status in freeze-target:
-
-- `mean_over_time`, `late_mean`, `early_late_delta`: required for thesis inference layer.
-- `volatility`: implemented in sidecar outputs for primary outcomes.
+No additional endpoint family is assumed in this contract.
 
 ### Inference-family guardrails
 
@@ -137,12 +129,5 @@ Status in freeze-target:
 
 ### Summary-layer separation rule
 
-- Sidecar summary (`summary_stats.json`) describes currently emitted implementation outputs.
-- Thesis inference outputs may extend beyond sidecar keys, but must be computed from logged artifacts with fixed formulas.
-
-## Implementation Status Notes
-
-- Sidecar summary keys are intentionally limited to currently emitted implementation outputs.
-- Freeze-target inference endpoints are fixed at the formula level and are computed in the thesis inference layer from logged artifacts.
-- Volatility endpoints are available in sidecar outputs and can be used directly by the thesis inference layer.
-- Final endpoint and multiplicity lock-in is recorded in internal freeze notes before final execution.
+- `summary_stats.json` contains the baseline run-level endpoint set.
+- Additional thesis inference outputs may extend beyond this set, but must be computed from logged artifacts with fixed formulas.

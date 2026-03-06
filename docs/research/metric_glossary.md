@@ -1,14 +1,9 @@
-# Metric Glossary (Frozen IDs and Meanings)
+# Metric Glossary
 
 This glossary is the field-to-meaning dictionary for thesis analysis.
 It complements:
 
 - `docs/research/thesis_measurement_spec.md`
-- `docs/research/execution_scope_freeze.md`
-
-Metric IDs are immutable after freeze unless a documented validity bug requires correction.
-
-## Current Contract (Implemented Truth)
 
 ### Primary time-series metrics
 
@@ -20,7 +15,7 @@ Metric IDs are immutable after freeze unless a documented validity bug requires 
 | `gini_dissatisfaction_t` | Gini over `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..100` | higher = more inequality |
 | `dist_to_reality_t` | eligible-weighted election quality distance at step `t` | derived from `area_steps.parquet` | `0..1` | lower = better |
 
-Frozen aggregation semantics:
+Aggregation semantics:
 
 - `turnout_pct_t = 100 * sum_a participants(a,t) / sum_a area_num_agents(a)`; if denominator is zero, value is `0`.
 - `dist_to_reality_t = sum_a dist_to_reality(a,t) * eligible_voters(a,t) / sum_a eligible_voters(a,t)`; if denominator is zero, value is `NaN`.
@@ -38,34 +33,28 @@ Frozen aggregation semantics:
 | `dist_to_ref_egalitarian_lam025` | egalitarian sensitivity (`lambda=0.25`) | analysis output | `0..1` | lower = closer |
 | `dist_to_ref_egalitarian_lam400` | egalitarian sensitivity (`lambda=4.0`) | analysis output | `0..1` | lower = closer |
 
-## Freeze-Target Contract (Decided, May Include Pending Items)
-
 ### Run-level thesis endpoint IDs
 
-| Metric ID | Definition | Status |
-| --- | --- | --- |
-| `turnout_mean_over_time` | mean of `turnout_pct_t` over all recorded steps | `freeze-target pending` |
-| `turnout_late_mean` | mean over final 20% of steps | `freeze-target pending` |
-| `turnout_early_late_delta` | late mean minus early mean | `freeze-target pending` |
-| `turnout_volatility` | adjacent-step L1 volatility endpoint | `implemented in sidecar` |
-| `gini_assets_mean_over_time` | mean of `gini_assets_t` | `freeze-target pending` |
-| `gini_dissatisfaction_mean_over_time` | mean of `gini_dissatisfaction_t` | `freeze-target pending` |
-| `dist_to_reality_mean_over_time` | mean of `dist_to_reality_t` | `freeze-target pending` |
+| Metric ID | Definition |
+| --- | --- |
+| `turnout_mean` | mean of `turnout_pct_t` over all recorded steps |
+| `turnout_final` | final observed `turnout_pct_t` value |
+| `turnout_volatility` | adjacent-step L1 volatility endpoint |
+| `gini_assets_mean` | mean of `gini_assets_t` |
+| `gini_assets_final` | final observed `gini_assets_t` value |
+| `gini_assets_volatility` | adjacent-step L1 volatility endpoint |
+| `gini_dissatisfaction_mean` | mean of `gini_dissatisfaction_t` |
+| `gini_dissatisfaction_final` | final observed `gini_dissatisfaction_t` value |
+| `gini_dissatisfaction_volatility` | adjacent-step L1 volatility endpoint |
+| `mean_dissatisfaction_mean` | mean of `mean_dissatisfaction_t` |
+| `mean_dissatisfaction_final` | final observed `mean_dissatisfaction_t` value |
+| `dist_to_reality_mean` | mean of `dist_to_reality_t` |
+| `dist_to_reality_final` | final observed `dist_to_reality_t` value |
+| `dist_to_reality_volatility` | adjacent-step L1 volatility endpoint |
+| `diversity_entropy_mean` | mean of diversity entropy over time |
+| `diversity_entropy_final` | final observed diversity entropy |
 
-Rule-family status labels for inference:
+Rule-family labels used in inference:
 
 - canonical family: confirmatory
 - random-reference family: reference-only unless explicitly reclassified
-
-## Freeze Status Notes
-
-- Endpoint IDs listed under freeze-target remain fixed once promoted to required thesis inference outputs.
-- Family classification remains fixed: canonical family is confirmatory, random-reference family is reference-only unless explicitly reclassified.
-
-## Freeze Rule
-
-After Gate B/D0 lock:
-
-- Do not rename metric IDs.
-- Do not change metric meanings without explicit decision-log entry.
-- Allowed edits are limited to wording clarifications and bug-fix annotations.

@@ -6,7 +6,7 @@
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
-## Current Contract (Implemented Truth)
+## Contract
 
 ### Run directory layout
 
@@ -190,7 +190,7 @@ Vote signal table (participants only). This is the single source of
 - Validators reject unknown columns (strict schema lock). Only documented fields and documented vector prefixes are accepted.
 - Missing required pre-mutation area snapshot fields fail loudly during logging (no silent fallback).
 
-## Freeze-Target Contract (Decided, May Include Pending Items)
+## Stability Guarantees
 
 - Schema-v2 remains structurally stable for thesis freeze (no field pruning as cleanup strategy).
 - Random reference arm (`rule_idx=4`) is included without schema-structure changes.
