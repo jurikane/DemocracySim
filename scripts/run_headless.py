@@ -78,7 +78,7 @@ def run_once(run_id: int, cfg, out_dir: Path):
             initial_grid = get_grid_colors(model)
             np.save(str(out_dir / "grids" / f"grid_{0:0{pad}d}.npy"), np.asarray(initial_grid))
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, AttributeError, OSError, yaml.YAMLError) as e:
         raise RuntimeError(f"Failed to instantiate model: {e}")
 
     grid_interval = max(1, int(getattr(sim_cfg, "grid_interval", 1)))

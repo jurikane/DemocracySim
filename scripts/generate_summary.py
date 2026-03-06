@@ -105,7 +105,7 @@ def _open_folder(path: Path) -> None:
                 os_start(str(path))
                 return
         subprocess.run(["xdg-open", str(path)], check=False)
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         # Best-effort UX helper; generation artifacts are already written.
         return
 

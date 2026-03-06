@@ -29,7 +29,7 @@ def _infer_rules_from_doe_spec(root: Path) -> tuple[str, str]:
         return default_primary, default_robust
     try:
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return default_primary, default_robust
     if not isinstance(spec, dict):
         return default_primary, default_robust

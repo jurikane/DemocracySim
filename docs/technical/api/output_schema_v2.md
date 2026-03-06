@@ -6,7 +6,7 @@
 
 This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
 
-## Contract
+## Specification
 
 ### Run directory layout
 
@@ -199,7 +199,7 @@ Vote signal table (participants only). This is the single source of
   - first and last election-time grids are always present
   - step-0 pre-election grid is optional and controlled by `store_grid`
 
-## Contract Maintenance Notes
+## Documentation Notes
 
 - Keep metadata mappings (`rule_idx`, `rule_name`, `rule_impl_name`) synchronized for all rule IDs.
 - Keep run-layout documentation synchronized with emitted artifacts and schema validators.

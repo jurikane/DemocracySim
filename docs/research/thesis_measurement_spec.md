@@ -7,7 +7,7 @@ It is coupled with:
 - `docs/research/metric_glossary.md`
 - `docs/research/execution_scope_freeze.md`
 
-## Contract
+## Specification
 
 ### Data sources (logged artifacts only)
 
@@ -72,7 +72,7 @@ These are descriptive benchmark comparisons, not normative optimality claims.
 
 Group-level descriptive diagnostics (non-confirmatory) may additionally be computed in analysis artifacts to inspect majority/minority participation composition over time.
 
-### Benchmark reference computation contract
+### Benchmark reference computation
 
 Reference families currently used in analysis:
 
@@ -90,7 +90,7 @@ Analysis output columns (time-indexed):
 - `dist_to_ref_egalitarian_lam025`
 - `dist_to_ref_egalitarian_lam400`
 
-Computation-layer freeze:
+Computation-layer assumptions:
 
 - all `dist_to_ref_*` values are computed in analysis from logged artifacts
 - no runtime reward-loop dependency on these benchmark trajectories
@@ -109,9 +109,9 @@ NaN policy:
 - one `agents` row per `(agent_id, step)`
 - no `NaN/inf` in thesis-critical emitted series (except explicitly allowed `NaN` semantics like denominator-zero `dist_to_reality_t`)
 
-## Inference Contract
+## Inference Specification
 
-### Thesis inference endpoints (design contract)
+### Thesis inference endpoints
 
 The thesis endpoint set is the run-level summary contract:
 
@@ -121,11 +121,11 @@ The thesis endpoint set is the run-level summary contract:
 
 No additional endpoint family is assumed in this contract.
 
-### Inference-family guardrails
+### Inference-family rules
 
 - Canonical rule-family tests and reference-family tests must remain separated in reporting.
-- Multiple-testing correction policy is frozen before first full final-run readout.
-- No endpoint formula changes after freeze lock.
+- Use a predefined multiple-testing correction policy for each reported experiment set.
+- Keep endpoint formulas fixed within one reported experiment set.
 
 ### Summary-layer separation rule
 

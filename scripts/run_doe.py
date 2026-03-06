@@ -68,7 +68,7 @@ def execute_run_plan(
             # run_id fixed to 0; base_seed controls actual model seed.
             run_once_fn(run_id=0, cfg=cfg_run, out_dir=task.out_dir)
             succeeded += 1
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, OSError):
             failed += 1
             if not continue_on_error:
                 raise
