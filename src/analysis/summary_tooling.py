@@ -8,6 +8,7 @@ import json
 import hashlib
 import re
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -146,6 +147,158 @@ def list_summary_pdfs_in_recommended_view_order(out_dir: Path) -> list[Path]:
     return ordered
 
 
+@dataclass(frozen=True)
+class _RunMetaStaticParseResult:
+    ok: bool
+    meta: dict[str, Any] | None
+    static: dict[str, Any] | None
+    num_colors: int | None
+    error: str | None
+
+
+def _parse_required_run_meta_static(*, run_dir: Path) -> _RunMetaStaticParseResult:
+    meta_path = run_dir / "meta.yaml"
+    static_path = run_dir / "static.json"
+    missing = [str(p) for p in (meta_path, static_path) if not p.exists()]
+    if missing:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Missing required run metadata artifact(s): {', '.join(missing)}",
+        )
+
+    try:
+        meta_raw = meta_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Failed to read meta.yaml at {meta_path}: {e}",
+        )
+    try:
+        meta_obj = yaml.safe_load(meta_raw)
+    except yaml.YAMLError as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Failed to parse YAML in {meta_path}: {e}",
+        )
+    if not isinstance(meta_obj, dict):
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid meta.yaml root in {meta_path}: expected mapping",
+        )
+    run_meta = meta_obj.get("run")
+    if not isinstance(run_meta, dict):
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid or missing 'run' section in {meta_path}",
+        )
+    for req_key in ("run_seed", "rule_idx"):
+        if req_key not in run_meta:
+            return _RunMetaStaticParseResult(
+                ok=False,
+                meta=None,
+                static=None,
+                num_colors=None,
+                error=f"Missing required meta.run field '{req_key}' in {meta_path}",
+            )
+    try:
+        int(run_meta["run_seed"])
+        int(run_meta["rule_idx"])
+    except (TypeError, ValueError) as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid meta.run seed/rule fields in {meta_path}: {e}",
+        )
+
+    try:
+        static_raw = static_path.read_text(encoding="utf-8")
+    except OSError as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Failed to read static.json at {static_path}: {e}",
+        )
+    try:
+        static_obj = json.loads(static_raw)
+    except json.JSONDecodeError as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Failed to parse JSON in {static_path}: {e}",
+        )
+    if not isinstance(static_obj, dict):
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid static.json root in {static_path}: expected object",
+        )
+
+    if "num_colors" not in static_obj:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Missing required field 'num_colors' in {static_path}",
+        )
+    try:
+        num_colors = int(static_obj["num_colors"])
+    except (TypeError, ValueError) as e:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid static.json field 'num_colors' in {static_path}: {e}",
+        )
+    if num_colors <= 0:
+        return _RunMetaStaticParseResult(
+            ok=False,
+            meta=None,
+            static=None,
+            num_colors=None,
+            error=f"Invalid static.json field 'num_colors' in {static_path}: {num_colors}",
+        )
+
+    return _RunMetaStaticParseResult(
+        ok=True,
+        meta=dict(meta_obj),
+        static=dict(static_obj),
+        num_colors=num_colors,
+        error=None,
+    )
+
+
+def _load_required_run_meta_static(*, run_dir: Path) -> tuple[dict[str, Any], dict[str, Any], int]:
+    parsed = _parse_required_run_meta_static(run_dir=run_dir)
+    if not parsed.ok or parsed.meta is None or parsed.static is None or parsed.num_colors is None:
+        raise RuntimeError(parsed.error or f"Failed to parse required run metadata for {run_dir}")
+    return parsed.meta, parsed.static, int(parsed.num_colors)
+
+
 def generate_run_summary_batch1(
     run_dir: Path,
     out_dir: Path | None = None,
@@ -169,12 +322,7 @@ def generate_run_summary_batch1(
     area_steps = pd.read_parquet(run_dir / "area_steps.parquet").sort_values(["step", "area_id"]).reset_index(drop=True)
     agents = pd.read_parquet(run_dir / "agents.parquet").sort_values(["step", "agent_id"]).reset_index(drop=True)
     votes = pd.read_parquet(run_dir / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
-    meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
-    static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
-
-    num_colors = int(static.get("num_colors", 0))
-    if num_colors <= 0:
-        raise RuntimeError(f"Invalid num_colors in static.json: {num_colors}")
+    meta, static, num_colors = _load_required_run_meta_static(run_dir=run_dir)
 
     area_agent_ids = _load_area_agent_ids_from_static_overlays(run_dir=run_dir)
     refs = _load_or_compute_reference_payload(
@@ -248,13 +396,12 @@ def generate_run_summary_batch2(
     agents = pd.read_parquet(run_dir / "agents.parquet").sort_values(["step", "agent_id"]).reset_index(drop=True)
     votes = pd.read_parquet(run_dir / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
     steps = pd.read_parquet(run_dir / "steps.parquet").sort_values("step").reset_index(drop=True)
-    meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
-    static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
+    meta, static, num_colors = _load_required_run_meta_static(run_dir=run_dir)
     area_agent_ids = _load_area_agent_ids_from_static_overlays(run_dir=run_dir)
     refs_payload = _load_or_compute_reference_payload(
         out_dir=base.out_dir,
         static=static,
-        num_colors=int(static.get("num_colors", 0)),
+        num_colors=int(num_colors),
         area_agent_ids=area_agent_ids,
         mode=mode,
         use_cache=use_cache,
@@ -1861,8 +2008,12 @@ def _load_or_compute_reference_payload(
                         if isinstance(v, dict)
                     },
                 }
-        except Exception:
-            pass
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            warnings.warn(
+                f"Reference cache read failed at {cache_path}: {exc}. Recomputing reference payload.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     d_global = _personal_dists_from_static(static=static, num_colors=num_colors)
     refs_global = _compute_reference_set_for_dists(dists=d_global, mode=mode)
@@ -4818,7 +4969,12 @@ def _compute_area_power_direction_orderings(
                     "color_ordering": color_ordering,
                 }
             )
-        except Exception:
+        except (TypeError, ValueError, KeyError, IndexError, RuntimeError) as exc:
+            warnings.warn(
+                f"Skipping static power-direction baseline for rule '{name}': {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             continue
     return out
 

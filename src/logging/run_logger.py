@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import yaml
 import hashlib
+import json
 
 from src.logging.output_schema import (
     SCHEMA_NAME,
@@ -43,6 +44,13 @@ class RunContextV2:
     out_dir: Path
     run_seed: int
     rule_idx: int
+
+
+@dataclass(frozen=True)
+class _ConfigDumpParseResult:
+    ok: bool
+    payload: Dict[str, Any] | None
+    error: str | None
 
 
 class RunLoggerV2:
@@ -88,7 +96,7 @@ class RunLoggerV2:
     ) -> None:
         """Write meta.yaml with schema identifier and config reference."""
         if config_hash is None:
-            cfg_dump = _safe_config_dump(config)
+            cfg_dump = _load_required_config_dump(config)
             cfg_yaml = yaml.safe_dump(cfg_dump)
             config_hash = _hash_text(cfg_yaml)
         meta = {
@@ -197,8 +205,6 @@ class RunLoggerV2:
             if pod:
                 # static.json is a heterogeneous JSON payload; keep typing flexible here.
                 static["personal_opt_dist"] = pod  # type: ignore[assignment]
-
-        import json
 
         with open(self.ctx.out_dir / "static.json", "w") as f:
             json.dump(static, f, indent=2)
@@ -696,21 +702,55 @@ def _to_python(obj: Any) -> Any:
     return {}
 
 
-def _safe_config_dump(config: Any) -> Dict[str, Any]:
+def _parse_config_dump(config: Any) -> _ConfigDumpParseResult:
     # Pydantic v2
     if hasattr(config, "model_dump"):
         try:
-            return config.model_dump(mode="json")
-        except (TypeError, ValueError):
-            return {}
+            dumped = config.model_dump(mode="json")
+        except (TypeError, ValueError) as e:
+            return _ConfigDumpParseResult(
+                ok=False,
+                payload=None,
+                error=f"Failed to dump config via model_dump(mode='json'): {e}",
+            )
+        if not isinstance(dumped, dict):
+            return _ConfigDumpParseResult(
+                ok=False,
+                payload=None,
+                error=f"Invalid config dump type from model_dump: {type(dumped).__name__}",
+            )
+        return _ConfigDumpParseResult(ok=True, payload=dict(dumped), error=None)
     # Pydantic v1
     if hasattr(config, "dict"):
         try:
-            import json
-            return json.loads(config.json())
-        except (TypeError, ValueError):
-            return {}
-    return {}
+            dumped = json.loads(config.json())
+        except (TypeError, ValueError, json.JSONDecodeError) as e:
+            return _ConfigDumpParseResult(
+                ok=False,
+                payload=None,
+                error=f"Failed to dump config via config.json(): {e}",
+            )
+        if not isinstance(dumped, dict):
+            return _ConfigDumpParseResult(
+                ok=False,
+                payload=None,
+                error=f"Invalid config dump type from config.json(): {type(dumped).__name__}",
+            )
+        return _ConfigDumpParseResult(ok=True, payload=dict(dumped), error=None)
+    if isinstance(config, dict):
+        return _ConfigDumpParseResult(ok=True, payload=dict(config), error=None)
+    return _ConfigDumpParseResult(
+        ok=False,
+        payload=None,
+        error=f"Unsupported config type for meta hash dump: {type(config).__name__}",
+    )
+
+
+def _load_required_config_dump(config: Any) -> Dict[str, Any]:
+    parsed = _parse_config_dump(config)
+    if not parsed.ok or parsed.payload is None:
+        raise RuntimeError(parsed.error or "Failed to dump config for meta hash")
+    return parsed.payload
 
 
 def _hash_text(text: str) -> str:

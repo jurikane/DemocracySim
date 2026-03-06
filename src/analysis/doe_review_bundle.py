@@ -39,7 +39,7 @@ class DOEReviewBundleArtifacts:
 def _safe_float(v: Any) -> float:
     try:
         f = float(v)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return float("nan")
     return f
 
@@ -117,7 +117,12 @@ def _load_doe_knob_ranges(*, doe_root: Path, knob_cols: list[str], points_df: pd
     if spec_path.exists():
         try:
             spec = json.loads(spec_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            warnings.warn(
+                f"Could not parse {spec_path}; falling back to observed design-point ranges: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             spec = {}
     spec_ranges = spec.get("ranges") if isinstance(spec, dict) else None
     if isinstance(spec_ranges, dict):
@@ -171,13 +176,17 @@ def _build_knob_position_payload(
 def _load_personality_group_info(run_dir: Path) -> dict[str, Any]:
     static_path = run_dir / "static.json"
     if not static_path.exists():
-        return {}
+        raise FileNotFoundError(f"Missing required artifact for DOE review bundle packet: {static_path}")
     try:
         static = json.loads(static_path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Failed to parse required artifact {static_path}: {exc}") from exc
     info = static.get("personality_group_info")
-    return info if isinstance(info, dict) else {}
+    if not isinstance(info, dict):
+        raise RuntimeError(
+            f"Invalid or missing personality_group_info in required artifact {static_path}"
+        )
+    return info
 
 
 def _render_run_overview_pdf(
