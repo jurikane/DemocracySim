@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 import json
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -534,7 +535,12 @@ def _current_rule_power_ordering_for_run(
         if not (0 <= winning_option_id < int(options.shape[0])):
             return None
         return np.asarray(options[winning_option_id], dtype=np.int64)
-    except Exception:
+    except (TypeError, ValueError, IndexError, RuntimeError, AssertionError) as exc:
+        warnings.warn(
+            f"Failed power-ordering rule evaluation for rule_idx={rule_idx}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return None
 
 
@@ -591,7 +597,12 @@ def _compute_puzzle_power_step_table(
     try:
         meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
         static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, yaml.YAMLError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        warnings.warn(
+            f"Failed to load run metadata for puzzle/power metrics at {run_dir}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return None
     run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
     if str(run_meta.get("quality_target_mode", "reality")) != "puzzle":
@@ -792,7 +803,12 @@ def _compute_lockin_recovery_metrics_for_run(
         return out
     try:
         votes = pd.read_parquet(votes_path)
-    except Exception:
+    except (OSError, ValueError, TypeError, RuntimeError, ImportError) as exc:
+        warnings.warn(
+            f"Failed to read votes.parquet for lock-in metrics at {votes_path}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return out
     if not {"step", "agent_id", "voted_altruistically"} <= set(votes.columns):
         return out
@@ -965,7 +981,12 @@ def _compute_moderate_recovery_metrics_for_run(
                         av = float(getattr(row, "group_altruism_share"))
                         if np.isfinite(av):
                             altru_lookup[(st, gi)] = av
-            except Exception:
+            except (OSError, ValueError, TypeError, RuntimeError, ImportError) as exc:
+                warnings.warn(
+                    f"Failed to read altruism vote stream for moderate recovery metrics at {votes_path}: {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 altru_lookup = {}
 
     event_strengths: list[float] = []
