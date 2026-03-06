@@ -34,7 +34,7 @@ class AreaDiagnosticsPanel(TextElement):
 
     Plots last N steps for each area with three rows of three columns:
       Row 1 (AreaStats):
-        1) area color distribution + dist_to_reality
+        1) area color distribution + quality_distance (mode-aware)
         2) elected ordering
         3) mean common + mean personal rewards
       Row 2 (Diagnostics):
@@ -72,12 +72,14 @@ class AreaDiagnosticsPanel(TextElement):
         if data is None or len(data) == 0:
             return ""
         if ('area_color_distribution' not in data.columns
-                or 'dist_to_reality' not in data.columns
+                or 'quality_distance' not in data.columns
                 or 'elected_color' not in data.columns):
             return ""
 
         color_distribution = data['area_color_distribution'].dropna()
-        dist_to_reality = data['dist_to_reality'].dropna()
+        quality_distance = data['quality_distance'].dropna()
+        dist_to_reality = data['dist_to_reality'].dropna() if 'dist_to_reality' in data.columns else None
+        puzzle_distance = data['puzzle_distance'].dropna() if 'puzzle_distance' in data.columns else None
         election_results = data['elected_color'].dropna()
 
         if len(color_distribution) == 0:
@@ -99,25 +101,51 @@ class AreaDiagnosticsPanel(TextElement):
 
             # --- AreaStats (top row) ---
             area_cd = color_distribution.xs(area.unique_id, level=1)
-            area_dist = dist_to_reality.xs(area.unique_id, level=1)
+            area_qdist = quality_distance.xs(area.unique_id, level=1)
             area_elec = election_results.xs(area.unique_id, level=1)
+            area_dist = None
+            if dist_to_reality is not None and len(dist_to_reality) > 0:
+                try:
+                    area_dist = dist_to_reality.xs(area.unique_id, level=1)
+                except KeyError:
+                    area_dist = None
+            area_pdist = None
+            if puzzle_distance is not None and len(puzzle_distance) > 0:
+                try:
+                    area_pdist = puzzle_distance.xs(area.unique_id, level=1)
+                except KeyError:
+                    area_pdist = None
 
             # limit to last N steps for AreaStats
             area_cd = area_cd.tail(self.max_steps)
-            area_dist = area_dist.tail(self.max_steps)
+            area_qdist = area_qdist.tail(self.max_steps)
             area_elec = area_elec.tail(self.max_steps)
+            if area_dist is not None:
+                area_dist = area_dist.tail(self.max_steps)
+            if area_pdist is not None:
+                area_pdist = area_pdist.tail(self.max_steps)
 
             ax0 = axes[row_top][0]
             ax1 = axes[row_top][1]
             ax2 = axes[row_top][2]
 
-            ax0.plot(area_dist.index, area_dist.values, color='Black', linestyle='--')
+            ax0.plot(area_qdist.index, area_qdist.values, color='Black', linestyle='--', linewidth=1.6, label='quality_distance')
+            q_mode = str(getattr(model, "quality_target_mode", "reality")).strip().lower()
+            if q_mode == "puzzle":
+                if area_pdist is not None:
+                    ax0.plot(area_pdist.index, area_pdist.values, color='tab:blue', linestyle=':', linewidth=1.0, alpha=0.8, label='puzzle_distance')
+                if area_dist is not None:
+                    ax0.plot(area_dist.index, area_dist.values, color='tab:green', linestyle=':', linewidth=1.0, alpha=0.8, label='dist_to_reality')
+            elif area_pdist is not None:
+                ax0.plot(area_pdist.index, area_pdist.values, color='tab:blue', linestyle=':', linewidth=1.0, alpha=0.8, label='puzzle_distance')
             for color_idx in range(num_colors):
                 cdata = area_cd.apply(lambda x: x[color_idx])
                 ax0.plot(cdata.index, cdata.values, color=COLORS[color_idx])
-            ax0.set_title(f'Area {area.unique_id} color-dst | --- dist_to_reality')
+            source = "puzzle_distance" if q_mode == "puzzle" else "dist_to_reality"
+            ax0.set_title(f'Area {area.unique_id} color-dst | quality_distance ({source})')
             ax0.set_xlabel('Step')
             ax0.set_ylabel('Color dist')
+            ax0.legend(fontsize=6, loc='best')
 
             for color_id in range(num_colors):
                 cdata = area_elec.apply(lambda x: list(x).index(color_id) if color_id in x else None)

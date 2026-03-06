@@ -126,7 +126,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             step=0.01,
         ),
         "break_even_distance_common": mesa.visualization.Slider(
-            name="Quality threshold (dist_to_reality)",
+            name="Quality threshold (quality_distance)",
             value=model_cfg.break_even_distance_common,
             min_value=0.0,
             max_value=1.0,

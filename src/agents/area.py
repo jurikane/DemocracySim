@@ -931,6 +931,8 @@ class Area(Agent):
             "dist_to_reality": float(self._dist_to_reality) if self._dist_to_reality is not None else float("nan"),
             "puzzle_distance": float(self._puzzle_distance) if self._puzzle_distance is not None else float("nan"),
             "quality_target_mode": str(getattr(self.model, "quality_target_mode", "reality")),
+            "quality_distance_source": "puzzle_distance" if self.puzzle_mode else "dist_to_reality",
+            "quality_distance": float(self._quality_distance()),
             "voted_ordering": (
                 self._voted_ordering.tolist()
                 if isinstance(self._voted_ordering, np.ndarray)

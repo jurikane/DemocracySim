@@ -35,6 +35,10 @@ from src.analysis.thesis_endpoints import (
     step_volatility_l1_normalized,
     time_mean,
 )
+from src.analysis.quality_distance import (
+    quality_distance_source,
+    resolve_quality_distance_series,
+)
 from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import spearman_fr_order, kendall_tau_order
@@ -341,6 +345,7 @@ def generate_run_summary_batch1(
         votes=votes,
         num_colors=num_colors,
         refs_global=refs["global"],
+        quality_target_mode=str(meta["run"].get("quality_target_mode", "reality")),
     )
     area_series = _build_area_series(
         area_steps=area_steps,
@@ -349,6 +354,7 @@ def generate_run_summary_batch1(
         area_agent_ids=area_agent_ids,
         num_colors=num_colors,
         refs_by_area=refs["areas"],
+        quality_target_mode=str(meta["run"].get("quality_target_mode", "reality")),
     )
     stats = _build_summary_stats(
         global_series=global_series,
@@ -468,6 +474,7 @@ def _build_global_series(
     votes: pd.DataFrame,
     num_colors: int,
     refs_global: dict[str, np.ndarray | None],
+    quality_target_mode: str,
 ) -> pd.DataFrame:
     color_cols = [f"color_{i}" for i in range(num_colors)]
     missing_color_cols = [c for c in color_cols if c not in steps.columns]
@@ -509,6 +516,20 @@ def _build_global_series(
 
     g["dist_to_reality"] = np.asarray(
         _weighted_dist_to_reality_by_step(area_steps=area_steps, step_index=g["step"].to_numpy(dtype=int)),
+        dtype=np.float32,
+    )
+    area_steps_q = area_steps.copy()
+    area_steps_q["quality_distance"] = resolve_quality_distance_series(
+        area_steps_q,
+        quality_target_mode=quality_target_mode,
+        run_label="summary_tooling:_build_global_series",
+    )
+    g["quality_distance"] = np.asarray(
+        _weighted_metric_by_step(
+            area_steps=area_steps_q,
+            step_index=g["step"].to_numpy(dtype=int),
+            value_col="quality_distance",
+        ),
         dtype=np.float32,
     )
     puzzle_color_cols = [f"puzzle_color_{i}" for i in range(num_colors) if f"puzzle_color_{i}" in area_steps.columns]
@@ -569,6 +590,7 @@ def _build_area_series(
     area_agent_ids: dict[int, list[int]],
     num_colors: int,
     refs_by_area: dict[int, dict[str, np.ndarray | None]],
+    quality_target_mode: str,
 ) -> pd.DataFrame:
     area_color_cols = [f"area_color_{i}" for i in range(num_colors)]
     missing = [c for c in area_color_cols if c not in area_steps.columns]
@@ -591,6 +613,14 @@ def _build_area_series(
         a["puzzle_distance"] = area_steps["puzzle_distance"].astype(np.float32)
     else:
         a["puzzle_distance"] = np.float32(np.nan)
+    a["quality_distance"] = np.asarray(
+        resolve_quality_distance_series(
+            area_steps,
+            quality_target_mode=quality_target_mode,
+            run_label="summary_tooling:_build_area_series",
+        ),
+        dtype=np.float32,
+    )
     if "grid_ordering_id" in area_steps.columns:
         a["grid_ordering_id"] = area_steps["grid_ordering_id"].astype(np.int32)
     if "puzzle_ordering_id" in area_steps.columns:
@@ -2195,10 +2225,10 @@ def _build_summary_stats(
             ),
             "mean_dissatisfaction_mean": time_mean(global_series["mean_dissatisfaction"].to_numpy(dtype=float)),
             "mean_dissatisfaction_final": _safe_final(global_series["mean_dissatisfaction"]),
-            "dist_to_reality_mean": time_mean(global_series["dist_to_reality"].to_numpy(dtype=float)),
-            "dist_to_reality_final": _safe_final(global_series["dist_to_reality"]),
-            "dist_to_reality_volatility": step_volatility_l1_normalized(
-                global_series["dist_to_reality"].to_numpy(dtype=float),
+            "quality_distance_mean": time_mean(global_series["quality_distance"].to_numpy(dtype=float)),
+            "quality_distance_final": _safe_final(global_series["quality_distance"]),
+            "quality_distance_volatility": step_volatility_l1_normalized(
+                global_series["quality_distance"].to_numpy(dtype=float),
                 value_range=1.0,
             ),
             "diversity_entropy_mean": time_mean(global_series["diversity_first_choice_entropy"].to_numpy(dtype=float)),
@@ -2259,7 +2289,7 @@ def _append_static_overview_pages(*, pdf: PdfPages, static: dict[str, Any], meta
     # Global group distribution
     if n_groups > 0 and global_dist.size == n_groups:
         x = np.arange(n_groups)
-        # Background: per-group preference-order stripes (same idea as ordering bands in area dist_to_reality plots).
+        # Background: per-group preference-order stripes (same idea as ordering bands in area quality-distance plots).
         if personality_groups.ndim == 2 and personality_groups.shape[0] >= n_groups:
             n_slots = int(min(num_colors, personality_groups.shape[1]))
             for gi in range(n_groups):
@@ -2430,7 +2460,7 @@ def _render_combined_global_summary_pdf(
         if render_profile.global_step_volatility_page:
             _render_global_step_volatility_page(pdf=pdf, global_series=global_series, meta=meta, static=static)
         if render_profile.global_distance_metrics:
-            _render_global_distance_page(pdf=pdf, global_series=global_series)
+            _render_global_distance_page(pdf=pdf, global_series=global_series, meta=meta)
 
 
 def _append_per_area_group_distribution_pages(*, pdf: PdfPages, static: dict[str, Any], meta: dict[str, Any]) -> None:
@@ -2700,17 +2730,32 @@ def _render_area_detail_pdf(
                     interpolation="nearest",
                     zorder=0,
                 )
+        quality_mode = str(meta["run"].get("quality_target_mode", "reality"))
+        q_source = quality_distance_source(quality_mode)
         ax_dist.plot(
             x,
-            area_series["dist_to_reality"].to_numpy(dtype=float),
+            area_series["quality_distance"].to_numpy(dtype=float),
             color="black",
             linestyle="--",
-            linewidth=1.6,
-            zorder=3,
+            linewidth=1.8,
+            zorder=4,
+            label=f"quality_distance ({q_source})",
         )
-        ax_dist.set_title("dist_to_reality")
+        if q_source == "puzzle_distance" and "dist_to_reality" in area_series.columns:
+            ax_dist.plot(
+                x,
+                area_series["dist_to_reality"].to_numpy(dtype=float),
+                color="tab:green",
+                linestyle=":",
+                linewidth=1.0,
+                alpha=0.85,
+                zorder=3,
+                label="dist_to_reality",
+            )
+        ax_dist.set_title("quality_distance (mode-aware)")
         ax_dist.set_ylabel("distance [0..1]")
         _set_unit_ylim_visible(ax_dist)
+        ax_dist.legend(loc="best", fontsize=8)
         for a in (ax_color, ax_dist):
             a.grid(True, alpha=0.25)
             a.set_xlabel("step")
@@ -4419,8 +4464,8 @@ def _render_global_core_metrics_page(
             step_volatility_l1_normalized(global_series["gini_dissatisfaction"].to_numpy(dtype=float), value_range=100.0),
         ),
         (
-            "dist_to_reality_volatility",
-            step_volatility_l1_normalized(global_series["dist_to_reality"].to_numpy(dtype=float), value_range=1.0),
+            "quality_distance_volatility",
+            step_volatility_l1_normalized(global_series["quality_distance"].to_numpy(dtype=float), value_range=1.0),
         ),
     ]
     vol_text = "Adjacent-step volatility (mean |Δ|)\n" + "\n".join(
@@ -4475,7 +4520,7 @@ def _render_global_step_volatility_page(
         ("turnout", "Turnout [%]", "tab:blue", "percent"),
         ("gini_assets", "Gini Assets [0..100]", "tab:red", "percent"),
         ("gini_dissatisfaction", "Gini Dissatisfaction [0..100]", "tab:purple", "percent"),
-        ("dist_to_reality", "dist_to_reality [0..1]", "tab:green", "unit"),
+        ("quality_distance", "quality_distance [0..1]", "tab:green", "unit"),
     ]
     for r, (col, title, color, scale_kind) in enumerate(rows):
         y = global_series[col].to_numpy(dtype=float)
@@ -4536,13 +4581,48 @@ def _render_global_step_volatility_page(
     plt.close(fig)
 
 
-def _render_global_distance_page(*, pdf: PdfPages, global_series: pd.DataFrame) -> None:
+def _render_global_distance_page(*, pdf: PdfPages, global_series: pd.DataFrame, meta: dict[str, Any]) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27), sharex=True)
     x = global_series["step"].to_numpy(dtype=float)
     ax = axes.ravel()
-    ax[0].plot(x, global_series["dist_to_reality"].to_numpy(dtype=float), color="tab:green")
-    ax[0].set_title("dist_to_reality (weighted)")
+    quality_mode = str(meta["run"].get("quality_target_mode", "reality"))
+    source_col = quality_distance_source(quality_mode)
+    ax[0].plot(x, global_series["quality_distance"].to_numpy(dtype=float), color="black", linewidth=1.8, label="quality_distance")
+    if source_col == "puzzle_distance":
+        if "dist_to_reality" in global_series.columns:
+            ax[0].plot(
+                x,
+                global_series["dist_to_reality"].to_numpy(dtype=float),
+                color="tab:green",
+                linestyle=":",
+                linewidth=1.0,
+                alpha=0.8,
+                label="dist_to_reality",
+            )
+        if "puzzle_distance" in global_series.columns:
+            ax[0].plot(
+                x,
+                global_series["puzzle_distance"].to_numpy(dtype=float),
+                color="tab:blue",
+                linestyle="--",
+                linewidth=1.0,
+                alpha=0.8,
+                label="puzzle_distance (source)",
+            )
+    else:
+        if "puzzle_distance" in global_series.columns:
+            ax[0].plot(
+                x,
+                global_series["puzzle_distance"].to_numpy(dtype=float),
+                color="tab:blue",
+                linestyle=":",
+                linewidth=1.0,
+                alpha=0.8,
+                label="puzzle_distance",
+            )
+    ax[0].set_title(f"quality_distance (source={source_col})")
     _set_unit_ylim_visible(ax[0])
+    ax[0].legend(loc="best", fontsize=8)
     ax[1].plot(x, global_series["dist_to_ref_utilitarian"].to_numpy(dtype=float), color="tab:blue", label="utilitarian")
     if "dist_to_ref_nash" in global_series.columns:
         ax[1].plot(x, global_series["dist_to_ref_nash"].to_numpy(dtype=float), color="tab:purple", label="nash")
@@ -4566,7 +4646,7 @@ def _render_global_distance_page(*, pdf: PdfPages, global_series: pd.DataFrame) 
     for a in ax[:3]:
         a.grid(True, alpha=0.25)
         a.set_xlabel("step")
-    fig.suptitle("Global Distance + Diversity Diagnostics", fontsize=12)
+    fig.suptitle("Global Quality Distance + Diversity Diagnostics", fontsize=12)
     fig.tight_layout()
     pdf.savefig(fig, dpi=140)
     plt.close(fig)
@@ -5414,7 +5494,7 @@ def _build_elected_ordering_background_image(
     num_colors: int,
     alpha: float = 0.28,
 ) -> np.ndarray | None:
-    """Build RGBA image for elected ordering background in dist_to_reality plots."""
+    """Build RGBA image for elected ordering background in quality-distance plots."""
     ids = np.asarray(winning_option_ids, dtype=int).reshape(-1)
     n_steps = int(ids.size)
     if n_steps <= 0 or num_colors <= 0:

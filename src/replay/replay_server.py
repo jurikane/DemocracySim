@@ -67,7 +67,9 @@ class _DataCollectorAdapter:
                     "step": int(step),
                     "agent_id": int(area_id),
                     "turnout": rec.get("turnout"),
+                    "quality_distance": rec.get("quality_distance"),
                     "dist_to_reality": rec.get("dist_to_reality"),
+                    "puzzle_distance": rec.get("puzzle_distance"),
                     # expanded vector columns are stored separately in parquet, but
                     # the adapter stores pre-packed vectors for viz.
                     "area_color_distribution": rec.get("area_color_distribution"),
@@ -109,6 +111,7 @@ class ReplayData:
 
         # Load static early so we can honor filename patterns
         self._static = self.load_static()
+        self._quality_target_mode = self._load_quality_target_mode()
         self._grid_pattern = None
         step_indexing = self._static.get("step_indexing") if isinstance(self._static.get("step_indexing"), dict) else {}
         if isinstance(step_indexing.get("grid_file"), str):
@@ -120,6 +123,13 @@ class ReplayData:
         self._steps_df: Optional[pd.DataFrame] = None
         self._area_steps_df: Optional[pd.DataFrame] = None
         self._load_parquet_tables()
+
+    def _load_quality_target_mode(self) -> str:
+        meta_path = self.run_dir / "meta.yaml"
+        import yaml
+        meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+        run_meta = meta.get("run", {}) if isinstance(meta, dict) else {}
+        return str(run_meta.get("quality_target_mode", "reality")).strip().lower()
 
     # -----------------
     # Schema detection
@@ -250,10 +260,21 @@ class ReplayData:
                     raise KeyError("area_steps.parquet missing area_color_* values")
                 if not elected_color:
                     raise KeyError("area_steps.parquet missing elected_color_* values")
+                if self._quality_target_mode == "puzzle":
+                    if "puzzle_distance" not in r.index:
+                        raise KeyError("area_steps.parquet missing puzzle_distance for puzzle-mode replay")
+                    if not np.isfinite(float(r["puzzle_distance"])):
+                        raise ValueError("Non-finite puzzle_distance in puzzle-mode replay step rows")
 
                 areas[aid] = {
                     "turnout": float(r["turnout"]),
+                    "quality_distance": float(
+                        r["puzzle_distance"]
+                        if self._quality_target_mode == "puzzle"
+                        else r["dist_to_reality"]
+                    ),
                     "dist_to_reality": float(r["dist_to_reality"]),
+                    "puzzle_distance": float(r["puzzle_distance"]) if "puzzle_distance" in r.index else float("nan"),
                     "gini_index": int(r["gini_index"]),
                     "area_color_distribution": area_color,
                     "elected_color": elected_color,

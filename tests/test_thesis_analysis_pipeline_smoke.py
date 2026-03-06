@@ -33,7 +33,7 @@ def _analyze_run_dir(run_dir: Path) -> dict:
 
     # --- schema/units sanity on thesis-critical series
     assert {"step", "turnout", "gini_index", "collective_assets"}.issubset(steps.columns)
-    assert {"step", "area_id", "turnout", "participants", "dist_to_reality"}.issubset(area_steps.columns)
+    assert {"step", "area_id", "turnout", "participants", "dist_to_reality", "puzzle_distance"}.issubset(area_steps.columns)
 
     turnout = steps["turnout"].to_numpy(dtype=float)
     gini = steps["gini_index"].to_numpy(dtype=float)
@@ -89,6 +89,12 @@ def _analyze_run_dir(run_dir: Path) -> dict:
 
     meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8"))
     rule_idx = int(meta["run"]["rule_idx"])
+    quality_mode = str(meta["run"].get("quality_target_mode", "reality")).strip().lower()
+    quality_series = (
+        area_steps["puzzle_distance"].to_numpy(dtype=float)
+        if quality_mode == "puzzle"
+        else area_steps["dist_to_reality"].to_numpy(dtype=float)
+    )
 
     return {
         "run_dir": str(run_dir),
@@ -102,7 +108,7 @@ def _analyze_run_dir(run_dir: Path) -> dict:
         "mean_gini_dissatisfaction": float(np.mean(diss_by_step.to_numpy(dtype=float))),
         "final_gini_dissatisfaction": float(diss_by_step.to_numpy(dtype=float)[-1]),
         "final_collective_assets": float(assets[-1]),
-        "mean_dist_to_reality": float(np.mean(area_steps["dist_to_reality"].to_numpy(dtype=float))),
+        "mean_quality_distance": float(np.mean(quality_series)),
     }
 
 

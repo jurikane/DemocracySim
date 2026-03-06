@@ -13,12 +13,16 @@ It complements:
 | `gini_assets_t` | inequality over agent assets at step `t` | `steps.gini_index` | `0..100` | higher = more inequality |
 | `mean_dissatisfaction_t` | mean `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..1` | higher = worse |
 | `gini_dissatisfaction_t` | Gini over `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..100` | higher = more inequality |
-| `dist_to_reality_t` | eligible-weighted election quality distance at step `t` | derived from `area_steps.parquet` | `0..1` | lower = better |
+| `quality_distance_t` | eligible-weighted quality-gate distance at step `t` (mode-aware source) | derived from `area_steps.parquet` | `0..1` | lower = better |
 
 Aggregation semantics:
 
 - `turnout_pct_t = 100 * sum_a participants(a,t) / sum_a area_num_agents(a)`; if denominator is zero, value is `0`.
-- `dist_to_reality_t = sum_a dist_to_reality(a,t) * eligible_voters(a,t) / sum_a eligible_voters(a,t)`; if denominator is zero, value is `NaN`.
+- `quality_distance_t = sum_a quality_distance(a,t) * eligible_voters(a,t) / sum_a eligible_voters(a,t)`; if denominator is zero, value is `NaN`.
+- `quality_distance(a,t)` source:
+  - puzzle mode: `area_steps.puzzle_distance`
+  - reality mode: `area_steps.dist_to_reality`
+- `dist_to_reality_t` remains a secondary grid-alignment diagnostic (not the primary gate metric in puzzle mode).
 
 ### Secondary descriptive metrics
 
@@ -48,9 +52,9 @@ Aggregation semantics:
 | `gini_dissatisfaction_volatility` | adjacent-step L1 volatility endpoint |
 | `mean_dissatisfaction_mean` | mean of `mean_dissatisfaction_t` |
 | `mean_dissatisfaction_final` | final observed `mean_dissatisfaction_t` value |
-| `dist_to_reality_mean` | mean of `dist_to_reality_t` |
-| `dist_to_reality_final` | final observed `dist_to_reality_t` value |
-| `dist_to_reality_volatility` | adjacent-step L1 volatility endpoint |
+| `quality_distance_mean` | mean of `quality_distance_t` |
+| `quality_distance_final` | final observed `quality_distance_t` value |
+| `quality_distance_volatility` | adjacent-step L1 volatility endpoint |
 | `diversity_entropy_mean` | mean of diversity entropy over time |
 | `diversity_entropy_final` | final observed diversity entropy |
 

@@ -16,6 +16,7 @@ from src.utils.metrics import (compute_gini_index, compute_collective_assets,
 from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
                                 get_area_dist_to_reality, get_election_results,
                                 get_area_color_distribution, get_area_gini_index,
+                                get_area_puzzle_distance, get_area_quality_distance,
                                 is_learning_rate, ensure_rate_0_1, ensure_choice,
                                 ensure_int_ge_0, ensure_finite_ge_0, ensure_finite_gt_0)
 from src.utils.rng import (
@@ -992,7 +993,9 @@ class ParticipationModel(mesa.Model):
             agent_reporters={
                 # These are collected for all Mesa agents, but only Area agents return values.
                 "turnout": get_area_voter_turnout,
+                "quality_distance": get_area_quality_distance,
                 "dist_to_reality": get_area_dist_to_reality,
+                "puzzle_distance": get_area_puzzle_distance,
                 "area_color_distribution": get_area_color_distribution,
                 "elected_color": get_election_results,
                 "gini_index": get_area_gini_index,
@@ -1234,7 +1237,7 @@ class ParticipationModel(mesa.Model):
         Return (callable, display_names, display_name, impl_names, impl_name) for distance_idx.
         Selects an ordering distance (for valid ColorOrderings (permutations)) used in:
           ballot scoring (ScoreVector entries are distances to options)
-          rewards (dist_to_reality, personal distance)
+          rewards (quality-gate distance, personal distance)
         """
         if distance_idx < 0 or distance_idx >= len(distance_functions):
             raise ValueError(

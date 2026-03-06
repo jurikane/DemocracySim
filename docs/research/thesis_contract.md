@@ -41,7 +41,7 @@ Primary outcome families are evaluated as time-series and run-level summaries:
 - participation dynamics (`turnout`)
 - resource inequality (`gini_assets` from `steps.gini_index`)
 - experiential inequality (`gini_dissatisfaction` from `agents.dissatisfaction_value`)
-- outcome-quality trajectory (`dist_to_reality` aggregated from `area_steps`)
+- outcome-quality trajectory (`quality_distance` aggregated from `area_steps` with mode-aware source)
 
 Interpretation note:
 

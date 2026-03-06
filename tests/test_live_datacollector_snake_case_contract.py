@@ -79,6 +79,7 @@ def test_live_datacollector_emits_snake_case_and_vectors():
     assert area_df is not None and len(area_df) > 0
 
     required_area_cols = {"turnout", "dist_to_reality", "gini_index",
+                          "quality_distance", "puzzle_distance",
                           "area_color_distribution", "elected_color"}
     missing = required_area_cols - set(area_df.columns)
     assert not missing, f"Missing area reporter columns: {sorted(missing)}"
@@ -125,4 +126,5 @@ def test_live_datacollector_emits_snake_case_and_vectors():
     assert len(
         e0) == num_colors, f"elected_color length {len(e0)} != num_colors {num_colors}"
     # Numeric series should exist
+    assert sub["quality_distance"].dropna().abs().sum() >= 0.0
     assert sub["dist_to_reality"].dropna().abs().sum() >= 0.0

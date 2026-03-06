@@ -24,11 +24,16 @@ It is coupled with:
 - `gini_assets_t` from `steps.gini_index` (0..100)
 - `mean_dissatisfaction_t` from mean of `agents.dissatisfaction_value` by step
 - `gini_dissatisfaction_t` from stepwise Gini over `agents.dissatisfaction_value` (0..100)
-- `dist_to_reality_t` from eligible-weighted `area_steps.dist_to_reality` by step
+- `quality_distance_t` from eligible-weighted area quality distance by step
 
-Current weighted aggregation for `dist_to_reality_t`:
+Mode-aware quality distance source:
 
-- numerator: `sum_a dist_to_reality(a,t) * eligible_voters(a,t)`
+- if `quality_target_mode = puzzle`: per-area value is `area_steps.puzzle_distance`
+- if `quality_target_mode = reality`: per-area value is `area_steps.dist_to_reality`
+
+Current weighted aggregation for `quality_distance_t`:
+
+- numerator: `sum_a quality_distance(a,t) * eligible_voters(a,t)`
 - denominator: `sum_a eligible_voters(a,t)`
 - if denominator is zero: `NaN`
 
@@ -43,8 +48,8 @@ Current weighted aggregation for `dist_to_reality_t`:
 - `gini_dissatisfaction_mean`, `gini_dissatisfaction_final`
 - `gini_dissatisfaction_volatility`
 - `mean_dissatisfaction_mean`, `mean_dissatisfaction_final`
-- `dist_to_reality_mean`, `dist_to_reality_final`
-- `dist_to_reality_volatility`
+- `quality_distance_mean`, `quality_distance_final`
+- `quality_distance_volatility`
 - `diversity_entropy_mean`, `diversity_entropy_final`
 
 Volatility definition (adjacent-step):
@@ -52,7 +57,7 @@ Volatility definition (adjacent-step):
 - step_volatility_l1(x) = mean_t |x_t - x_{t-1}| over finite adjacent pairs
 - normalization:
   - turnout/gini series: divide by 100 (series are 0..100)
-  - distance series (dist_to_reality): divide by 1
+  - distance series (quality_distance): divide by 1
 - no clamping is applied in formula layer
 - if fewer than one finite adjacent pair exists: NaN
 
@@ -107,7 +112,7 @@ NaN policy:
 - `steps.turnout(t) == 100 * sum_a participants(a,t) / sum_a area_num_agents(a)` (if denominator is zero, turnout is `0`)
 - `area_steps.participants(a,t) == count(votes rows for (a,t))`
 - one `agents` row per `(agent_id, step)`
-- no `NaN/inf` in thesis-critical emitted series (except explicitly allowed `NaN` semantics like denominator-zero `dist_to_reality_t`)
+- no `NaN/inf` in thesis-critical emitted series (except explicitly allowed `NaN` semantics like denominator-zero `quality_distance_t`)
 
 ## Inference Specification
 

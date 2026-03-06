@@ -20,7 +20,7 @@ class ModelConfig(StrictBaseModel):
 
     # --- Reward knobs (binary quality-sign economics) ---
     reward_rate_personal: float = 0.0  # Reward/punishment magnitude as a fraction of agent assets (0..1)
-    break_even_distance_common: float = 0.5  # Quality threshold against dist_to_reality
+    break_even_distance_common: float = 0.5  # Quality threshold against quality_distance (mode-aware gate)
     quality_target_mode: str = "puzzle"  # "reality" | "puzzle"
     puzzle_local_kappa: float = 30.0  # >0; higher => smaller local puzzle jumps
     puzzle_shock_prob: float = 0.05  # rare full redraw probability in [0,1]

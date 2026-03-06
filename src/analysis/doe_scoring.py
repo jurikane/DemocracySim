@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from src.analysis.quality_distance import resolve_quality_distance_series
 from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import kendall_tau_order, spearman_fr_order
 from src.utils.social_welfare_functions import (
@@ -1111,6 +1112,7 @@ def compute_run_features_from_tables(
     agents: pd.DataFrame,
     *,
     burn_in_steps: int = 0,
+    quality_target_mode: str = "reality",
 ) -> dict[str, float]:
     req_area = {"step", "participants", "turnout", "gini_index", "dist_to_reality", "winning_option_id"}
     req_agents = {"step", "personality_group_idx", "participating"}
@@ -1121,17 +1123,12 @@ def compute_run_features_from_tables(
     if missing_agents:
         raise ValueError(f"agents missing columns: {missing_agents}")
 
-    quality_col = "quality_distance"
-    if "quality_distance" not in area_steps.columns:
-        quality_col = "puzzle_distance" if "puzzle_distance" in area_steps.columns else "dist_to_reality"
-        area_steps = area_steps.copy()
-        area_steps["quality_distance"] = pd.to_numeric(area_steps[quality_col], errors="coerce")
-        if quality_col == "puzzle_distance" and not np.isfinite(
-            area_steps["quality_distance"].to_numpy(dtype=float)
-        ).any():
-            area_steps["quality_distance"] = pd.to_numeric(
-                area_steps["dist_to_reality"], errors="coerce"
-            )
+    area_steps = area_steps.copy()
+    area_steps["quality_distance"] = resolve_quality_distance_series(
+        area_steps,
+        quality_target_mode=quality_target_mode,
+        run_label="doe_scoring:compute_run_features_from_tables",
+    )
 
     per_step = (
         area_steps.groupby("step", as_index=False)
@@ -1615,7 +1612,18 @@ def collect_run_features(
             continue
         area = pd.read_parquet(area_path)
         agents = pd.read_parquet(agents_path)
-        features = compute_run_features_from_tables(area, agents, burn_in_steps=burn_in_steps)
+        meta_path = run_dir / "meta.yaml"
+        quality_target_mode = "reality"
+        if meta_path.exists():
+            meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+            run_meta = meta.get("run", {}) if isinstance(meta, dict) else {}
+            quality_target_mode = str(run_meta.get("quality_target_mode", "reality"))
+        features = compute_run_features_from_tables(
+            area,
+            agents,
+            burn_in_steps=burn_in_steps,
+            quality_target_mode=quality_target_mode,
+        )
         features.update(
             _compute_puzzle_power_metrics_for_run(
                 run_dir=run_dir,

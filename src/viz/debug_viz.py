@@ -118,9 +118,15 @@ class AreaAgentDebugPanel(TextElement):
         )
         lines.append(
             "Outcome: "
-            f"dist_to_reality={self._fmt_value(rec.get('dist_to_reality'))} "
+            f"quality_distance={self._fmt_value(rec.get('quality_distance'))} "
+            f"(source={rec.get('quality_distance_source')}) "
             f"winning_option={rec.get('winning_option')} "
             f"aggregated_ordering={self._fmt_value(rec.get('aggregated_ordering'))}"
+        )
+        lines.append(
+            "Distances: "
+            f"dist_to_reality={self._fmt_value(rec.get('dist_to_reality'))} "
+            f"puzzle_distance={self._fmt_value(rec.get('puzzle_distance'))}"
         )
         if rec.get("voted_ordering") is not None:
             lines.append(f"Voted ordering: {self._fmt_value(rec.get('voted_ordering'))}")

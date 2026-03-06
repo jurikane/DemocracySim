@@ -63,6 +63,34 @@ def test_compute_run_features_from_tables_contract() -> None:
     assert f["participant_share_turnover_rate_w"] >= 0.0
 
 
+def test_compute_run_features_from_tables_fails_fast_for_puzzle_mode_without_puzzle_distance() -> None:
+    area = pd.DataFrame(
+        {
+            "step": [1, 2],
+            "participants": [1, 1],
+            "turnout": [10.0, 20.0],
+            "gini_index": [10.0, 11.0],
+            "dist_to_reality": [0.4, 0.3],
+            "winning_option_id": [1, 2],
+        }
+    )
+    agents = pd.DataFrame(
+        {
+            "step": [1, 1, 2, 2],
+            "personality_group_idx": [0, 1, 0, 1],
+            "participating": [1, 0, 1, 0],
+            "election_delta_rel": [0.2, -0.1, 0.3, -0.1],
+        }
+    )
+    with pytest.raises(ValueError, match="puzzle_distance"):
+        compute_run_features_from_tables(
+            area,
+            agents,
+            burn_in_steps=0,
+            quality_target_mode="puzzle",
+        )
+
+
 def test_turnout_shape_score_helpers_are_not_limited_to_unit_scale() -> None:
     s = pd.Series([10.0, 50.0, 90.0])
     band = _band_pref01(s, low=20.0, high=80.0)

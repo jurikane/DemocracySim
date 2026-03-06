@@ -41,6 +41,18 @@ def get_area_dist_to_reality(area: Area) -> Optional[float]:
     return area.dist_to_reality if isinstance(area, Area) else None
 
 
+def get_area_puzzle_distance(area: Area) -> Optional[float]:
+    return area.puzzle_distance if isinstance(area, Area) else None
+
+
+def get_area_quality_distance(area: Area) -> Optional[float]:
+    if not isinstance(area, Area):
+        return None
+    if area.puzzle_mode:
+        return area.puzzle_distance
+    return area.dist_to_reality
+
+
 def get_area_color_distribution(area: Area) -> Optional[list[float]]:
     return area.color_distribution.tolist() if isinstance(area, Area) else None
 

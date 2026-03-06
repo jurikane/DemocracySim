@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import yaml
 import pytest
 
 from src.config.loader import load_config
@@ -112,7 +113,15 @@ def test_replay_v2_adapter_matches_parquet(v2_run_dir):
 
     a_parq = area_steps[area_steps["area_id"].astype(int) == area_id].sort_values("step")
 
-    for col in ["turnout", "dist_to_reality", "gini_index", "area_color_distribution", "elected_color"]:
+    for col in [
+        "turnout",
+        "quality_distance",
+        "dist_to_reality",
+        "puzzle_distance",
+        "gini_index",
+        "area_color_distribution",
+        "elected_color",
+    ]:
         assert col in area_df.columns, f"{col} missing in replay area dataframe"
 
     a_rep = area_df.xs(area_id, level=1).sort_index()
@@ -128,6 +137,23 @@ def test_replay_v2_adapter_matches_parquet(v2_run_dir):
         a_parq["dist_to_reality"].to_numpy(dtype=float),
         rtol=0,
         atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        a_rep["puzzle_distance"].to_numpy(dtype=float),
+        a_parq["puzzle_distance"].to_numpy(dtype=float),
+        rtol=0,
+        atol=1e-6,
+        equal_nan=True,
+    )
+    meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8")) or {}
+    quality_mode = str((meta.get("run") or {}).get("quality_target_mode", "reality"))
+    quality_src = "puzzle_distance" if quality_mode == "puzzle" else "dist_to_reality"
+    np.testing.assert_allclose(
+        a_rep["quality_distance"].to_numpy(dtype=float),
+        a_parq[quality_src].to_numpy(dtype=float),
+        rtol=0,
+        atol=1e-6,
+        equal_nan=True,
     )
     np.testing.assert_array_equal(
         a_rep["gini_index"].to_numpy(),

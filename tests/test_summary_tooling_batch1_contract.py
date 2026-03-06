@@ -7,6 +7,7 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 from scripts.run_headless import run_once
 from src.analysis.thesis_endpoints import step_volatility_l1_normalized
@@ -25,10 +26,11 @@ def _make_small_run(tmp_path: Path) -> Path:
     return out
 
 
-def _expected_global_dist_to_reality(area_steps: pd.DataFrame, step: int) -> float:
+def _expected_global_quality_distance(area_steps: pd.DataFrame, step: int, *, mode: str) -> float:
     block = area_steps[area_steps["step"] == step]
     weights = block["eligible_voters"].to_numpy(dtype=float)
-    vals = block["dist_to_reality"].to_numpy(dtype=float)
+    col = "puzzle_distance" if str(mode).strip().lower() == "puzzle" else "dist_to_reality"
+    vals = block[col].to_numpy(dtype=float)
     denom = float(np.sum(weights))
     if denom <= 0.0:
         return float("nan")
@@ -68,6 +70,7 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
         "gini_assets",
         "gini_dissatisfaction",
         "mean_dissatisfaction",
+        "quality_distance",
         "dist_to_reality",
         "dist_to_ref_utilitarian",
         "dist_to_ref_nash",
@@ -90,6 +93,7 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
         "eligible_voters",
         "turnout",
         "gini_assets",
+        "quality_distance",
         "dist_to_reality",
         "dist_to_ref_utilitarian",
         "dist_to_ref_nash",
@@ -115,7 +119,7 @@ def test_batch1_summary_generation_writes_core_artifacts_and_columns(tmp_path: P
         "turnout_volatility",
         "gini_assets_volatility",
         "gini_dissatisfaction_volatility",
-        "dist_to_reality_volatility",
+        "quality_distance_volatility",
     ):
         assert key in global_summary
 
@@ -128,6 +132,8 @@ def test_batch1_summary_formulas_match_logged_artifacts(tmp_path: Path) -> None:
     area_steps = pd.read_parquet(run_dir / "area_steps.parquet").sort_values(["step", "area_id"]).reset_index(drop=True)
     agents = pd.read_parquet(run_dir / "agents.parquet").sort_values(["step", "agent_id"]).reset_index(drop=True)
     votes = pd.read_parquet(run_dir / "votes.parquet").sort_values(["step", "area_id", "agent_id"]).reset_index(drop=True)
+    meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8")) or {}
+    quality_mode = str((meta.get("run") or {}).get("quality_target_mode", "reality"))
     static = json.loads((run_dir / "static.json").read_text(encoding="utf-8"))
     num_colors = int(static["num_colors"])
 
@@ -148,17 +154,17 @@ def test_batch1_summary_formulas_match_logged_artifacts(tmp_path: Path) -> None:
         equal_nan=True,
     )
 
-    # dist_to_reality weighted by eligible_voters
-    expected_dist = np.asarray(
+    # quality_distance weighted by eligible_voters (mode-aware source)
+    expected_quality = np.asarray(
         [
-            _expected_global_dist_to_reality(area_steps, int(step))
+            _expected_global_quality_distance(area_steps, int(step), mode=quality_mode)
             for step in summary_global["step"].to_numpy(dtype=int)
         ],
         dtype=float,
     )
     np.testing.assert_allclose(
-        summary_global["dist_to_reality"].to_numpy(dtype=float),
-        expected_dist,
+        summary_global["quality_distance"].to_numpy(dtype=float),
+        expected_quality,
         rtol=0.0,
         atol=1e-6,
         equal_nan=True,
@@ -205,7 +211,7 @@ def test_batch1_summary_formulas_match_logged_artifacts(tmp_path: Path) -> None:
         step_volatility_l1_normalized(summary_global["gini_dissatisfaction"].to_numpy(dtype=float), value_range=100.0),
         abs=1e-6,
     )
-    assert float(gs["dist_to_reality_volatility"]) == pytest.approx(
-        step_volatility_l1_normalized(summary_global["dist_to_reality"].to_numpy(dtype=float), value_range=1.0),
+    assert float(gs["quality_distance_volatility"]) == pytest.approx(
+        step_volatility_l1_normalized(summary_global["quality_distance"].to_numpy(dtype=float), value_range=1.0),
         abs=1e-6,
     )

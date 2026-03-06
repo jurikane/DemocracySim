@@ -113,6 +113,12 @@ Merged area-state + election table.
 | gini_index                           |   int16 | area gini 0–100                                                  |
 | area_color_0..area_color_{C-1}       | float32 | **pre-mutation distribution**                                    |
 
+Quality-gate interpretation:
+
+- Canonical gate metric in analysis is `quality_distance` (derived, mode-aware).
+- Source is `puzzle_distance` when `quality_target_mode=puzzle`, else `dist_to_reality`.
+- Both raw columns are retained for diagnostics and replay context.
+
 ### `agents.parquet`
 
 Agent snapshot table (**agent state only**).
