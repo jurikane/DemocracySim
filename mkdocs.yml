@@ -3,6 +3,8 @@ site_name: DemocracySim
 site_description: <b>How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?</b>
 site_url: https://jurikane.github.io/DemocracySim/
 site_author: Paul Kühnel
+exclude_docs: |
+  internal/**
 
 # Repository
 repo_url: https://github.com/jurikane/DemocracySim
@@ -27,7 +29,7 @@ nav:
             - Dynamics and Rule Interaction: research/dynamics_rule_interaction_concept.md
         - Thesis Measurement Spec: research/thesis_measurement_spec.md
         - Metric Glossary: research/metric_glossary.md
-        - Execution Scope Freeze (M0): research/execution_scope_freeze.md
+        - Execution Scope: research/execution_scope_freeze.md
     - Technical:
         - Overview: technical/technical_overview.md
         - Semantics, Representations & RNG: technical/semantics_representation_rng.md

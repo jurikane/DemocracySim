@@ -75,7 +75,7 @@ Volatility definition (adjacent-step):
 
 These are descriptive benchmark comparisons, not normative optimality claims.
 
-Group-level descriptive diagnostics (non-confirmatory) may additionally be computed in analysis artifacts to inspect majority/minority participation composition over time.
+Group-level descriptive diagnostics (non-confirmatory) may additionally be computed in analysis artifacts to inspect participation composition over time.
 
 ### Benchmark reference computation
 
@@ -116,20 +116,35 @@ NaN policy:
 
 ## Inference Specification
 
-### Thesis inference endpoints
+### Confirmatory endpoint subset
 
-The thesis endpoint set is the run-level summary contract:
+Primary confirmatory endpoints are time means:
 
-- means/finals for turnout, inequality, dissatisfaction, and quality
-- adjacent-step volatility for turnout, inequality, and quality
-- diversity entropy mean/final
+- `turnout_mean`
+- `gini_assets_mean`
+- `gini_dissatisfaction_mean`
+- `quality_distance_mean`
 
-No additional endpoint family is assumed in this contract.
+These endpoints are computed from the time-series definitions above using fixed formulas.
+
+### Secondary reported endpoints
+
+Additional `summary_stats.json` endpoints (final values, volatility, diversity entropy, mean dissatisfaction) are reported descriptively unless explicitly promoted in a separate analysis contract.
 
 ### Inference-family rules
 
-- Canonical rule-family tests and reference-family tests must remain separated in reporting.
-- Use a predefined multiple-testing correction policy for each reported experiment set.
+Rule-family roles for reporting:
+
+- canonical confirmatory family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
+- reference family: `majority (0)`, `random (5)`
+- context-only calibration arm: `approval (1)`
+
+Family boundaries must remain explicit in results reporting.
+
+### Multiple-testing policy rule
+
+- Use a predefined multiplicity correction policy within each reported family.
+- Do not merge canonical confirmatory and reference-family p-value pools.
 - Keep endpoint formulas fixed within one reported experiment set.
 
 ### Summary-layer separation rule

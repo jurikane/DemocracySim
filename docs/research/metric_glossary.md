@@ -8,7 +8,7 @@ It complements:
 ### Primary time-series metrics
 
 | Metric ID | Definition | Source | Unit | Direction |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
 | `turnout_pct_t` | global participation rate at step `t` | `steps.turnout` | `0..100` | higher = more participation |
 | `gini_assets_t` | inequality over agent assets at step `t` | `steps.gini_index` | `0..100` | higher = more inequality |
 | `mean_dissatisfaction_t` | mean `agents.dissatisfaction_value` at step `t` | derived from `agents.parquet` | `0..1` | higher = worse |
@@ -37,7 +37,7 @@ Aggregation semantics:
 | `dist_to_ref_egalitarian_lam025` | egalitarian sensitivity (`lambda=0.25`) | analysis output | `0..1` | lower = closer |
 | `dist_to_ref_egalitarian_lam400` | egalitarian sensitivity (`lambda=4.0`) | analysis output | `0..1` | lower = closer |
 
-### Run-level thesis endpoint IDs
+### Run-level endpoint IDs
 
 | Metric ID | Definition |
 | --- | --- |
@@ -58,7 +58,8 @@ Aggregation semantics:
 | `diversity_entropy_mean` | mean of diversity entropy over time |
 | `diversity_entropy_final` | final observed diversity entropy |
 
-Rule-family labels used in inference:
+### Rule-family labels used in reporting
 
-- canonical family: confirmatory
-- random-reference family: reference-only unless explicitly reclassified
+- canonical confirmatory family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
+- reference family: `majority (0)`, `random (5)`
+- context-only calibration arm: `approval (1)`

@@ -6,17 +6,19 @@ How do different voting rules influence the temporal evolution of participation 
 Related documents:
 
 - `docs/research/execution_scope_freeze.md`
+- `docs/research/thesis_measurement_spec.md`
+- `docs/research/metric_glossary.md`
 - `docs/research/thesis_model_concepts.md`
 
 ## 1. Scientific Scope
 
-The thesis studies a fixed simulation environment where voting rule is the primary intentionally varied factor in confirmatory rule-comparison runs.
+The thesis studies a fixed simulation environment where voting rule is the primary intentionally varied factor in rule-comparison runs.
 
 Participation and altruism are adaptive, but their update mechanisms are fixed within a given experiment set.
 
 ## 2. Baseline Model Settings
 
-Current baseline family:
+Baseline family:
 
 - `quality_target_mode = puzzle`
 - `participation_signal_mode = group_relative_delta_rel_party`
@@ -26,15 +28,24 @@ Current baseline family:
   - `altruism_satisfaction_slope`
   - `altruism_response_gamma`
 
-Implemented voting rules:
+Implemented voting-rule mapping (`rule_idx`):
 
 - `0 = majority`
 - `1 = approval`
 - `2 = utilitarian`
 - `3 = borda`
-- `4 = random` (reference arm)
+- `4 = schulze`
+- `5 = random`
 
-## 3. Primary Outcomes
+## 3. Rule-Family Framing for Thesis Inference
+
+- confirmatory canonical family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
+- reference family: `majority (0)`, `random (5)`
+- context-only calibration arm: `approval (1)`
+
+Family labels define reporting roles, not implementation differences in runtime mechanics.
+
+## 4. Primary Outcomes
 
 Primary outcome families are evaluated as time-series and run-level summaries:
 
@@ -47,14 +58,15 @@ Interpretation note:
 
 - `assets` denotes simulation resource/capacity state, not literal income.
 
-## 4. Secondary Descriptive Analyses
+## 5. Secondary Descriptive Analyses
 
 Secondary (non-confirmatory) views include:
 
 - group-level turnout and participation-composition dynamics
 - participation/inequality co-movement patterns
+- benchmark-reference distance diagnostics from logged artifacts
 
-## 5. Out of Scope for Confirmatory Claims
+## 6. Out of Scope for Confirmatory Claims
 
 - strategic voting equilibria
 - empirical calibration against real election datasets
