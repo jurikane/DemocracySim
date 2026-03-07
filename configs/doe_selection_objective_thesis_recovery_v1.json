@@ -41,14 +41,9 @@
     "quality_bundle": 0.50
   },
   "quality_component_weights": {
-    "z_winner_entropy": 1.40,
-    "z_winner_changes": 1.30,
-    "z_competitive_step_share": 1.00,
+    "z_winner_entropy": 4.00,
     "z_puzzle_dom_balance_conflict": 1.30,
-    "z_group_turnout_range": 0.90,
-    "z_roll3_group_turnout_range": 0.70,
-    "z_roll3_group_turnout_range_max": 0.80,
-    "z_group_std": 0.55,
+    "z_group_turnout_structure": 3.90,
     "z_q_delta_group_dispersion_late": 0.70,
     "z_participant_composition_dynamics": 1.00,
     "z_pa_gap": 0.55,
@@ -57,12 +52,8 @@
     "z_turnout_drop_stability": 0.40,
     "z_turnout_decline_stability": 0.40,
     "z_dist_std": 0.25,
-    "z_dist_nonzero_share": 0.30,
     "z_gini_std": 0.20,
     "z_turnout_std": 0.20,
-    "z_roll20_group_turnout_range": 0.35,
-    "z_roll20_group_turnout_range_max": 0.35,
-    "z_group_turnout_resid": 0.25,
     "z_q_delta_mean_stability": 0.30,
     "z_q_delta_late_stability": 0.30
   }

@@ -131,11 +131,8 @@ REQUIRED_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
     "dist_std",
     "group_participation_std",
     "group_turnout_range_mean",
-    "roll3_group_turnout_range_mean",
     "roll3_group_turnout_range_max",
-    "roll20_group_turnout_range_mean",
     "roll20_group_turnout_range_max",
-    "group_turnout_residual_abs_mean",
     "participant_abstainer_delta_rel_gap_abs",
     "group_participant_abstainer_delta_rel_gap_abs",
     "winner_entropy_norm",
@@ -168,19 +165,10 @@ PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
     "z_turnout_std",
     "z_gini_std",
     "z_dist_std",
-    "z_group_std",
-    "z_group_turnout_range",
-    "z_roll3_group_turnout_range",
-    "z_roll3_group_turnout_range_max",
-    "z_roll20_group_turnout_range",
-    "z_roll20_group_turnout_range_max",
-    "z_group_turnout_resid",
+    "z_group_turnout_structure",
     "z_pa_gap",
     "z_group_pa_gap",
     "z_winner_entropy",
-    "z_dist_nonzero_share",
-    "z_competitive_step_share",
-    "z_winner_changes",
     "z_turnout_shape",
     "z_q_delta_mean_stability",
     "z_q_delta_late_stability",
@@ -1206,17 +1194,7 @@ def compute_run_features_from_tables(
     else:
         group_turnout_range_mean = 0.0
 
-    global_step = agents.groupby("step", as_index=False).agg(global_turnout=("participating", "mean"))
-    merged_step = group_step.merge(global_step, on="step", how="left")
-    if len(merged_step) > 0:
-        merged_step["resid_abs"] = (merged_step["turnout_resident"] - merged_step["global_turnout"]).abs()
-        group_turnout_residual_abs_mean = float(merged_step["resid_abs"].mean())
-    else:
-        group_turnout_residual_abs_mean = 0.0
-
-    roll3_group_turnout_range_mean = 0.0
     roll3_group_turnout_range_max = 0.0
-    roll20_group_turnout_range_mean = 0.0
     roll20_group_turnout_range_max = 0.0
     competitive_step_share = 0.0
     piv = group_step.pivot(index="step", columns="personality_group_idx", values="turnout_resident").sort_index()
@@ -1229,7 +1207,6 @@ def compute_run_features_from_tables(
         roll = np.vstack(roll_cols).T
         r = np.nanmax(roll, axis=1) - np.nanmin(roll, axis=1)
         if np.isfinite(r).any():
-            roll20_group_turnout_range_mean = float(np.nanmean(r))
             roll20_group_turnout_range_max = float(np.nanmax(r))
     if arr.shape[0] >= 3 and arr.shape[1] >= 2:
         roll_cols = [
@@ -1239,7 +1216,6 @@ def compute_run_features_from_tables(
         roll = np.vstack(roll_cols).T
         r = np.nanmax(roll, axis=1) - np.nanmin(roll, axis=1)
         if np.isfinite(r).any():
-            roll3_group_turnout_range_mean = float(np.nanmean(r))
             roll3_group_turnout_range_max = float(np.nanmax(r))
     if arr.shape[0] >= 2 and arr.shape[1] >= 2:
         d = np.diff(arr, axis=0)
@@ -1535,9 +1511,7 @@ def compute_run_features_from_tables(
         "group_participation_std": float(group_std),
         "group_participation_range": float(group_range),
         "group_turnout_range_mean": float(group_turnout_range_mean),
-        "roll3_group_turnout_range_mean": float(roll3_group_turnout_range_mean),
         "roll3_group_turnout_range_max": float(roll3_group_turnout_range_max),
-        "roll20_group_turnout_range_mean": float(roll20_group_turnout_range_mean),
         "roll20_group_turnout_range_max": float(roll20_group_turnout_range_max),
         "roll10_dist_std_mean": float(roll10_dist_std_mean),
         "roll10_winner_change_rate": float(roll10_winner_change_rate),
@@ -1573,7 +1547,6 @@ def compute_run_features_from_tables(
         )
         if np.isfinite(participation_q_delta_group_dispersion_late_w)
         else float("nan"),
-        "group_turnout_residual_abs_mean": float(group_turnout_residual_abs_mean),
         "participant_abstainer_delta_rel_gap_abs": _gap_abs("election_delta_rel"),
         "group_participant_abstainer_delta_rel_gap_abs": float(group_pa_delta_rel_gap_abs),
         "participant_abstainer_delta_abs_gap_abs": _gap_abs("election_delta_abs"),
@@ -1843,27 +1816,18 @@ def score_designs(
     primary["z_turnout_std"] = _norm01(primary["turnout_std"], higher_better=True)
     primary["z_gini_std"] = _norm01(primary["gini_std"], higher_better=True)
     primary["z_dist_std"] = _norm01(primary["dist_std"], higher_better=True)
-    primary["z_group_std"] = _norm01(primary["group_participation_std"], higher_better=True)
-    primary["z_group_turnout_range"] = _norm01(primary["group_turnout_range_mean"], higher_better=True)
-    primary["z_roll3_group_turnout_range"] = _norm01(
-        primary["roll3_group_turnout_range_mean"], higher_better=True
-    )
-    primary["z_roll3_group_turnout_range_max"] = _norm01(
-        primary["roll3_group_turnout_range_max"], higher_better=True
-    )
-    primary["z_roll20_group_turnout_range"] = _norm01(
-        primary["roll20_group_turnout_range_mean"], higher_better=True
-    )
-    primary["z_roll20_group_turnout_range_max"] = _norm01(
-        primary["roll20_group_turnout_range_max"], higher_better=True
-    )
-    primary["z_group_turnout_resid"] = _norm01(primary["group_turnout_residual_abs_mean"], higher_better=True)
+    primary["z_group_turnout_structure"] = pd.concat(
+        [
+            _norm01(primary["group_participation_std"], higher_better=True),
+            _norm01(primary["group_turnout_range_mean"], higher_better=True),
+            _norm01(primary["roll3_group_turnout_range_max"], higher_better=True),
+            _norm01(primary["roll20_group_turnout_range_max"], higher_better=True),
+        ],
+        axis=1,
+    ).mean(axis=1)
     primary["z_pa_gap"] = _norm01(primary["participant_abstainer_delta_rel_gap_abs"], higher_better=True)
     primary["z_group_pa_gap"] = _norm01(primary["group_participant_abstainer_delta_rel_gap_abs"], higher_better=True)
     primary["z_winner_entropy"] = _norm01(primary["winner_entropy_norm"], higher_better=True)
-    primary["z_dist_nonzero_share"] = _norm01(primary["dist_nonzero_share"], higher_better=True)
-    primary["z_competitive_step_share"] = _norm01(primary["competitive_step_share"], higher_better=True)
-    primary["z_winner_changes"] = _norm01(primary["winner_change_rate_post_burnin"], higher_better=True)
     primary["z_mean_turnout_centered"] = _band_pref01(
         primary["mean_turnout"],
         low=float(turnout_start_score_low),
@@ -2331,19 +2295,10 @@ def analyze_doe_root(
                     "turnout_std",
                     "gini_std",
                     "dist_std",
-                    "group_participation_std",
-                    "group_turnout_range_mean",
-                    "roll3_group_turnout_range_mean",
-                    "roll3_group_turnout_range_max",
-                    "roll20_group_turnout_range_mean",
-                    "roll20_group_turnout_range_max",
-                    "group_turnout_residual_abs_mean",
+                    "group_turnout_structure (group std + mean range + roll3 max range + roll20 max range)",
                     "participant_abstainer_delta_rel_gap_abs",
                     "group_participant_abstainer_delta_rel_gap_abs",
                     "winner_entropy_norm",
-                    "dist_nonzero_share",
-                    "competitive_step_share",
-                    "winner_changes_post_burnin",
                     "turnout_shape (start/end/contextual-drop/contextual-decline/band-time)",
                     "participation_q_delta_mean_abs (stability, closer to 0)",
                     "participation_q_delta_late_window_mean_abs (stability, closer to 0)",
