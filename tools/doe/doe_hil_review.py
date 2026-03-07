@@ -61,8 +61,7 @@ def _build_ai_interpretation(
             f"pass_rate={_safe_float(design_row.get('pass_rate'), 3)}, "
             f"score_total={_safe_float(design_row.get('score_total'), 3)}, "
             f"quality_mean={_safe_float(design_row.get('quality_mean'), 3)}, "
-            f"seed_robustness={_safe_float(design_row.get('seed_robustness'), 3)}, "
-            f"discriminability={_safe_float(design_row.get('discriminability'), 3)}."
+            f"seed_robustness={_safe_float(design_row.get('seed_robustness'), 3)}."
         )
 
     if run_row is not None:
@@ -83,21 +82,6 @@ def _build_ai_interpretation(
             f"winner_entropy_norm={_safe_float(run_row.get('winner_entropy_norm'), 3)}."
         )
         new_signal_parts = []
-        if "lag1_participation_signal_turnout_response_corr" in run_row.index:
-            new_signal_parts.append(
-                "lag1_resp(total)="
-                f"{_safe_float(run_row.get('lag1_participation_signal_turnout_response_corr'), 3)}"
-            )
-        if "lag1_participation_signal_group_component_turnout_response_corr" in run_row.index:
-            new_signal_parts.append(
-                "lag1_resp(group)="
-                f"{_safe_float(run_row.get('lag1_participation_signal_group_component_turnout_response_corr'), 3)}"
-            )
-        if "lag1_participation_signal_fee_component_turnout_response_corr" in run_row.index:
-            new_signal_parts.append(
-                "lag1_resp(fee)="
-                f"{_safe_float(run_row.get('lag1_participation_signal_fee_component_turnout_response_corr'), 3)}"
-            )
         if "puzzle_dominance_share_conflict" in run_row.index or "power_recovery_share_conflict" in run_row.index:
             new_signal_parts.append(
                 "puzzle_conflict: "

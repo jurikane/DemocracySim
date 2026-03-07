@@ -11,7 +11,7 @@ from src.analysis.summary_tooling import _compute_area_power_direction_orderings
 pytestmark = pytest.mark.phase1
 
 
-def test_summary_power_direction_includes_schulze_before_random() -> None:
+def test_summary_power_direction_excludes_random_and_keeps_schulze() -> None:
     area_group_series = pd.DataFrame(
         {
             "step": [1, 1],
@@ -32,14 +32,13 @@ def test_summary_power_direction_includes_schulze_before_random() -> None:
         num_colors=3,
         meta={"run": {"run_seed": 17, "distance_impl_name": "spearman_fr_order"}},
     )
-    assert [int(x["rule_idx"]) for x in power_dirs] == [0, 1, 2, 3, 4, 5]
+    assert [int(x["rule_idx"]) for x in power_dirs] == [0, 1, 2, 3, 4]
     assert [str(x["rule_name"]) for x in power_dirs] == [
         "Majority",
         "Approval",
         "Utilitarian",
         "Borda",
         "Schulze",
-        "Random",
     ]
 
 

@@ -809,7 +809,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
         # Final local freeze profile after supersearch:
         # - focus around top-performing regions from supersearch
         # - keep enough spread around seed-128/160 failure regimes
-        # NOTE: run with --robust-every 1 so discriminability is observed for every design.
+        # NOTE: run with --robust-every 1 so robustness diagnostics are observed for every design.
         "ranges": {
             # Participation dynamics (local around top-quantile region).
             "participation_init_q": (0.115, 0.165),

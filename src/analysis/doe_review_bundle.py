@@ -344,7 +344,6 @@ def _build_knob_metric_artifacts(
         "pass_rate",
         "quality_mean",
         "seed_robustness",
-        "discriminability",
         "mean_turnout",
         "mean_dist",
         "winner_entropy_norm",
@@ -499,7 +498,6 @@ def _fallback_design_scores_from_runs(*, run_features_df: pd.DataFrame) -> pd.Da
                 "pass_rate",
                 "quality_mean",
                 "seed_robustness",
-                "discriminability",
                 "score_total",
             ]
         )
@@ -534,7 +532,6 @@ def _fallback_design_scores_from_runs(*, run_features_df: pd.DataFrame) -> pd.Da
     out["quality_mean"] = pd.to_numeric(out["quality_mean"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
     out["pass_rate"] = pd.to_numeric(out["pass_rate"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
     out["seed_robustness"] = np.nan
-    out["discriminability"] = np.nan
     out["score_total"] = (0.70 * out["pass_rate"] + 0.30 * out["quality_mean"]).astype(float)
     return out[
         [
@@ -542,7 +539,6 @@ def _fallback_design_scores_from_runs(*, run_features_df: pd.DataFrame) -> pd.Da
             "pass_rate",
             "quality_mean",
             "seed_robustness",
-            "discriminability",
             "score_total",
         ]
     ]
@@ -607,7 +603,7 @@ def build_doe_review_bundle(
                 "with allow_fallback_scores=True to force heuristic ranking."
             )
         base_scores = design_points.merge(design_scores, on="design_id", how="left")
-        for c in ("pass_rate", "quality_mean", "seed_robustness", "discriminability", "score_total"):
+        for c in ("pass_rate", "quality_mean", "seed_robustness", "score_total"):
             if c not in base_scores.columns:
                 base_scores[c] = np.nan
         base_scores["pass_rate"] = pd.to_numeric(base_scores["pass_rate"], errors="coerce").fillna(0.0)
@@ -719,7 +715,6 @@ def build_doe_review_bundle(
                 "pass_rate": _safe_float(drow.get("pass_rate")),
                 "quality_mean": _safe_float(drow.get("quality_mean")),
                 "seed_robustness": _safe_float(drow.get("seed_robustness")),
-                "discriminability": _safe_float(drow.get("discriminability")),
                 "gate_puzzle_anti_monopoly": bool(rep.get("gate_puzzle_anti_monopoly", True)),
                 "passes_hard_gates": bool(rep.get("passes_hard_gates", False)),
                 "bundle_used_fallback_scores": bool(used_fallback_scores),

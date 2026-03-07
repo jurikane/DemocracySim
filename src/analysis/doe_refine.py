@@ -315,17 +315,17 @@ def _bootstrap_design_ci(
 
 
 def _pareto_designs(scores: pd.DataFrame) -> pd.DataFrame:
-    cols = ["design_id", "is_pareto", "pass_rate", "quality_mean", "discriminability", "seed_robustness", "score_total"]
+    cols = ["design_id", "is_pareto", "pass_rate", "quality_mean", "seed_robustness", "score_total"]
     if len(scores) == 0:
         return pd.DataFrame(columns=cols)
     work = scores.copy()
-    for c in ["pass_rate", "quality_mean", "discriminability", "seed_robustness", "score_total"]:
+    for c in ["pass_rate", "quality_mean", "seed_robustness", "score_total"]:
         if c not in work.columns:
             work[c] = 0.0
         work[c] = pd.to_numeric(work[c], errors="coerce").fillna(0.0)
-    objectives = work[["pass_rate", "quality_mean", "discriminability", "seed_robustness"]].to_numpy(dtype=float)
+    objectives = work[["pass_rate", "quality_mean", "seed_robustness"]].to_numpy(dtype=float)
     mask = _pareto_front_mask(objectives)
-    out = work[["design_id", "pass_rate", "quality_mean", "discriminability", "seed_robustness", "score_total"]].copy()
+    out = work[["design_id", "pass_rate", "quality_mean", "seed_robustness", "score_total"]].copy()
     out["is_pareto"] = mask.astype(bool)
     return out[cols].sort_values(["is_pareto", "score_total"], ascending=[False, False])
 
@@ -424,7 +424,7 @@ def build_inference_report(
                         "rows": int(len(boot)),
                     },
                     "pareto": {
-                        "kind": "non-dominated designs on pass/quality/discriminability/robustness",
+                        "kind": "non-dominated designs on pass/quality/robustness",
                         "pareto_count": int(pareto["is_pareto"].sum()) if "is_pareto" in pareto.columns else 0,
                     },
                 },

@@ -9,25 +9,11 @@
     "max_puzzle_dominance_share_conflict": 0.93,
     "min_power_recovery_share_conflict": 0.04,
     "puzzle_dominance_share_score_low": 0.30,
-    "puzzle_dominance_share_score_high": 0.55,
-    "moderate_min_group_size": 6.0,
-    "moderate_takeover_loss_frac_min": 0.50,
-    "moderate_takeover_capture_frac_min": 0.50,
-    "moderate_rebound_loss_frac_min": 0.35,
-    "moderate_rebound_share_vs_a_peak_min": 0.40,
-    "moderate_min_steps": 5.0,
-    "moderate_min_peak_share": 0.00,
-    "moderate_length_bonus_max": 0.15,
-    "moderate_altruism_bonus_weight": 0.20,
-    "moderate_altruism_bonus_floor": 0.60,
-    "moderate_selector_quality_gate_zero_at": 0.58,
-    "moderate_selector_quality_gate_good_min": 0.72
+    "puzzle_dominance_share_score_high": 0.55
   },
   "weights": {
-    "quality_mean": 0.67,
-    "discriminability": 0.0,
-    "seed_robustness": 0.30,
-    "moderate_recovery_selector": 0.03
+    "quality_mean": 0.70,
+    "seed_robustness": 0.30
   },
   "stage_weights": {
     "viability": 0.50,
@@ -37,17 +23,9 @@
     "z_winner_entropy": 4.00,
     "z_puzzle_dom_balance_conflict": 1.30,
     "z_group_turnout_structure": 3.90,
-    "z_q_delta_group_dispersion_late": 0.70,
     "z_participant_composition_dynamics": 1.00,
-    "z_pa_gap": 0.55,
-    "z_group_pa_gap": 0.55,
-    "z_turnout_shape": 0.45,
-    "z_turnout_drop_stability": 0.40,
-    "z_turnout_decline_stability": 0.40,
-    "z_dist_std": 0.25,
-    "z_gini_std": 0.20,
-    "z_turnout_std": 0.20,
-    "z_q_delta_mean_stability": 0.30,
-    "z_q_delta_late_stability": 0.30
+    "z_pa_gap": 0.00,
+    "z_turnout_shape": 1.45,
+    "z_quality_dist_std": 0.45
   }
 }

@@ -271,7 +271,6 @@ def _select_diverse_top(
             "pass_rate",
             "quality_mean",
             "seed_robustness",
-            "moderate_recovery_selector",
             "score_total",
         ]
         if c in pool.columns
@@ -345,7 +344,6 @@ def _pick_representative_run(
             "winner_change_rate_post_burnin",
             "group_turnout_range_mean",
             "puzzle_dominance_share_conflict",
-            "moderate_recovery_strength_run",
         ]
         if c in sub.columns
     ]
@@ -448,10 +446,9 @@ def main() -> None:
     qcw_base = dict(objective.get("quality_component_weights") or {})
     strict = bool(objective.get("strict_completeness", True))
 
-    inferred_primary, inferred_robust = _infer_rules_from_doe_spec(doe_root)
+    inferred_primary, _ = _infer_rules_from_doe_spec(doe_root)
     primary_rule = str(args.primary_rule or inferred_primary)
-    robust_rule = str(args.robust_rule or inferred_robust)
-    req_primary, req_pairs = _required_seed_coverage(doe_root, strict=strict)
+    req_primary, _ = _required_seed_coverage(doe_root, strict=strict)
 
     gated = apply_hard_gates(
         run_features,
@@ -502,17 +499,13 @@ def main() -> None:
         scores = score_designs(
             gated,
             primary_rule_name=primary_rule,
-            robust_rule_name=robust_rule,
             weights=w,
             stage_weights=sw,
             required_primary_runs=req_primary,
-            required_matched_seed_pairs=req_pairs,
             min_winner_entropy_norm=float(thr["min_winner_entropy_norm"]),
             min_competitive_step_share=float(thr["min_competitive_step_share"]),
             puzzle_dominance_share_score_low=float(thr["puzzle_dominance_share_score_low"]),
             puzzle_dominance_share_score_high=float(thr["puzzle_dominance_share_score_high"]),
-            moderate_selector_quality_gate_zero_at=float(thr["moderate_selector_quality_gate_zero_at"]),
-            moderate_selector_quality_gate_good_min=float(thr["moderate_selector_quality_gate_good_min"]),
             turnout_start_score_low=float(thr["turnout_start_score_low"]),
             turnout_start_score_high=float(thr["turnout_start_score_high"]),
             turnout_end_score_low=float(thr["turnout_end_score_low"]),
@@ -523,10 +516,6 @@ def main() -> None:
             turnout_decline_score_zero_at=float(thr["turnout_decline_score_zero_at"]),
             turnout_outside_band_share_good_max=float(thr["turnout_outside_band_share_good_max"]),
             turnout_outside_band_share_zero_at=float(thr["turnout_outside_band_share_zero_at"]),
-            participation_q_delta_mean_abs_good_max=float(thr["participation_q_delta_mean_abs_good_max"]),
-            participation_q_delta_mean_abs_zero_at=float(thr["participation_q_delta_mean_abs_zero_at"]),
-            participation_q_delta_late_mean_abs_good_max=float(thr["participation_q_delta_late_mean_abs_good_max"]),
-            participation_q_delta_late_mean_abs_zero_at=float(thr["participation_q_delta_late_mean_abs_zero_at"]),
             quality_component_weights=qcw,
         )
         scores = scores.reset_index(drop=True)
@@ -577,7 +566,6 @@ def main() -> None:
                     "pass_rate": float(drow["pass_rate"]),
                     "quality_mean": float(drow["quality_mean"]),
                     "seed_robustness": float(drow["seed_robustness"]),
-                    "moderate_recovery_selector": float(drow.get("moderate_recovery_selector", 0.0)),
                     "run_dir": str(run_dir),
                     "summary_pdf_path": str(pdf_path),
                     "human_verdict": "",
@@ -606,7 +594,6 @@ def main() -> None:
                 "summary_mode": str(args.summary_mode),
                 "summary_profile": str(args.summary_profile),
                 "primary_rule": str(primary_rule),
-                "robust_rule": str(robust_rule),
             },
             indent=2,
         ),

@@ -21,21 +21,19 @@ def _resolve_default_doe_root() -> Path:
     return candidates[-1]
 
 
-def _infer_rules_from_doe_spec(root: Path) -> tuple[str, str]:
+def _infer_primary_rule_from_doe_spec(root: Path) -> str:
     spec_path = root / "doe_spec.json"
     default_primary = "approval"
-    default_robust = "utilitarian"
     if not spec_path.exists():
-        return default_primary, default_robust
+        return default_primary
     try:
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        return default_primary, default_robust
+        return default_primary
     if not isinstance(spec, dict):
-        return default_primary, default_robust
+        return default_primary
     primary = str(spec.get("primary_rule_name", default_primary) or default_primary)
-    robust = str(spec.get("robust_rule_name", default_robust) or default_robust)
-    return primary, robust
+    return primary
 
 
 def main() -> None:
@@ -48,12 +46,6 @@ def main() -> None:
         type=str,
         default=None,
         help="Primary rule folder name (without 'rule_'). Default: infer from doe_spec.json, fallback 'approval'.",
-    )
-    parser.add_argument(
-        "--robust-rule",
-        type=str,
-        default=None,
-        help="Robustness rule folder name (without 'rule_'). Default: infer from doe_spec.json, fallback 'utilitarian'.",
     )
     parser.add_argument(
         "--objective-config",
@@ -106,22 +98,20 @@ def main() -> None:
     args = parser.parse_args()
 
     root = _resolve_default_doe_root() if args.doe_root is None else Path(args.doe_root)
-    inferred_primary, inferred_robust = _infer_rules_from_doe_spec(root)
+    inferred_primary = _infer_primary_rule_from_doe_spec(root)
     primary_rule = str(args.primary_rule or inferred_primary)
-    robust_rule = str(args.robust_rule or inferred_robust)
     out = analyze_doe_root(
         root,
         out_dir=args.out_dir,
         burn_in_steps=int(args.burn_in_steps),
         primary_rule_name=primary_rule,
-        robust_rule_name=robust_rule,
         objective_config_path=Path(args.objective_config) if args.objective_config else None,
         strict_completeness=(
             False if bool(args.allow_incomplete_designs) else None
         ),
     )
     print(f"DOE root: {root}")
-    print(f"Rules: primary={primary_rule}, robust={robust_rule}")
+    print(f"Rule: primary={primary_rule}")
     print(f"Wrote: {out['run_features_csv']}")
     print(f"Wrote: {out['design_scores_csv']}")
     print(f"Wrote: {out['selection_spec_json']}")

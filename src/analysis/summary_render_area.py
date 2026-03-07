@@ -23,7 +23,7 @@ from src.analysis.summary_series import (
 )
 from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
-from src.utils.social_welfare_functions import approval_voting, borda_rule, majority_rule, random_rule, schulze_rule, utilitarian_rule
+from src.utils.social_welfare_functions import approval_voting, borda_rule, majority_rule, schulze_rule, utilitarian_rule
 from src.viz.color_palette import COLORS as SIM_COLORS
 from src.viz.group_palette import get_group_color
 
@@ -330,6 +330,8 @@ def _render_area_detail_pdf(
             )
 
         # Page 3: vote-mode alignment diagnostics (with support/coverage context).
+        # Render now, append as last page later.
+        deferred_vote_mode_alignment_fig = None
         fig2m, axes2m = plt.subplots(
             3,
             1,
@@ -445,9 +447,7 @@ def _render_area_detail_pdf(
             a.set_xlabel("step")
         fig2m.suptitle(suptitle, fontsize=11)
         fig2m.tight_layout()
-        if render_profile.area_vote_mode_alignment_page:
-            pdf.savefig(fig2m, dpi=140)
-        plt.close(fig2m)
+        deferred_vote_mode_alignment_fig = fig2m
 
         # Page 4: group puzzle opportunity alignment + compact divergence diagnostics.
         fig2g, axes2g = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
@@ -765,6 +765,12 @@ def _render_area_detail_pdf(
         if render_profile.area_dist_to_ref_page:
             pdf.savefig(fig3, dpi=140)
         plt.close(fig3)
+
+        # Keep this diagnostics page as the final page in the area PDF packet.
+        if deferred_vote_mode_alignment_fig is not None:
+            if render_profile.area_vote_mode_alignment_page:
+                pdf.savefig(deferred_vote_mode_alignment_fig, dpi=140)
+            plt.close(deferred_vote_mode_alignment_fig)
 
 def _render_area_group_pages(
     *,
@@ -1363,8 +1369,9 @@ def _compute_area_power_direction_orderings(
         return []
     pref_table = np.vstack(pref_rows)
 
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
-    rule_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze", "Random"]
+    # Keep this panel deterministic and interpretable: exclude Random baseline.
+    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
+    rule_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze"]
     run_seed = int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0)
     out: list[dict[str, Any]] = []
     for idx, (fn, name) in enumerate(zip(rule_fns, rule_names)):

@@ -32,12 +32,12 @@ def test_build_doe_review_bundle_writes_bundle_artifacts(tmp_path: Path) -> None
 
     design_scores = pd.DataFrame(
         [
-            {"design_id": 0, "score_total": 0.92, "pass_rate": 1.00, "quality_mean": 0.77, "seed_robustness": 0.80, "discriminability": 0.71},
-            {"design_id": 1, "score_total": 0.84, "pass_rate": 0.95, "quality_mean": 0.68, "seed_robustness": 0.72, "discriminability": 0.64},
-            {"design_id": 2, "score_total": 0.51, "pass_rate": 0.65, "quality_mean": 0.42, "seed_robustness": 0.35, "discriminability": 0.31},
-            {"design_id": 3, "score_total": 0.44, "pass_rate": 0.55, "quality_mean": 0.37, "seed_robustness": 0.30, "discriminability": 0.28},
-            {"design_id": 4, "score_total": 0.18, "pass_rate": 0.20, "quality_mean": 0.14, "seed_robustness": 0.11, "discriminability": 0.09},
-            {"design_id": 5, "score_total": 0.07, "pass_rate": 0.00, "quality_mean": 0.05, "seed_robustness": 0.03, "discriminability": 0.02},
+            {"design_id": 0, "score_total": 0.92, "pass_rate": 1.00, "quality_mean": 0.77, "seed_robustness": 0.80},
+            {"design_id": 1, "score_total": 0.84, "pass_rate": 0.95, "quality_mean": 0.68, "seed_robustness": 0.72},
+            {"design_id": 2, "score_total": 0.51, "pass_rate": 0.65, "quality_mean": 0.42, "seed_robustness": 0.35},
+            {"design_id": 3, "score_total": 0.44, "pass_rate": 0.55, "quality_mean": 0.37, "seed_robustness": 0.30},
+            {"design_id": 4, "score_total": 0.18, "pass_rate": 0.20, "quality_mean": 0.14, "seed_robustness": 0.11},
+            {"design_id": 5, "score_total": 0.07, "pass_rate": 0.00, "quality_mean": 0.05, "seed_robustness": 0.03},
         ]
     )
     design_scores.to_csv(doe_root / "doe_design_scores.csv", index=False)
@@ -123,7 +123,6 @@ def test_build_doe_review_bundle_falls_back_when_design_scores_are_empty(tmp_pat
             "quality_mean",
             "quality_std",
             "seed_robustness",
-            "discriminability",
             "score_total",
         ]
     ).to_csv(doe_root / "doe_design_scores.csv", index=False)

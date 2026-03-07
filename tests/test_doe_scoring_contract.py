@@ -43,11 +43,6 @@ def test_compute_run_features_from_tables_contract() -> None:
     assert f["winner_changes_post_burnin"] == 2
     assert f["roll3_group_turnout_range_max"] > 0.0
     assert f["roll20_group_turnout_range_max"] == 0.0
-    assert f["roll10_dist_std_mean"] == 0.0
-    assert f["roll10_winner_change_rate"] == 0.0
-    assert f["roll10_turnout_slope_abs_mean"] == 0.0
-    assert f["roll10_group_sync_index"] == 0.0
-    assert -1.0 <= f["lag1_group_signal_turnout_response_corr"] <= 1.0
     assert 0.0 <= f["winner_entropy_norm"] <= 1.0
     assert f["dist_nonzero_share"] > 0.0
     assert f["turnout_std"] > 0.0
@@ -168,7 +163,6 @@ def test_apply_hard_gates_contract() -> None:
         runs,
         max_all_abstain_stretch=20,
         min_winner_changes_post_burnin=3,
-        max_winner_changes_post_burnin=100,
         min_group_turnout_range_mean=0.03,
         min_roll3_group_turnout_range_max=0.3,
         min_roll20_group_turnout_range_max=0.3,
@@ -213,7 +207,6 @@ def test_apply_hard_gates_lockin_is_hard_blocker() -> None:
         runs,
         max_all_abstain_stretch=10,
         min_winner_changes_post_burnin=2,
-        max_winner_changes_post_burnin=120,
         min_group_turnout_range_mean=0.03,
         min_roll3_group_turnout_range_max=0.3,
         min_roll20_group_turnout_range_max=0.3,
@@ -257,7 +250,6 @@ def test_apply_hard_gates_requires_roll3_and_roll20() -> None:
         runs,
         max_all_abstain_stretch=10,
         min_winner_changes_post_burnin=3,
-        max_winner_changes_post_burnin=120,
         min_group_turnout_range_mean=0.03,
         min_roll3_group_turnout_range_max=0.3,
         min_roll20_group_turnout_range_max=0.1,
@@ -402,8 +394,8 @@ def test_score_designs_optional_metric_diagnostics_are_explicit() -> None:
 
     _, meta = score_designs(runs, return_meta=True)
     diag = meta["optional_metric_diagnostics"]
-    assert "participation_q_delta_mean_abs" in diag["missing_optional_columns"]
-    assert int(diag["optional_na_counts"]["participation_q_delta_mean_abs"]) == 2
+    assert "participant_share_max_abs_drift_20" in diag["missing_optional_columns"]
+    assert int(diag["optional_na_counts"]["participant_share_max_abs_drift_20"]) == 2
 
 
 def _write_run_tables(run_dir: Path, *, participants_scale: float, dist_scale: float, delta_rel_amp: float = 0.2) -> None:
@@ -452,7 +444,6 @@ def test_analyze_doe_root_and_score_designs(tmp_path: Path) -> None:
         thresholds={
             "max_all_abstain_stretch": 999.0,
             "min_winner_changes_post_burnin": 0.0,
-            "max_winner_changes_post_burnin": 999.0,
             "min_group_turnout_range_mean": 0.0,
             "min_roll3_group_turnout_range_max": 0.0,
             "min_roll20_group_turnout_range_max": 0.0,
@@ -501,13 +492,13 @@ def test_load_selection_objective_contract(tmp_path: Path) -> None:
     p = tmp_path / "objective.json"
     p.write_text(
         json.dumps(
-            {
-                "version": "v1",
-                "thresholds": {"max_all_abstain_stretch": 7.0},
-                "weights": {"quality_mean": 0.5, "discriminability": 0.3, "seed_robustness": 0.2},
-                "stage_weights": {"viability": 0.7, "quality_bundle": 0.3},
-                "strict_completeness": False,
-            }
+                {
+                    "version": "v1",
+                    "thresholds": {"max_all_abstain_stretch": 7.0},
+                    "weights": {"quality_mean": 0.5, "seed_robustness": 0.5},
+                    "stage_weights": {"viability": 0.7, "quality_bundle": 0.3},
+                    "strict_completeness": False,
+                }
         ),
         encoding="utf-8",
     )
@@ -525,28 +516,27 @@ def test_analyze_doe_root_reads_objective_contract(tmp_path: Path) -> None:
     objective = tmp_path / "objective.json"
     objective.write_text(
         json.dumps(
-            {
-                "version": "v1",
-                "thresholds": {
-                    "max_all_abstain_stretch": 999.0,
-                    "min_winner_changes_post_burnin": 0.0,
-                    "max_winner_changes_post_burnin": 999.0,
-                    "min_group_turnout_range_mean": 0.0,
-                    "min_roll3_group_turnout_range_max": 0.0,
-                    "min_roll20_group_turnout_range_max": 0.0,
+                {
+                    "version": "v1",
+                    "thresholds": {
+                        "max_all_abstain_stretch": 999.0,
+                        "min_winner_changes_post_burnin": 0.0,
+                        "min_group_turnout_range_mean": 0.0,
+                        "min_roll3_group_turnout_range_max": 0.0,
+                        "min_roll20_group_turnout_range_max": 0.0,
                     "min_turnout_std": 0.0,
                     "min_gini_std": 0.0,
                     "min_dist_std": 0.0,
                     "min_winner_entropy_norm": 0.0,
                     "min_dist_nonzero_share": 0.0,
-                    "min_competitive_step_share": 0.0,
-                    "min_mean_turnout": 0.0,
-                    "max_mean_turnout": 100.0,
-                },
-                "weights": {"quality_mean": 0.45, "discriminability": 0.35, "seed_robustness": 0.2},
-                "stage_weights": {"viability": 0.6, "quality_bundle": 0.4},
-                "strict_completeness": False,
-            }
+                        "min_competitive_step_share": 0.0,
+                        "min_mean_turnout": 0.0,
+                        "max_mean_turnout": 100.0,
+                    },
+                    "weights": {"quality_mean": 0.45, "seed_robustness": 0.55},
+                    "stage_weights": {"viability": 0.6, "quality_bundle": 0.4},
+                    "strict_completeness": False,
+                }
         ),
         encoding="utf-8",
     )
@@ -704,7 +694,6 @@ def test_analyze_doe_root_strict_completeness_filters_incomplete_designs(tmp_pat
         thresholds={
             "max_all_abstain_stretch": 999.0,
             "min_winner_changes_post_burnin": 0.0,
-            "max_winner_changes_post_burnin": 999.0,
             "min_group_turnout_range_mean": 0.0,
             "min_roll3_group_turnout_range_max": 0.0,
             "min_roll20_group_turnout_range_max": 0.0,
