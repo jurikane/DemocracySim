@@ -34,7 +34,7 @@ def test_resolve_debug_profile_single_area_keeps_area_core_and_group_diagnostics
     assert not profile.global_colors_and_grids
     assert profile.area_core_page
     assert profile.area_puzzle_page
-    assert profile.area_vote_mode_alignment_page
+    assert not profile.area_vote_mode_alignment_page
     assert profile.area_group_opportunity_page
     assert profile.area_puzzle_gate_page
     assert profile.area_group_diagnostics_pages

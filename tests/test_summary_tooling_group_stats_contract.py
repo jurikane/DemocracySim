@@ -156,13 +156,13 @@ def test_build_area_group_series_learning_signal_diagnostics() -> None:
     assert abs(float(row_g0["group_mean_participation_q_update_proxy"]) - 0.06) < 1e-6
     assert abs(float(row_g1["group_mean_participation_q_update_proxy"]) - 0.05) < 1e-6
     assert abs(float(row_g0["altruistic_voters_mean_dissatisfaction_signal"]) - 0.03) < 1e-6
-    assert pd.isna(row_g0["non_altruistic_voters_mean_dissatisfaction_signal"])
+    assert pd.isna(row_g0["self_regarding_voters_mean_dissatisfaction_signal"])
     assert pd.isna(row_g1["altruistic_voters_mean_dissatisfaction_signal"])
-    assert abs(float(row_g1["non_altruistic_voters_mean_dissatisfaction_signal"]) - (-0.04)) < 1e-6
+    assert abs(float(row_g1["self_regarding_voters_mean_dissatisfaction_signal"]) - (-0.04)) < 1e-6
     assert abs(float(row_g0["altruistic_voters_mean_altruism_update_proxy"]) - 0.03) < 1e-6
-    assert pd.isna(row_g0["non_altruistic_voters_mean_altruism_update_proxy"])
+    assert pd.isna(row_g0["self_regarding_voters_mean_altruism_update_proxy"])
     assert pd.isna(row_g1["altruistic_voters_mean_altruism_update_proxy"])
-    assert abs(float(row_g1["non_altruistic_voters_mean_altruism_update_proxy"]) - (-0.04)) < 1e-6
+    assert abs(float(row_g1["self_regarding_voters_mean_altruism_update_proxy"]) - (-0.04)) < 1e-6
     assert pd.isna(row_g0["vote_mode_switch_share"])
     assert pd.isna(row_g1["vote_mode_switch_share"])
 
@@ -196,12 +196,12 @@ def test_build_area_group_series_vote_mode_switch_share() -> None:
     row_t2 = out[(out["step"] == 2) & (out["area_id"] == 0) & (out["group_idx"] == 0)].iloc[0]
     assert abs(float(row_t1["vote_mode_switch_share"]) - 0.0) < 1e-6
     assert abs(float(row_t1["vote_mode_switch_from_altruistic_share"]) - 0.0) < 1e-6
-    assert abs(float(row_t1["vote_mode_switch_from_non_altruistic_share"]) - 0.0) < 1e-6
+    assert abs(float(row_t1["vote_mode_switch_from_self_regarding_share"]) - 0.0) < 1e-6
     assert pd.isna(row_t1["participation_switch_to_abstain_share"])
     # Denominator is all participants at step 2 (3 participants: 0,1,2).
     # agent0 switched (True->False), agent1 stayed False, agent2 has no previous vote-mode.
     assert abs(float(row_t2["vote_mode_switch_share"]) - (1.0 / 3.0)) < 1e-6
     assert abs(float(row_t2["vote_mode_switch_from_altruistic_share"]) - (1.0 / 3.0)) < 1e-6
-    assert abs(float(row_t2["vote_mode_switch_from_non_altruistic_share"]) - 0.0) < 1e-6
+    assert abs(float(row_t2["vote_mode_switch_from_self_regarding_share"]) - 0.0) < 1e-6
     # no agent switched from participating to abstaining at t2.
     assert abs(float(row_t2["participation_switch_to_abstain_share"]) - 0.0) < 1e-6

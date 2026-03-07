@@ -656,14 +656,14 @@ def _build_area_series(
     else:
         for c in (
             "altruistic_rank1_match_puzzle_share",
-            "non_altruistic_rank1_match_puzzle_share",
+            "self_regarding_rank1_match_puzzle_share",
             "altruistic_rank1_match_outcome_share",
-            "non_altruistic_rank1_match_outcome_share",
+            "self_regarding_rank1_match_outcome_share",
             "altruistic_votes_count",
-            "non_altruistic_votes_count",
+            "self_regarding_votes_count",
             "vote_count_total",
             "altruistic_vote_share",
-            "non_altruistic_vote_share",
+            "self_regarding_vote_share",
         ):
             a[c] = np.float32(np.nan)
 
@@ -702,14 +702,14 @@ def _compute_area_vote_mode_alignment_series(
                 "step",
                 "area_id",
                 "altruistic_rank1_match_puzzle_share",
-                "non_altruistic_rank1_match_puzzle_share",
+                "self_regarding_rank1_match_puzzle_share",
                 "altruistic_rank1_match_outcome_share",
-                "non_altruistic_rank1_match_outcome_share",
+                "self_regarding_rank1_match_outcome_share",
                 "altruistic_votes_count",
-                "non_altruistic_votes_count",
+                "self_regarding_votes_count",
                 "vote_count_total",
                 "altruistic_vote_share",
-                "non_altruistic_vote_share",
+                "self_regarding_vote_share",
             ]
         )
     req_vote = {"step", "area_id", "agent_id", "rank_1_option_id", "voted_altruistically"}
@@ -780,7 +780,7 @@ def _compute_area_vote_mode_alignment_series(
         row: dict[str, Any] = {"step": int(step), "area_id": int(area_id)}
         total_votes = int(len(block))
         row["vote_count_total"] = int(total_votes)
-        for mode_val, prefix in ((True, "altruistic"), (False, "non_altruistic")):
+        for mode_val, prefix in ((True, "altruistic"), (False, "self_regarding")):
             m = block[block["voted_altruistically"] == mode_val]
             mode_count = int(len(m))
             row[f"{prefix}_votes_count"] = int(mode_count)
@@ -850,7 +850,7 @@ def _build_area_group_series(
         "residents",
         "eligible",
         "participants",
-        "non_altruistic_voters",
+        "self_regarding_voters",
         "turnout",
         "mean_assets",
         "mean_dissatisfaction",
@@ -884,7 +884,7 @@ def _build_area_group_series(
         "participants_mean_participation_q_delta",
         "abstainers_mean_participation_q_delta",
         "altruistic_voters_mean_participation_q_delta",
-        "non_altruistic_voters_mean_participation_q_delta",
+        "self_regarding_voters_mean_participation_q_delta",
         "group_mean_participation_p_delta",
         "group_std_q_participation",
         "group_std_participation_probability",
@@ -896,16 +896,16 @@ def _build_area_group_series(
         "participants_mean_participation_q_update_proxy",
         "abstainers_mean_participation_q_update_proxy",
         "altruistic_voters_mean_participation_q_update_proxy",
-        "non_altruistic_voters_mean_participation_q_update_proxy",
+        "self_regarding_voters_mean_participation_q_update_proxy",
         "altruistic_voters_mean_dissatisfaction_signal",
-        "non_altruistic_voters_mean_dissatisfaction_signal",
+        "self_regarding_voters_mean_dissatisfaction_signal",
         "altruistic_voters_mean_altruism_delta",
-        "non_altruistic_voters_mean_altruism_delta",
+        "self_regarding_voters_mean_altruism_delta",
         "altruistic_voters_mean_altruism_update_proxy",
-        "non_altruistic_voters_mean_altruism_update_proxy",
+        "self_regarding_voters_mean_altruism_update_proxy",
         "vote_mode_switch_share",
         "vote_mode_switch_from_altruistic_share",
-        "vote_mode_switch_from_non_altruistic_share",
+        "vote_mode_switch_from_self_regarding_share",
         "participation_switch_to_abstain_share",
     ]
     if not area_agent_ids:
@@ -1037,7 +1037,7 @@ def _build_area_group_series(
                 "area_id",
                 "personality_group_idx",
                 "participants",
-                "non_altruistic_voters",
+                "self_regarding_voters",
             ]
         )
     else:
@@ -1052,14 +1052,14 @@ def _build_area_group_series(
         v = v.merge(ag, on="agent_id", how="left")
         v = v.dropna(subset=["personality_group_idx"])
         if has_vote_mode:
-            v["non_altruistic_voters"] = (v["voted_altruistically"] == False).astype("int32")
+            v["self_regarding_voters"] = (v["voted_altruistically"] == False).astype("int32")
         else:
-            v["non_altruistic_voters"] = 0
+            v["self_regarding_voters"] = 0
         participants = (
             v.groupby(["step", "area_id", "personality_group_idx"], sort=True, as_index=False)
             .agg(
                 participants=("agent_id", "nunique"),
-                non_altruistic_voters=("non_altruistic_voters", "sum"),
+                self_regarding_voters=("self_regarding_voters", "sum"),
             )
         )
 
@@ -1069,7 +1069,7 @@ def _build_area_group_series(
         how="left",
     )
     out["participants"] = out["participants"].fillna(0).astype("int32")
-    out["non_altruistic_voters"] = out["non_altruistic_voters"].fillna(0).astype("int32")
+    out["self_regarding_voters"] = out["self_regarding_voters"].fillna(0).astype("int32")
     out["turnout"] = np.where(
         out["residents"].to_numpy(dtype=float) > 0.0,
         (out["participants"].to_numpy(dtype=float) / out["residents"].to_numpy(dtype=float)) * 100.0,
@@ -1448,7 +1448,7 @@ def _build_area_group_series(
                 .mean()
                 .rename(
                     columns={
-                        "dissatisfaction_signal": "non_altruistic_voters_mean_dissatisfaction_signal"
+                        "dissatisfaction_signal": "self_regarding_voters_mean_dissatisfaction_signal"
                     }
                 )
             )
@@ -1487,7 +1487,7 @@ def _build_area_group_series(
                 .mean()
                 .rename(
                     columns={
-                        "participation_q_update_proxy": "non_altruistic_voters_mean_participation_q_update_proxy"
+                        "participation_q_update_proxy": "self_regarding_voters_mean_participation_q_update_proxy"
                     }
                 )
             )
@@ -1507,7 +1507,7 @@ def _build_area_group_series(
                 .mean()
                 .rename(
                     columns={
-                        "participation_q_delta": "non_altruistic_voters_mean_participation_q_delta"
+                        "participation_q_delta": "self_regarding_voters_mean_participation_q_delta"
                     }
                 )
             )
@@ -1533,7 +1533,7 @@ def _build_area_group_series(
                 v_mode[v_mode["voted_altruistically"] == False]
                 .groupby(["step", "area_id", "personality_group_idx"], sort=False, as_index=False)["altruism_delta"]
                 .mean()
-                .rename(columns={"altruism_delta": "non_altruistic_voters_mean_altruism_delta"})
+                .rename(columns={"altruism_delta": "self_regarding_voters_mean_altruism_delta"})
             )
             v_non_a = (
                 v_mode[v_mode["voted_altruistically"] == False]
@@ -1543,7 +1543,7 @@ def _build_area_group_series(
                 .mean()
                 .rename(
                     columns={
-                        "altruism_update_proxy": "non_altruistic_voters_mean_altruism_update_proxy"
+                        "altruism_update_proxy": "self_regarding_voters_mean_altruism_update_proxy"
                     }
                 )
             )
@@ -1567,7 +1567,7 @@ def _build_area_group_series(
                     switch_block["prev_voted_altruistically"].astype(bool)
                     & (~switch_block["voted_altruistically"].astype(bool))
                 ).astype(int)
-                switch_block["switched_from_non_altruistic"] = (
+                switch_block["switched_from_self_regarding"] = (
                     (~switch_block["prev_voted_altruistically"].astype(bool))
                     & switch_block["voted_altruistically"].astype(bool)
                 ).astype(int)
@@ -1576,25 +1576,25 @@ def _build_area_group_series(
                     .agg(
                         switched=("switched", "sum"),
                         switched_from_altruistic=("switched_from_altruistic", "sum"),
-                        switched_from_non_altruistic=("switched_from_non_altruistic", "sum"),
+                        switched_from_self_regarding=("switched_from_self_regarding", "sum"),
                     )
                 )
                 v_switch = current_counts.merge(
                     switch_counts,
                     on=["step", "area_id", "personality_group_idx"],
                     how="left",
-                ).fillna({"switched": 0, "switched_from_altruistic": 0, "switched_from_non_altruistic": 0})
+                ).fillna({"switched": 0, "switched_from_altruistic": 0, "switched_from_self_regarding": 0})
                 n = v_switch["current_participants"].to_numpy(dtype=float)
                 sw = v_switch["switched"].to_numpy(dtype=float)
                 sw_a = v_switch["switched_from_altruistic"].to_numpy(dtype=float)
-                sw_n = v_switch["switched_from_non_altruistic"].to_numpy(dtype=float)
+                sw_n = v_switch["switched_from_self_regarding"].to_numpy(dtype=float)
                 v_switch["vote_mode_switch_share"] = np.divide(
                     sw, n, out=np.full_like(sw, np.nan), where=n > 0.0
                 )
                 v_switch["vote_mode_switch_from_altruistic_share"] = np.divide(
                     sw_a, n, out=np.full_like(sw_a, np.nan), where=n > 0.0
                 )
-                v_switch["vote_mode_switch_from_non_altruistic_share"] = np.divide(
+                v_switch["vote_mode_switch_from_self_regarding_share"] = np.divide(
                     sw_n, n, out=np.full_like(sw_n, np.nan), where=n > 0.0
                 )
                 v_switch = v_switch[
@@ -1604,14 +1604,14 @@ def _build_area_group_series(
                         "personality_group_idx",
                         "vote_mode_switch_share",
                         "vote_mode_switch_from_altruistic_share",
-                        "vote_mode_switch_from_non_altruistic_share",
+                        "vote_mode_switch_from_self_regarding_share",
                     ]
                 ]
             else:
                 v_switch = current_counts.copy()
                 v_switch["vote_mode_switch_share"] = np.nan
                 v_switch["vote_mode_switch_from_altruistic_share"] = np.nan
-                v_switch["vote_mode_switch_from_non_altruistic_share"] = np.nan
+                v_switch["vote_mode_switch_from_self_regarding_share"] = np.nan
                 v_switch = v_switch[
                     [
                         "step",
@@ -1619,7 +1619,7 @@ def _build_area_group_series(
                         "personality_group_idx",
                         "vote_mode_switch_share",
                         "vote_mode_switch_from_altruistic_share",
-                        "vote_mode_switch_from_non_altruistic_share",
+                        "vote_mode_switch_from_self_regarding_share",
                     ]
                 ]
             out = out.merge(v_alt, on=["step", "area_id", "personality_group_idx"], how="left")
@@ -1661,7 +1661,7 @@ def _build_area_group_series(
         "participants_mean_participation_q_delta",
         "abstainers_mean_participation_q_delta",
         "altruistic_voters_mean_participation_q_delta",
-        "non_altruistic_voters_mean_participation_q_delta",
+        "self_regarding_voters_mean_participation_q_delta",
         "group_mean_participation_p_delta",
         "participants_mean_participation_p_delta",
         "abstainers_mean_participation_p_delta",
@@ -1669,16 +1669,16 @@ def _build_area_group_series(
         "participants_mean_participation_q_update_proxy",
         "abstainers_mean_participation_q_update_proxy",
         "altruistic_voters_mean_participation_q_update_proxy",
-        "non_altruistic_voters_mean_participation_q_update_proxy",
+        "self_regarding_voters_mean_participation_q_update_proxy",
         "altruistic_voters_mean_dissatisfaction_signal",
-        "non_altruistic_voters_mean_dissatisfaction_signal",
+        "self_regarding_voters_mean_dissatisfaction_signal",
         "altruistic_voters_mean_altruism_delta",
-        "non_altruistic_voters_mean_altruism_delta",
+        "self_regarding_voters_mean_altruism_delta",
         "altruistic_voters_mean_altruism_update_proxy",
-        "non_altruistic_voters_mean_altruism_update_proxy",
+        "self_regarding_voters_mean_altruism_update_proxy",
         "vote_mode_switch_share",
         "vote_mode_switch_from_altruistic_share",
-        "vote_mode_switch_from_non_altruistic_share",
+        "vote_mode_switch_from_self_regarding_share",
         "participation_switch_to_abstain_share",
         "group_std_q_participation",
         "group_std_participation_probability",
@@ -1733,7 +1733,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             global_distance_metrics=True,
             area_core_page=True,
             area_puzzle_page=True,
-            area_vote_mode_alignment_page=True,
+            area_vote_mode_alignment_page=False,
             area_group_opportunity_page=True,
             area_puzzle_gate_page=False,
             area_group_diagnostics_pages=True,
@@ -1754,7 +1754,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             global_distance_metrics=True,
             area_core_page=True,
             area_puzzle_page=True,
-            area_vote_mode_alignment_page=True,
+            area_vote_mode_alignment_page=False,
             area_group_opportunity_page=True,
             area_puzzle_gate_page=True,
             area_group_diagnostics_pages=True,
@@ -1774,7 +1774,7 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
         global_distance_metrics=True,
         area_core_page=True,
         area_puzzle_page=True,
-        area_vote_mode_alignment_page=True,
+        area_vote_mode_alignment_page=False,
         area_group_opportunity_page=True,
         area_puzzle_gate_page=False,
         area_group_diagnostics_pages=True,
@@ -2737,7 +2737,7 @@ def _render_area_detail_pdf(
             area_series["quality_distance"].to_numpy(dtype=float),
             color="black",
             linestyle="--",
-            linewidth=1.8,
+            linewidth=1.0,
             zorder=4,
             label=f"quality_distance ({q_source})",
         )
@@ -2836,7 +2836,7 @@ def _render_area_detail_pdf(
             area_series.get("puzzle_distance", pd.Series(np.nan, index=area_series.index)).to_numpy(dtype=float),
             color="black",
             linestyle="--",
-            linewidth=1.6,
+            linewidth=1.3,
             label="outcome↔puzzle",
             zorder=3,
         )
@@ -2845,7 +2845,7 @@ def _render_area_detail_pdf(
                 x,
                 dist_decomp["dist_outcome_power"].astype(float),
                 color="tab:red",
-                linewidth=1.4,
+                linewidth=1.3,
                 label="outcome↔power",
                 zorder=3,
             )
@@ -2854,7 +2854,7 @@ def _render_area_detail_pdf(
                 puzzle_threshold,
                 color="#4a4a4a",
                 linestyle=":",
-                linewidth=1.4,
+                linewidth=1.5,
                 label="threshold",
                 zorder=2,
             )
@@ -2900,7 +2900,7 @@ def _render_area_detail_pdf(
                 0,
                 (
                     ("altruistic_rank1_match_puzzle_share", "altruistic_votes_count", "tab:green", "-", "altruistic -> puzzle"),
-                    ("non_altruistic_rank1_match_puzzle_share", "non_altruistic_votes_count", "tab:red", "--", "non-altruistic -> puzzle"),
+                    ("self_regarding_rank1_match_puzzle_share", "self_regarding_votes_count", "tab:red", "--", "self-regarding -> puzzle"),
                 ),
                 "Rank-1 Match to Puzzle by Vote Mode [% of mode votes]",
             ),
@@ -2908,7 +2908,7 @@ def _render_area_detail_pdf(
                 1,
                 (
                     ("altruistic_rank1_match_outcome_share", "altruistic_votes_count", "tab:green", "-", "altruistic -> elected"),
-                    ("non_altruistic_rank1_match_outcome_share", "non_altruistic_votes_count", "tab:red", "--", "non-altruistic -> elected"),
+                    ("self_regarding_rank1_match_outcome_share", "self_regarding_votes_count", "tab:red", "--", "self-regarding -> elected"),
                 ),
                 "Rank-1 Match to Elected Outcome by Vote Mode [% of mode votes]",
             ),
@@ -2954,7 +2954,7 @@ def _render_area_detail_pdf(
         axm_cov.set_ylabel("% of votes")
         for col, color, label in (
             ("altruistic_vote_share", "tab:green", "altruistic vote share"),
-            ("non_altruistic_vote_share", "tab:red", "non-altruistic vote share"),
+            ("self_regarding_vote_share", "tab:red", "self-regarding vote share"),
         ):
             if col not in area_series.columns:
                 continue
@@ -3082,7 +3082,7 @@ def _render_area_detail_pdf(
         if not area_group_series.empty and groups_sorted:
             steps_g = np.asarray(sorted(int(v) for v in area_group_series["step"].dropna().unique().tolist()), dtype=float)
             part_vals_all = area_group_series["participants"].to_numpy(dtype=float)
-            non_alt_vals_all = area_group_series["non_altruistic_voters"].to_numpy(dtype=float)
+            non_alt_vals_all = area_group_series["self_regarding_voters"].to_numpy(dtype=float)
             non_alt_share_vals = np.full(len(area_group_series), np.nan, dtype=np.float32)
             np.divide(
                 100.0 * non_alt_vals_all,
@@ -3216,12 +3216,7 @@ def _render_area_detail_pdf(
                 eligible=eligible,
                 suptitle=suptitle,
             )
-        if render_profile.area_learning_causal_page and (not area_group_series.empty):
-            _render_area_learning_causal_page(
-                pdf=pdf,
-                area_group_series=area_group_series,
-                suptitle=suptitle,
-            )
+        # Summary packet trim: learning-causal page is intentionally disabled.
 
         # Page 10: gini assets + assets share by group
         fig1, axes1 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
@@ -3351,7 +3346,7 @@ def _render_area_group_pages(
     p_res = pivot("residents")
     p_elig = pivot("eligible")
     p_part = pivot("participants")
-    p_non_alt = pivot("non_altruistic_voters")
+    p_non_alt = pivot("self_regarding_voters")
     p_turn = pivot("turnout")
     p_assets = pivot("mean_assets")
     p_dissat = pivot("mean_dissatisfaction")
@@ -3366,17 +3361,17 @@ def _render_area_group_pages(
     p_gini_assets_within = pivot_optional("group_gini_assets_within")
     p_gini_diss_within = pivot_optional("group_gini_dissatisfaction_within")
     p_alt_a_update = pivot_optional("altruistic_voters_mean_altruism_update_proxy")
-    p_non_alt_a_update = pivot_optional("non_altruistic_voters_mean_altruism_update_proxy")
+    p_non_alt_a_update = pivot_optional("self_regarding_voters_mean_altruism_update_proxy")
     p_alt_a_delta_exact = pivot_optional("altruistic_voters_mean_altruism_delta")
-    p_non_alt_a_delta_exact = pivot_optional("non_altruistic_voters_mean_altruism_delta")
+    p_non_alt_a_delta_exact = pivot_optional("self_regarding_voters_mean_altruism_delta")
     p_mode_switch = pivot_optional("vote_mode_switch_share")
     p_mode_switch_from_alt = pivot_optional("vote_mode_switch_from_altruistic_share")
-    p_mode_switch_from_non_alt = pivot_optional("vote_mode_switch_from_non_altruistic_share")
+    p_mode_switch_from_non_alt = pivot_optional("vote_mode_switch_from_self_regarding_share")
     p_part_to_abs_switch = pivot_optional("participation_switch_to_abstain_share")
     p_alt_dsig = pivot_optional("altruistic_voters_mean_dissatisfaction_signal")
-    p_non_alt_dsig = pivot_optional("non_altruistic_voters_mean_dissatisfaction_signal")
+    p_non_alt_dsig = pivot_optional("self_regarding_voters_mean_dissatisfaction_signal")
 
-    # Page 2: top participants/eligible/non-altruistic; bottom composition share, both with right-side references.
+    # Page 2: top participants/eligible/self-regarding; bottom composition share, both with right-side references.
     fig4 = plt.figure(figsize=(11.69, 8.27))
     gs4 = fig4.add_gridspec(2, 1, height_ratios=[1.0, 1.0])
     top = gs4[0].subgridspec(1, 2, width_ratios=[4.0, 0.15], wspace=0.01)
@@ -3418,15 +3413,7 @@ def _render_area_group_pages(
         color = get_group_color(int(g))
         ax4_left.plot(steps, p_part[g].to_numpy(dtype=float), color=color, linewidth=1.15, label=f"g{g} participants")
         ax4_left.plot(steps, p_elig[g].to_numpy(dtype=float), color=color, linestyle=":", alpha=0.85, linewidth=1.2)
-        ax4_left.plot(
-            steps,
-            p_non_alt[g].to_numpy(dtype=float),
-            color=color,
-            linestyle="--",
-            alpha=0.9,
-            linewidth=1.2,
-        )
-    ax4_left.set_title("Participants (solid) + Eligible (dotted) + Non-altruistic voters (dashed) by Group")
+    ax4_left.set_title("Participants (solid) + Eligible (dotted) by Group")
     ax4_left.set_ylabel("count")
     ax4_left.grid(True, alpha=0.25)
     ax4_left.set_xlabel("step")
@@ -3494,9 +3481,9 @@ def _render_area_group_pages(
     pdf.savefig(fig4, dpi=140)
     plt.close(fig4)
 
-    # Page 3: non-altruistic share among participants by group (top), Turnout by Group (bottom).
+    # Page 3: self-regarding share among participants by group (top), Turnout by Group (bottom).
     fig3, ax3 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    ax3[0].set_title("Non-altruistic Share Among Participants by Group")
+    ax3[0].set_title("Self-regarding Share Among Participants by Group")
     ax3[0].set_ylabel("%")
     for g in groups:
         color = get_group_color(int(g))
@@ -3504,13 +3491,22 @@ def _render_area_group_pages(
         non_alt_vals = p_non_alt[g].to_numpy(dtype=float)
         share = np.zeros_like(part_vals, dtype=float)
         np.divide(non_alt_vals, part_vals, out=share, where=part_vals > 0.0)
+        y = share * 100.0
         ax3[0].plot(
             steps,
-            share * 100.0,
+            y,
             color=color,
             linestyle="-",
-            linewidth=0.9,
-            alpha=0.9,
+            linewidth=0.8,
+            alpha=0.24,
+        )
+        ax3[0].plot(
+            steps,
+            _rolling_mean_nan(y),
+            color=color,
+            linestyle="-",
+            linewidth=1.55,
+            alpha=0.98,
             label=f"g{g}",
         )
     total_participants = p_part.sum(axis=1).to_numpy(dtype=float)
@@ -3522,9 +3518,17 @@ def _render_area_group_pages(
         total_share * 100.0,
         color="black",
         linestyle="--",
+        linewidth=1.0,
+        alpha=0.28,
+    )
+    ax3[0].plot(
+        steps,
+        _rolling_mean_nan(total_share * 100.0),
+        color="black",
+        linestyle="--",
         linewidth=1.4,
-        alpha=0.95,
-        label="total non-altruistic share",
+        alpha=0.98,
+        label="total self-regarding share",
     )
     _set_percent_ylim_visible(ax3[0])
     if groups:
@@ -3543,78 +3547,113 @@ def _render_area_group_pages(
     pdf.savefig(fig3, dpi=140)
     plt.close(fig3)
 
-    # Page 4: top plot = non-altruistic group shares over total non-altruistic participants.
-    fig5, ax5 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    ax5[0].set_title("Non-altruistic Share by Group [% of Total Non-altruistic Participants]")
-    ax5[0].set_ylabel("%")
+    # Page 4: split altruistic/self-regarding diagnostics into three readable panels.
+    fig5, ax5 = plt.subplots(3, 1, figsize=(11.69, 8.27), sharex=True)
+
+    def _set_percent_ylim_adaptive(ax, series_list: list[np.ndarray]) -> None:
+        finite_chunks = []
+        for s in series_list:
+            arr = np.asarray(s, dtype=float).reshape(-1)
+            arr = arr[np.isfinite(arr)]
+            if arr.size > 0:
+                finite_chunks.append(arr)
+        if not finite_chunks:
+            _set_percent_ylim_visible(ax)
+            return
+        vals = np.concatenate(finite_chunks)
+        ymax = float(np.nanmax(vals))
+        if (not np.isfinite(ymax)) or ymax <= 0.0:
+            top = 10.0
+        else:
+            top = min(100.0, max(10.0, ymax * 1.10))
+        ax.set_ylim(-float(_Y_PAD_PERCENT), float(top) + float(_Y_PAD_PERCENT))
+    total_participants = p_part.sum(axis=1).to_numpy(dtype=float)
     total_non_alt = p_non_alt.sum(axis=1).to_numpy(dtype=float)
+    total_alt = np.maximum(0.0, total_participants - total_non_alt)
+    total_residents = p_res.sum(axis=1).to_numpy(dtype=float)
+    finite_res = total_residents[np.isfinite(total_residents) & (total_residents > 0.0)]
+    denom_agents = float(finite_res[0]) if finite_res.size > 0 else float("nan")
+
+    turnout_pct = np.zeros_like(total_participants, dtype=float)
+    non_alt_pct = np.zeros_like(total_non_alt, dtype=float)
+    alt_pct = np.zeros_like(total_alt, dtype=float)
+    if np.isfinite(denom_agents) and denom_agents > 0.0:
+        turnout_pct = 100.0 * (total_participants / denom_agents)
+        non_alt_pct = 100.0 * (total_non_alt / denom_agents)
+        alt_pct = 100.0 * (total_alt / denom_agents)
+
+    ax5[0].set_title("Total Turnout / Altruistic / Self-regarding Voters [% of Area Agents]")
+    ax5[0].set_ylabel("%")
+    ax5[0].plot(steps, turnout_pct, color="black", linewidth=1.5, alpha=0.95, label="total turnout")
+    ax5[0].plot(steps, alt_pct, color="tab:green", linewidth=1.35, alpha=0.95, label="total altruistic")
+    ax5[0].plot(steps, non_alt_pct, color="tab:red", linewidth=1.35, alpha=0.95, label="total self-regarding")
+    _set_percent_ylim_adaptive(ax5[0], [turnout_pct, alt_pct, non_alt_pct])
+    ax5[0].legend(loc="best", fontsize=8)
+
+    ax5[1].set_title("Self-regarding Votes by Group + Total Altruistic Votes [% of Area Agents]")
+    ax5[1].set_ylabel("%")
+    non_alt_group_series: list[np.ndarray] = []
     for g in groups:
         non_alt_vals = p_non_alt[g].to_numpy(dtype=float)
-        share = np.zeros_like(non_alt_vals, dtype=float)
-        np.divide(non_alt_vals, total_non_alt, out=share, where=total_non_alt > 0.0)
-        ax5[0].plot(
+        group_non_alt_pct = np.zeros_like(non_alt_vals, dtype=float)
+        if np.isfinite(denom_agents) and denom_agents > 0.0:
+            group_non_alt_pct = 100.0 * (non_alt_vals / denom_agents)
+        non_alt_group_series.append(group_non_alt_pct)
+        ax5[1].plot(
             steps,
-            share * 100.0,
+            group_non_alt_pct,
             color=get_group_color(int(g)),
-            linewidth=1.6,
-            alpha=0.9,
-            label=f"g{g}",
+            linewidth=1.15,
+            alpha=0.92,
+            label=f"g{g} self-regarding",
         )
-    _set_percent_ylim_visible(ax5[0])
+    ax5[1].plot(
+        steps,
+        alt_pct,
+        color="black",
+        linestyle="--",
+        linewidth=1.35,
+        alpha=0.95,
+        label="total altruistic",
+    )
+    _set_percent_ylim_adaptive(ax5[1], non_alt_group_series + [alt_pct])
     if groups:
-        ax5[0].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
-    ax5[0].grid(True, alpha=0.25)
-    ax5[0].set_xlabel("step")
+        ax5[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups) + 1))
 
-    ax5[1].set_title("Altruistic / Non-altruistic Share by Group [% of Total Participants]")
-    ax5[1].set_ylabel("%")
-    total_participants = p_part.sum(axis=1).to_numpy(dtype=float)
+    ax5[2].set_title("Altruistic Votes by Group [% of Area Agents]")
+    ax5[2].set_ylabel("%")
+    alt_group_series: list[np.ndarray] = []
     for g in groups:
         part_vals = p_part[g].to_numpy(dtype=float)
         non_alt_vals = p_non_alt[g].to_numpy(dtype=float)
         alt_vals = np.maximum(0.0, part_vals - non_alt_vals)
-        share = np.zeros_like(non_alt_vals, dtype=float)
-        np.divide(non_alt_vals, total_participants, out=share, where=total_participants > 0.0)
-        alt_share = np.zeros_like(alt_vals, dtype=float)
-        np.divide(alt_vals, total_participants, out=alt_share, where=total_participants > 0.0)
-        ax5[1].plot(
+        group_alt_pct = np.zeros_like(alt_vals, dtype=float)
+        if np.isfinite(denom_agents) and denom_agents > 0.0:
+            group_alt_pct = 100.0 * (alt_vals / denom_agents)
+        alt_group_series.append(group_alt_pct)
+        ax5[2].plot(
             steps,
-            share * 100.0,
+            group_alt_pct,
             color=get_group_color(int(g)),
-            linewidth=1.6,
-            alpha=0.9,
-            label=f"g{g} non-alt",
+            linewidth=1.15,
+            alpha=0.92,
+            label=f"g{g} altruistic",
         )
-        ax5[1].plot(
-            steps,
-            alt_share * 100.0,
-            color=get_group_color(int(g)),
-            linestyle=":",
-            linewidth=1.25,
-            alpha=0.9,
-            label=f"g{g} alt",
-        )
-    total_non_alt = p_non_alt.sum(axis=1).to_numpy(dtype=float)
-    total_non_alt_share = np.zeros_like(total_non_alt, dtype=float)
-    np.divide(total_non_alt, total_participants, out=total_non_alt_share, where=total_participants > 0.0)
-    ax5[1].plot(
-        steps,
-        total_non_alt_share * 100.0,
-        color="black",
-        linestyle="--",
-        linewidth=1.4,
-        alpha=0.95,
-        label="total non-alt share",
-    )
-    _set_percent_ylim_visible(ax5[1])
+    _set_percent_ylim_adaptive(ax5[2], alt_group_series)
     if groups:
-        ax5[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(6, len(groups) + 1))
-    ax5[1].grid(True, alpha=0.25)
-    ax5[1].set_xlabel("step")
+        ax5[2].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
+
+    for a in ax5:
+        a.grid(True, alpha=0.25)
+        a.set_xlabel("step")
     fig5.suptitle(suptitle + " | Group Diagnostics", fontsize=11)
     fig5.tight_layout()
     pdf.savefig(fig5, dpi=140)
     plt.close(fig5)
+
+    # Summary packet trim: pages after this point are intentionally disabled.
+    # This keeps only the first three group-diagnostics pages in the area PDF.
+    return
 
     # Page 5 (Page A): incentives and costs by group.
     fig6, ax6 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
@@ -3645,10 +3684,9 @@ def _render_area_group_pages(
         ax6[0].text(0.5, 0.5, "Participant/abstainer delta data unavailable", ha="center", va="center")
         ax6[0].set_yticks([])
 
-    ax6[1].set_title("Election Fee Share of Pool by Group (solid) + Fee/Assets (dotted)")
+    ax6[1].set_title("Election Fee Share of Pool by Group")
     ax6[1].set_ylabel("% of fee pool")
-    if p_part_fee is not None and p_part_fee_assets is not None:
-        ax6b = ax6[1].twinx()
+    if p_part_fee is not None:
         group_fee_total = p_part_fee * p_part
         fee_pool_total = group_fee_total.sum(axis=1).to_numpy(dtype=float)
         for g in groups:
@@ -3664,16 +3702,7 @@ def _render_area_group_pages(
                 alpha=0.9,
                 label=f"g{g}",
             )
-            ax6b.plot(
-                steps,
-                p_part_fee_assets[g].to_numpy(dtype=float) * 100.0,
-                color=color,
-                linestyle=":",
-                linewidth=1.8,
-                alpha=0.9,
-            )
         _set_percent_ylim_visible(ax6[1])
-        ax6b.set_ylabel("fee/assets [%]")
         if groups:
             ax6[1].legend(loc="upper center", bbox_to_anchor=(0.5, 1.02), fontsize=7, ncol=min(5, len(groups)))
     else:
@@ -3699,12 +3728,20 @@ def _render_area_group_pages(
         shown_groups = 0
         for g in groups:
             is_small = _group_is_small(int(g))
+            y = p_part_to_abs_switch[g].to_numpy(dtype=float) * 100.0
             ax7.plot(
                 steps,
-                p_part_to_abs_switch[g].to_numpy(dtype=float) * 100.0,
+                y,
                 color=get_group_color(int(g)),
-                linewidth=0.8 if is_small else 1.0,
-                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                linewidth=0.75 if is_small else 0.8,
+                alpha=_group_alpha(int(g), normal=0.24, small=0.06),
+            )
+            ax7.plot(
+                steps,
+                _rolling_mean_nan(y),
+                color=get_group_color(int(g)),
+                linewidth=1.2 if is_small else 1.55,
+                alpha=_group_alpha(int(g), normal=0.98, small=0.18),
                 label=f"g{g}" if not is_small else "_nolegend_",
             )
             if not is_small:
@@ -3811,13 +3848,22 @@ def _render_area_group_pages(
         for g in groups:
             is_small = _group_is_small(int(g))
             color = get_group_color(int(g))
+            y = p_mode_switch[g].to_numpy(dtype=float) * 100.0
             ax9[0].plot(
                 steps,
-                p_mode_switch[g].to_numpy(dtype=float) * 100.0,
+                y,
                 color=color,
-                linewidth=0.9 if is_small else 1.2,
+                linewidth=0.75 if is_small else 0.8,
                 linestyle="-",
-                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                alpha=_group_alpha(int(g), normal=0.24, small=0.06),
+            )
+            ax9[0].plot(
+                steps,
+                _rolling_mean_nan(y),
+                color=color,
+                linewidth=1.2 if is_small else 1.55,
+                linestyle="-",
+                alpha=_group_alpha(int(g), normal=0.98, small=0.18),
                 label=f"g{g}" if not is_small else "_nolegend_",
             )
             if not is_small:
@@ -3846,29 +3892,49 @@ def _render_area_group_pages(
         )
         ax9[0].set_yticks([])
 
-    ax9[1].set_title("Vote-Mode Switch Origins by Group [% of participants: from altruistic / from non-altruistic]")
+    ax9[1].set_title("Vote-Mode Switch Origins by Group [% of participants: from altruistic / from self-regarding]")
     ax9[1].set_ylabel("%")
     if has_switch:
         shown_groups_origins = 0
         for g in groups:
             is_small = _group_is_small(int(g))
             color = get_group_color(int(g))
+            y_from_alt = p_mode_switch_from_alt[g].to_numpy(dtype=float) * 100.0
+            y_from_self = p_mode_switch_from_non_alt[g].to_numpy(dtype=float) * 100.0
             ax9[1].plot(
                 steps,
-                p_mode_switch_from_alt[g].to_numpy(dtype=float) * 100.0,
+                y_from_alt,
                 color=color,
-                linewidth=0.75 if is_small else 0.9,
+                linewidth=0.65 if is_small else 0.75,
                 linestyle="-",
-                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                alpha=_group_alpha(int(g), normal=0.20, small=0.06),
+                label="_nolegend_",
+            )
+            ax9[1].plot(
+                steps,
+                _rolling_mean_nan(y_from_alt),
+                color=color,
+                linewidth=1.0 if is_small else 1.2,
+                linestyle="-",
+                alpha=_group_alpha(int(g), normal=0.98, small=0.18),
                 label=f"g{g}" if not is_small else "_nolegend_",
             )
             ax9[1].plot(
                 steps,
-                p_mode_switch_from_non_alt[g].to_numpy(dtype=float) * 100.0,
+                y_from_self,
                 color=color,
-                linewidth=1.0 if is_small else 1.5,
+                linewidth=0.7 if is_small else 0.85,
                 linestyle=":",
-                alpha=_group_alpha(int(g), normal=0.9, small=0.16),
+                alpha=_group_alpha(int(g), normal=0.20, small=0.06),
+                label="_nolegend_",
+            )
+            ax9[1].plot(
+                steps,
+                _rolling_mean_nan(y_from_self),
+                color=color,
+                linewidth=1.2 if is_small else 1.55,
+                linestyle=":",
+                alpha=_group_alpha(int(g), normal=0.98, small=0.18),
                 label="_nolegend_",
             )
             if not is_small:
@@ -3885,7 +3951,7 @@ def _render_area_group_pages(
             ax9[1].add_artist(group_leg)
             style_handles = [
                 Line2D([0], [0], color="black", linestyle="-", linewidth=0.9, label="from altruistic"),
-                Line2D([0], [0], color="black", linestyle=":", linewidth=1.35, label="from non-altruistic"),
+                Line2D([0], [0], color="black", linestyle=":", linewidth=1.35, label="from self-regarding"),
             ]
             ax9[1].legend(
                 handles=style_handles,
@@ -3918,7 +3984,7 @@ def _render_area_group_pages(
 
     # Page 10: altruism signal + altruism shift proxy.
     fig10, ax10 = plt.subplots(2, 1, figsize=(11.69, 8.27), sharex=True)
-    ax10[0].set_title("Altruism Learning Signal by Group (solid=altruistic voters, dotted=non-altruistic voters)")
+    ax10[0].set_title("Altruism Signal by Group (solid=altruistic voters, dotted=self-regarding voters)")
     ax10[0].set_ylabel("signal (dissatisfaction)")
     has_alt_sig = (
         p_alt_dsig is not None
@@ -3960,7 +4026,7 @@ def _render_area_group_pages(
     alt_shift_is_exact = p_alt_a_delta_exact is not None and p_non_alt_a_delta_exact is not None
     ax10[1].set_title(
         "Altruism Learning Shift by Group "
-        f"({'exact Δa' if alt_shift_is_exact else 'proxy'}; solid=altruistic voters, dashed=non-altruistic voters)"
+        f"({'exact Δa' if alt_shift_is_exact else 'proxy'}; solid=altruistic voters, dashed=self-regarding voters)"
     )
     ax10[1].set_ylabel("Δaltruism" if alt_shift_is_exact else "delta_altruism proxy")
     has_alt_shift = (
