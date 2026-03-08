@@ -69,7 +69,7 @@ def test_doe_inference_cli(tmp_path: Path) -> None:
     cmd = [
         sys.executable,
         "-m",
-        "tools.research.doe_inference",
+        "tools.doe.doe_inference",
         "--doe-root",
         str(root),
         "--bootstrap-reps",

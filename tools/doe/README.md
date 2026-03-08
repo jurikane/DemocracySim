@@ -9,6 +9,7 @@ Utilities for DOE-specific analysis and review workflows.
 - `build_doe_review_bundle.py`: assemble a compact review bundle from DOE outputs.
 - `probe_scoring_dimensions.py`: stress-test scoring dimensions by dominant-weight probing.
 - `recovery_scan.py`: scan run-level artifacts for strict/moderate recovery patterns.
+- `doe_inference.py`: generate DOE inference artifacts (seed effects, nonlinear importance, interactions, CIs, Pareto).
 - `select_balanced_seeds.py`: choose stratified candidate seeds from DOE profile descriptors.
 - `run_sanity_matrix.py`: execute a compact non-DOE sanity scenario matrix.
 

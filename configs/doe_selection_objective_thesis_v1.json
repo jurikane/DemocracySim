@@ -1,5 +1,5 @@
 {
-  "version": "thesis-recovery-v4-no-altruism-bonus",
+  "version": "thesis-v6-no-moderate-selector",
   "strict_completeness": true,
   "thresholds": {
     "min_winner_change_rate_post_burnin": 0.02,

@@ -96,7 +96,7 @@ python -m tools.doe.select_balanced_seeds --config doe.yaml --doe-profile <profi
 ### DOE inference report
 
 ```bash
-python -m tools.research.doe_inference --doe-root data/simulation_output/doe_<timestamp>
+python -m tools.doe.doe_inference --doe-root data/simulation_output/doe_<timestamp>
 ```
 
 ## Output Structure (Headless/DOE)

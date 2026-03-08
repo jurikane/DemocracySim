@@ -406,7 +406,7 @@ def main() -> None:
     ap.add_argument(
         "--objective-config",
         type=Path,
-        default=Path("configs") / "doe_selection_objective_thesis_recovery_v1.json",
+        default=Path("configs") / "doe_selection_objective_thesis_v1.json",
         help="Base objective config used for thresholds/top-level weights.",
     )
     ap.add_argument("--dimensions", type=str, default=None, help="Comma-separated quality keys to probe. Default: all.")

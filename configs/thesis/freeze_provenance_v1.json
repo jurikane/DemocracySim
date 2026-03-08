@@ -1,0 +1,27 @@
+{
+  "version": "freeze_provenance_v1",
+  "generated_at_utc": "2026-03-08T18:05:04+00:00",
+  "git_head": "c936c219fd1b9240dfac94dadf8f02334370599c",
+  "git_dirty": true,
+  "source": {
+    "doe_root": "data/simulation_output/doe_20260302_175623",
+    "doe_profile": "phase3_party_altruism_sharp_local_v1",
+    "selected_design_id": 149
+  },
+  "artifacts": {
+    "final_model_v1_yaml": "configs/thesis/final_model_v1.yaml",
+    "final_seed_list_v1_json": "configs/thesis/final_seed_list_v1.json",
+    "final_run_manifest_v1_csv": "configs/thesis/final_run_manifest_v1.csv",
+    "sha256": {
+      "configs/thesis/final_model_v1.yaml": "3f4adfa658e64d20a7f5c53bf73cb85c685009485f44b36d887db46d5a5d1e00",
+      "configs/thesis/final_seed_list_v1.json": "bb5b5008d8aef3a0abd2cd749338488475356a35bd793b7f01961ebc84b8fabe",
+      "configs/thesis/final_run_manifest_v1.csv": "5cd0ef46e1ce96abcaf08498c83ce88d57cc02751594a7f22096acaea473f41d"
+    }
+  },
+  "run_plan_counts": {
+    "main_rules": 5,
+    "main_seeds": 200,
+    "approval_seeds": 50,
+    "expected_runs_total": 1050
+  }
+}

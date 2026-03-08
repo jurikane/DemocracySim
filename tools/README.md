@@ -10,7 +10,6 @@ This folder contains non-core CLI utilities used for analysis, diagnostics, and 
 ## Subfolders
 
 - `tools/doe/`: DOE helper utilities (HIL queues/review, probing, recovery scans, seed tooling, sanity matrix).
-- `tools/research/`: research/inference utilities that are useful but not part of the default production pipeline.
 
 ## Stability
 

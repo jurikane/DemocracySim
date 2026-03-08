@@ -50,7 +50,7 @@ def main() -> None:
     parser.add_argument(
         "--objective-config",
         type=Path,
-        default=Path("configs") / "doe_selection_objective_thesis_recovery_v1.json",
+        default=Path("configs") / "doe_selection_objective_thesis_v1.json",
         help="Selection objective JSON (thresholds/weights/stage-weights/strict-completeness).",
     )
     parser.add_argument(
