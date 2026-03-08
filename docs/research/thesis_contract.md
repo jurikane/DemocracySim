@@ -5,7 +5,6 @@ How do different voting rules influence the temporal evolution of participation 
 
 Related documents:
 
-- `docs/research/execution_scope_freeze.md`
 - `docs/research/thesis_measurement_spec.md`
 - `docs/research/metric_glossary.md`
 - `docs/research/thesis_model_concepts.md`

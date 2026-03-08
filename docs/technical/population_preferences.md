@@ -23,7 +23,3 @@ This page describes how agents and preference structures are initialized.
 - Personality groups are permutations over color IDs.
 - `personal_opt_dist` is generated to follow each agent’s personality ordering.
 - Knowledge sampling (`known_cells`) determines estimate confidence used in voting.
-
-## Practical Note
-
-For clean voting-rule comparisons, keep population/preference knobs fixed and vary them only in dedicated robustness analyses.

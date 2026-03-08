@@ -1,6 +1,6 @@
 # Dynamics and Voting-Rule Interaction Concept
 
-This is to document the system-level dynamic intuition behind the thesis without overstating confirmatory claims.
+This file documents the system-level dynamic intuition behind the thesis without overstating confirmatory claims.
 
 ## 1. Closed-Loop Dynamic
 
@@ -34,20 +34,7 @@ Design intuition:
 
 At the same time, self-regarding pressure can prevent convergence or create lock-in/polarized movement.
 
-Thesis framing decision:
+Thesis framing:
 
 - this attractor logic is treated as theoretical design intuition and exploratory expectation
-- it is not a primary confirmatory hypothesis by default
-
-## 4. Why Voting Rules Matter Here
-
-Voting rules can differ in how they:
-
-- translate heterogeneous ballots into winners
-- mediate majority/minority influence
-- preserve or suppress minority directional information
-
-Therefore, rule choice can change both:
-
-- short-run election quality outcomes
-- long-run participation and inequality trajectories
+- it is not a primary confirmatory hypothesis

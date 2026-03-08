@@ -3,11 +3,10 @@
 This document explains the conceptual logic behind the simulation as currently implemented.
 It is intentionally narrative and causal (not only metric/schema focused).
 
-Related technical contracts:
+Related technical references:
 
 - `docs/research/thesis_contract.md`
 - `docs/research/thesis_measurement_spec.md`
-- `docs/research/participation_learning_group_relative_party_mode.md`
 
 Detailed concept notes:
 

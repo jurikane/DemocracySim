@@ -29,7 +29,3 @@ This page describes how grid states are initialized and mutated over time.
 - `heterogeneity` `>= 0`: spread of the preset initialization distribution.
 - `color_patches_steps` `>= 0`: number of initialization patching passes.
 - `patch_power` `>= 0`: patching preference for local consensus versus preset distribution.
-
-## Practical Note
-
-When comparing voting rules, keep environment knobs fixed unless environment sensitivity is the explicit treatment.

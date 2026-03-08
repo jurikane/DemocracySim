@@ -35,7 +35,7 @@ def gini_index_0_100(values: Union[Sequence[float], np.ndarray, None]) -> int:
 def get_grid_colors(model):
     """
     Return the current grid state as an array of rows (row-major):
-      result[y][x] == color at position (x, y)
+      result[y, x] == color at position (x, y)
     """
     grid = model.grid
 
@@ -69,4 +69,3 @@ def get_voter_turnout(model):
     total_participants = float(sum(int(area.num_agents_participated_last or 0) for area in model.areas))
     total_resident = float(sum(int(area.num_agents) for area in model.areas))
     return (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
-

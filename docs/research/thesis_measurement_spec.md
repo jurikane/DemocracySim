@@ -5,7 +5,6 @@ It is coupled with:
 
 - `docs/research/thesis_contract.md`
 - `docs/research/metric_glossary.md`
-- `docs/research/execution_scope_freeze.md`
 
 ## Specification
 
@@ -143,9 +142,9 @@ Family boundaries must remain explicit in results reporting.
 
 ### Multiple-testing policy rule
 
-- Use a predefined multiplicity correction policy within each reported family.
-- Do not merge canonical confirmatory and reference-family p-value pools.
-- Keep endpoint formulas fixed within one reported experiment set.
+- We use a predefined multiplicity correction policy within each reported family.
+- We do not merge canonical confirmatory and reference-family p-value pools.
+- We keep endpoint formulas fixed within one reported experiment set.
 
 ### Summary-layer separation rule
 

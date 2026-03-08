@@ -18,22 +18,18 @@ nav:
     - Research:
         - Thesis Contract: research/thesis_contract.md
         - Thesis Model Concepts: research/thesis_model_concepts.md
-        - Visualization:
-            - Plot Inventory: research/visualization_plot_inventory.md
         - Concept Deep Dives:
             - Grid State Concept: research/grid_state_concept.md
             - Puzzle Quality Gate Concept: research/puzzle_quality_gate_concept.md
             - Satisfaction to Altruistic Voting: research/satisfaction_altruistic_voting_concept.md
             - Participation Dilemma and Group Learning: research/participation_dilemma_and_group_learning_concept.md
-            - Group-Relative Participation Learning: research/participation_learning_group_relative_party_mode.md
             - Dynamics and Rule Interaction: research/dynamics_rule_interaction_concept.md
         - Thesis Measurement Spec: research/thesis_measurement_spec.md
         - Metric Glossary: research/metric_glossary.md
-        - Execution Scope: research/execution_scope_freeze.md
     - Technical:
         - Overview: technical/technical_overview.md
         - Semantics, Representations & RNG: technical/semantics_representation_rng.md
-        - Voting Rules Contract: technical/voting_rules.md
+        - Voting Rules: technical/voting_rules.md
         - Core Mechanics (Fees/Rewards/Distance): technical/core_mechanics.md
         - Environment Dynamics: technical/environment_dynamics.md
         - Structural Topology: technical/structural_topology.md
@@ -107,6 +103,8 @@ plugins:
         - locale: de
           name: Deutsch
           build: true
+  - autorefs:
+      resolve_closest: true
   - search
   - mkdocstrings:
       default_handler: python

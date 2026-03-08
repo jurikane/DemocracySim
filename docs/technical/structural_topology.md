@@ -27,7 +27,3 @@ It does not imply full grid coverage.
 - `av_area_height` (`>= 1`, bounded by grid height)
 - `av_area_width` (`>= 1`, bounded by grid width)
 - `area_size_variance` (`[0,1]`)
-
-## Practical Note
-
-For baseline comparisons, use one fixed topology and vary topology only in dedicated sensitivity runs.

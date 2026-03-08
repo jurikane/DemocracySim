@@ -79,18 +79,10 @@ data/
 # Use tmp_check_smoke/ only for ephemeral smoke checks.
 
 # Configs
-# Keep only curated baseline/test/runner configs in git.
+# Keep only curated runtime/public configs in git.
 configs/*.yaml
 !configs/default.yaml
-!configs/config.yaml
-!configs/toy.yaml
 !configs/doe.yaml
-!configs/test.yaml
-!configs/test_small.yaml
-!configs/test_tiny.yaml
-!configs/debug_tiny.yaml
-!configs/large.yaml
-!configs/replay_sparse_grid_ui_test.yaml
 
 # Local env and secrets
 .env

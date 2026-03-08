@@ -1,6 +1,6 @@
 # Puzzle Quality Gate Concept
 
-This is to define the conceptual and technical role of the puzzle process used for decision-quality evaluation.
+This defines the conceptual and technical role of the puzzle process used for decision-quality evaluation.
 
 Canonical term in thesis text: **Puzzle Quality Gate**.
 Optional metaphor: "zeitgeist" or "window of opportunity".

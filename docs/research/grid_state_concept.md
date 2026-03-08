@@ -1,6 +1,6 @@
 # Grid State Concept
 
-This is to explain the conceptual role of the color grid as implemented in the thesis model.
+Explains the conceptual role of the color grid as implemented in the thesis model.
 
 ## 1. What the Grid Represents
 

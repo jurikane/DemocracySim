@@ -3,7 +3,7 @@ Script to run the DemocracySim model server.
 Configure using a config file (YAML or TOML) inside the 'configs' folder.
 Use --config to specify a config file (YAML or TOML).
 Example:
-python -m scripts.run -c config.yaml --no-browser
+python -m scripts.run -c default.yaml --no-browser
 """
 import argparse
 from mesa.visualization.ModularVisualization import ModularServer

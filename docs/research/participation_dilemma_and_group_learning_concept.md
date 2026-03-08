@@ -2,10 +2,6 @@
 
 This is to explain why participation learning is group-relative in the thesis baseline.
 
-This document complements:
-
-- `docs/research/participation_learning_group_relative_party_mode.md`
-
 ## 1. Participation Dilemma Built Into the Model
 
 The model intentionally combines:
