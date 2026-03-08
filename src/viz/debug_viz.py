@@ -1,18 +1,8 @@
 from __future__ import annotations
 
 from mesa.visualization import TextElement
-from src.viz.factory import get_vis_cfg
 import numpy as np
 import html
-
-# Visualization config (is set by make_canvas before these are instantiated)
-vis_cfg = get_vis_cfg()
-show_agent_debug_panel = bool(getattr(vis_cfg, 'show_agent_debug_panel', False))
-agent_debug_area_id = getattr(vis_cfg, "agent_debug_area_id", None)
-agent_debug_max_steps = int(getattr(vis_cfg, "agent_debug_max_steps", 1))
-agent_debug_max_agents = int(getattr(vis_cfg, "agent_debug_max_agents", 50))
-agent_debug_max_field_len = int(getattr(vis_cfg, "agent_debug_max_field_len", 180))
-
 
 class AreaAgentDebugPanel(TextElement):
     """Step-wise per-agent debug panel for a single area.
@@ -31,12 +21,14 @@ class AreaAgentDebugPanel(TextElement):
         area_id: int | None = None,
         max_agents: int | None = None,
         max_field_len: int | None = None,
+        enabled: bool = True,
     ):
         super().__init__()
-        self.max_steps = max(1, int(max_steps if max_steps is not None else agent_debug_max_steps))
-        self.area_id = area_id if area_id is not None else agent_debug_area_id
-        self.max_agents = int(max_agents if max_agents is not None else agent_debug_max_agents)
-        self.max_field_len = int(max_field_len if max_field_len is not None else agent_debug_max_field_len)
+        self.max_steps = max(1, int(max_steps if max_steps is not None else 1))
+        self.area_id = area_id
+        self.max_agents = int(max_agents if max_agents is not None else 50)
+        self.max_field_len = int(max_field_len if max_field_len is not None else 180)
+        self.enabled = bool(enabled)
         self.max_list_items = 8
         self.agent_key_order = [
             "id",
@@ -176,7 +168,7 @@ class AreaAgentDebugPanel(TextElement):
         return "\n".join(lines)
 
     def render(self, model) -> str:
-        if not show_agent_debug_panel:
+        if not self.enabled:
             return ""
 
         # Enable capture for subsequent steps.

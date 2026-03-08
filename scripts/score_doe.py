@@ -87,14 +87,6 @@ def main() -> None:
         default=SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
         help="Summary profile used for per-run PDFs in review bundle.",
     )
-    parser.add_argument(
-        "--bundle-allow-fallback-scores",
-        action="store_true",
-        help=(
-            "Allow heuristic ranking from doe_run_features.csv when doe_design_scores.csv is empty/non-mergeable "
-            "while building the review bundle. Default is fail-fast."
-        ),
-    )
     args = parser.parse_args()
 
     root = _resolve_default_doe_root() if args.doe_root is None else Path(args.doe_root)
@@ -137,7 +129,6 @@ def main() -> None:
                 rule_name=str(args.bundle_rule_name or primary_rule),
                 summary_profile=str(args.bundle_summary_profile),
                 render_summaries=True,
-                allow_fallback_scores=bool(args.bundle_allow_fallback_scores),
             )
             print(f"Wrote: {bundle.bundle_root}")
             print(f"Wrote: {bundle.queue_csv}")

@@ -36,14 +36,6 @@ def main() -> None:
         action="store_true",
         help="Do not render per-run summary PDFs (metadata/overview still produced).",
     )
-    parser.add_argument(
-        "--allow-fallback-scores",
-        action="store_true",
-        help=(
-            "Allow heuristic ranking from doe_run_features.csv when doe_design_scores.csv is empty/non-mergeable. "
-            "Default is fail-fast to surface scoring problems."
-        ),
-    )
     args = parser.parse_args()
 
     root = _resolve_default_doe_root() if args.doe_root is None else Path(args.doe_root)
@@ -54,7 +46,6 @@ def main() -> None:
         rule_name=str(args.rule_name),
         summary_profile=str(args.summary_profile),
         render_summaries=not bool(args.skip_summary_render),
-        allow_fallback_scores=bool(args.allow_fallback_scores),
     )
     print(f"DOE root: {root}")
     print(f"Wrote: {out.bundle_root}")

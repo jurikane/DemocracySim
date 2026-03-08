@@ -25,21 +25,12 @@ from src.utils.representations import distribution_to_ordering_tie_aware
 
 
 DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
-    "max_all_abstain_stretch": 10.0,
     "min_winner_changes_post_burnin": 3.0,
     "min_winner_change_rate_post_burnin": 0.01,
     "max_winner_change_rate_post_burnin": 0.80,
-    "min_group_turnout_range_mean": 0.03,
-    "min_roll3_group_turnout_range_max": 0.3,
-    "min_roll20_group_turnout_range_max": 0.1,
-    "min_turnout_std": 0.5,
-    "min_gini_std": 1.0,
-    "min_dist_std": 0.02,
     "min_winner_entropy_norm": 0.25,
-    "min_dist_nonzero_share": 0.05,
+    # Used as turnout-shape context relief (not a hard gate).
     "min_competitive_step_share": 0.05,
-    "min_mean_turnout": 20.0,
-    "max_mean_turnout": 90.0,
     "puzzle_conflict_min_dist": 0.33,
     "min_puzzle_conflict_step_share_for_gate": 0.20,
     "max_puzzle_dominance_share_conflict": 0.95,
@@ -71,19 +62,9 @@ DEFAULT_STAGE_WEIGHTS: dict[str, float] = {
 
 
 REQUIRED_HARD_GATE_COLUMNS: tuple[str, ...] = (
-    "max_all_abstain_stretch",
     "winner_changes_post_burnin",
     "winner_change_rate_post_burnin",
-    "group_turnout_range_mean",
-    "roll3_group_turnout_range_max",
-    "roll20_group_turnout_range_max",
     "winner_entropy_norm",
-    "dist_nonzero_share",
-    "competitive_step_share",
-    "mean_turnout",
-    "turnout_std",
-    "gini_std",
-    "dist_std",
 )
 
 REQUIRED_PRIMARY_SCORING_COLUMNS: tuple[str, ...] = (
@@ -144,6 +125,13 @@ def _require_numeric_notna(df: pd.DataFrame, required: tuple[str, ...], *, conte
     if bad:
         details = ", ".join(f"{col}: {count}" for col, count in sorted(bad.items()))
         raise ValueError(f"{context} has NA/non-numeric values in required columns: {details}")
+
+
+def _run_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(meta, dict):
+        return {}
+    run_meta = meta.get("run")
+    return run_meta if isinstance(run_meta, dict) else {}
 
 
 def load_selection_objective(path: Path | str) -> dict[str, Any]:
@@ -233,18 +221,6 @@ def _safe_std(series: pd.Series) -> float:
     if not np.isfinite(v):
         return 0.0
     return v
-
-
-def _max_true_stretch(mask: np.ndarray) -> int:
-    best = 0
-    cur = 0
-    for v in mask:
-        if bool(v):
-            cur += 1
-            best = max(best, cur)
-        else:
-            cur = 0
-    return int(best)
 
 
 def _winner_changes(win_ids: np.ndarray) -> int:
@@ -349,7 +325,7 @@ def _lower_bound_pref01(series: pd.Series, *, zero_at: float, good_min: float) -
 
 
 def _ordering_distance_func_from_meta(meta: dict[str, Any]):
-    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    run_meta = _run_meta(meta)
     name = str(run_meta.get("distance_impl_name", "") or "").strip()
     if name in {"kendall_tau_order", "kendall_tau"}:
         return kendall_tau_order
@@ -363,7 +339,7 @@ def _current_rule_power_ordering_for_run(
     agents: pd.DataFrame,
     num_colors: int,
 ) -> np.ndarray | None:
-    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    run_meta = _run_meta(meta)
     rule_idx = int(run_meta.get("rule_idx", -1))
     if rule_idx not in {0, 1, 2, 3, 4, 5}:
         return None
@@ -492,7 +468,7 @@ def _compute_puzzle_power_step_table(
             stacklevel=2,
         )
         return None
-    run_meta = (meta.get("run", {}) or {}) if isinstance(meta, dict) else {}
+    run_meta = _run_meta(meta)
     if str(run_meta.get("quality_target_mode", "reality")) != "puzzle":
         return None
     num_colors = int(static.get("num_colors", len(puzzle_cols)) or len(puzzle_cols))
@@ -635,9 +611,6 @@ def compute_run_features_from_tables(
         if np.isfinite(y).all():
             coeffs = np.polyfit(x, y, 1)
             turnout_decline_slope_norm = float(max(0.0, -float(coeffs[0])))
-
-    abstain_mask = (per_step["participants"].to_numpy(dtype=float) <= 0.0)
-    max_all_abstain_stretch = _max_true_stretch(abstain_mask)
 
     post = per_step.loc[per_step["step"] > int(burn_in_steps), "winning_option_id"].to_numpy()
     winner_changes_post_burnin = _winner_changes(post)
@@ -825,7 +798,6 @@ def compute_run_features_from_tables(
         "gini_std": _safe_std(per_step["gini_index"]),
         "mean_dist": float(per_step["quality_distance"].mean()),
         "dist_std": _safe_std(per_step["quality_distance"]),
-        "max_all_abstain_stretch": float(max_all_abstain_stretch),
         "winner_changes_post_burnin": float(winner_changes_post_burnin),
         "winner_change_rate_post_burnin": float(winner_change_rate_post_burnin),
         "winner_entropy_norm": float(winner_entropy_norm),
@@ -860,7 +832,7 @@ def collect_run_features(
         quality_target_mode = "reality"
         if meta_path.exists():
             meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
-            run_meta = meta.get("run", {}) if isinstance(meta, dict) else {}
+            run_meta = _run_meta(meta)
             quality_target_mode = str(run_meta.get("quality_target_mode", "reality"))
         features = compute_run_features_from_tables(
             area,
@@ -898,21 +870,10 @@ def collect_run_features(
 def apply_hard_gates(
     run_features: pd.DataFrame,
     *,
-    max_all_abstain_stretch: float = DEFAULT_SCORING_THRESHOLDS["max_all_abstain_stretch"],
     min_winner_changes_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["min_winner_changes_post_burnin"],
     min_winner_change_rate_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["min_winner_change_rate_post_burnin"],
     max_winner_change_rate_post_burnin: float = DEFAULT_SCORING_THRESHOLDS["max_winner_change_rate_post_burnin"],
-    min_group_turnout_range_mean: float = DEFAULT_SCORING_THRESHOLDS["min_group_turnout_range_mean"],
-    min_roll3_group_turnout_range_max: float = DEFAULT_SCORING_THRESHOLDS["min_roll3_group_turnout_range_max"],
-    min_roll20_group_turnout_range_max: float = DEFAULT_SCORING_THRESHOLDS["min_roll20_group_turnout_range_max"],
-    min_turnout_std: float = DEFAULT_SCORING_THRESHOLDS["min_turnout_std"],
-    min_gini_std: float = DEFAULT_SCORING_THRESHOLDS["min_gini_std"],
-    min_dist_std: float = DEFAULT_SCORING_THRESHOLDS["min_dist_std"],
     min_winner_entropy_norm: float = DEFAULT_SCORING_THRESHOLDS["min_winner_entropy_norm"],
-    min_dist_nonzero_share: float = DEFAULT_SCORING_THRESHOLDS["min_dist_nonzero_share"],
-    min_competitive_step_share: float = DEFAULT_SCORING_THRESHOLDS["min_competitive_step_share"],
-    min_mean_turnout: float = DEFAULT_SCORING_THRESHOLDS["min_mean_turnout"],
-    max_mean_turnout: float = DEFAULT_SCORING_THRESHOLDS["max_mean_turnout"],
     min_puzzle_conflict_step_share_for_gate: float = DEFAULT_SCORING_THRESHOLDS["min_puzzle_conflict_step_share_for_gate"],
     max_puzzle_dominance_share_conflict: float = DEFAULT_SCORING_THRESHOLDS["max_puzzle_dominance_share_conflict"],
     min_power_recovery_share_conflict: float = DEFAULT_SCORING_THRESHOLDS["min_power_recovery_share_conflict"],
@@ -932,31 +893,12 @@ def apply_hard_gates(
     ]:
         if col not in df.columns:
             df[col] = np.nan
-    df["gate_no_collapse"] = df["max_all_abstain_stretch"] <= float(max_all_abstain_stretch)
     df["gate_no_lockin"] = df["winner_changes_post_burnin"] >= float(min_winner_changes_post_burnin)
     df["gate_not_too_chaotic"] = (
         (df["winner_change_rate_post_burnin"] >= float(min_winner_change_rate_post_burnin))
         & (df["winner_change_rate_post_burnin"] <= float(max_winner_change_rate_post_burnin))
     )
-    df["gate_group_divergence"] = df["group_turnout_range_mean"] >= float(min_group_turnout_range_mean)
-    df["gate_roll3_divergence"] = (
-        df["roll3_group_turnout_range_max"] >= float(min_roll3_group_turnout_range_max)
-    )
-    df["gate_roll20_divergence"] = (
-        df["roll20_group_turnout_range_max"] >= float(min_roll20_group_turnout_range_max)
-    )
     df["gate_winner_entropy"] = df["winner_entropy_norm"] >= float(min_winner_entropy_norm)
-    df["gate_dist_activity"] = df["dist_nonzero_share"] >= float(min_dist_nonzero_share)
-    df["gate_competitive_steps"] = df["competitive_step_share"] >= float(min_competitive_step_share)
-    df["gate_turnout_band"] = (
-        (df["mean_turnout"] >= float(min_mean_turnout))
-        & (df["mean_turnout"] <= float(max_mean_turnout))
-    )
-    df["gate_signal_present"] = (
-        (df["turnout_std"] >= float(min_turnout_std))
-        | (df["gini_std"] >= float(min_gini_std))
-        | (df["dist_std"] >= float(min_dist_std))
-    )
     puzzle_metric_available = (
         df["puzzle_conflict_step_share"].notna()
         & df["puzzle_dominance_share_conflict"].notna()
@@ -975,16 +917,9 @@ def apply_hard_gates(
         True,
     )
     df["passes_hard_gates"] = (
-        df["gate_no_collapse"]
-        & df["gate_no_lockin"]
+        df["gate_no_lockin"]
         & df["gate_not_too_chaotic"]
-        & df["gate_roll3_divergence"]
-        & df["gate_roll20_divergence"]
         & df["gate_winner_entropy"]
-        & df["gate_dist_activity"]
-        & df["gate_competitive_steps"]
-        & df["gate_turnout_band"]
-        & df["gate_signal_present"]
         & df["gate_puzzle_anti_monopoly"]
     )
     return df
@@ -1297,21 +1232,10 @@ def analyze_doe_root(
     )
     gated = apply_hard_gates(
         rf,
-        max_all_abstain_stretch=float(thr["max_all_abstain_stretch"]),
         min_winner_changes_post_burnin=float(thr["min_winner_changes_post_burnin"]),
         min_winner_change_rate_post_burnin=float(thr["min_winner_change_rate_post_burnin"]),
         max_winner_change_rate_post_burnin=float(thr["max_winner_change_rate_post_burnin"]),
-        min_group_turnout_range_mean=float(thr["min_group_turnout_range_mean"]),
-        min_roll3_group_turnout_range_max=float(thr["min_roll3_group_turnout_range_max"]),
-        min_roll20_group_turnout_range_max=float(thr["min_roll20_group_turnout_range_max"]),
-        min_turnout_std=float(thr["min_turnout_std"]),
-        min_gini_std=float(thr["min_gini_std"]),
-        min_dist_std=float(thr["min_dist_std"]),
         min_winner_entropy_norm=float(thr["min_winner_entropy_norm"]),
-        min_dist_nonzero_share=float(thr["min_dist_nonzero_share"]),
-        min_competitive_step_share=float(thr["min_competitive_step_share"]),
-        min_mean_turnout=float(thr["min_mean_turnout"]),
-        max_mean_turnout=float(thr["max_mean_turnout"]),
         min_puzzle_conflict_step_share_for_gate=float(thr["min_puzzle_conflict_step_share_for_gate"]),
         max_puzzle_dominance_share_conflict=float(thr["max_puzzle_dominance_share_conflict"]),
         min_power_recovery_share_conflict=float(thr["min_power_recovery_share_conflict"]),

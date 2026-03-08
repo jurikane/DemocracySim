@@ -138,7 +138,7 @@ def main() -> None:
                 if "seed" in rep.index and pd.notna(rep.get("seed")):
                     try:
                         rep_seed = int(rep.get("seed"))  # type: ignore[arg-type]
-                    except Exception:
+                    except (TypeError, ValueError):
                         rep_seed = None
                 if "rule_name" in rep.index and pd.notna(rep.get("rule_name")):
                     rep_rule = str(rep.get("rule_name"))

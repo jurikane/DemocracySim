@@ -3,17 +3,12 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 from mesa.visualization import TextElement
 import matplotlib.patches as patches
-from src.viz.factory import COLORS, get_vis_cfg
-from src.viz.group_palette import get_group_color
+from src.viz.factory import COLORS
+from src.viz.color_palette import get_group_color
 import base64
 import math
 import io
 import numpy as np
-
-
-vis_cfg = get_vis_cfg()
-show_area_stats = bool(getattr(vis_cfg, 'show_area_stats', True))
-
 
 def _series_at(idx: int, seqs: list) -> list[float]:
     return [s[idx] if s is not None and len(s) > idx else float("nan") for s in seqs]
@@ -367,7 +362,7 @@ class AreaGiniElement(_AreaTimeSeriesElement):
 class MatplotlibElement(TextElement):
     def render(self, model) -> str:
         step = model.scheduler.steps
-        if not show_area_stats or step == 0:
+        if step == 0:
             return ""
         data = model.datacollector.get_model_vars_dataframe()
         collective_assets = data.get("collective_assets") if data is not None else None

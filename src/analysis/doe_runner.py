@@ -905,20 +905,18 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "reward_rate_personal": (0.23, 0.26),
             "break_even_distance_common": (0.45, 0.55),
 
-            # Keep knowledge conservative to preserve rule-difference signal
-            # (avoid over-unifying altruistic voters).
+            # We keep knowledge conservative to avoid over-unifying altruistic voters.
             "known_cells": (11.0, 16.0),
 
-            # Keep unresolved puzzle/power dynamics moderately open.
+            # We keep unresolved puzzle/power dynamics moderately open.
             "election_impact_on_mutation": (1.10, 3.10),
             "puzzle_local_kappa": (85.0, 125.0),
             "puzzle_shock_prob": (0.04, 0.08),
             "mu": (0.10, 0.30),
 
             # Satisfaction -> altruism switch:
-            # - maintain sharp regime (higher slope)
-            # - avoid very high theta that hurt viability in probe
-            # - gamma<1 introduces delay/smoothing; keep somewhat open due uncertainty
+            # sharp regime (higher slope)
+            # gamma<1: delay/smoothing; 
             "altruism_satisfaction_theta": (0.64, 0.76),
             "altruism_satisfaction_slope": (4.50, 10.5),
             "altruism_response_gamma": (0.5, 1.0),
@@ -943,144 +941,6 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "num_steps": 250,
         },
     },
-    "phase3_party_switch_puzzle_small_v1": {
-        "name": "phase3_party_switch_puzzle_small_v1",
-        # Small confirmation DOE:
-        # freeze to design-0006-centered baseline and open only the
-        # satisfaction-switch knobs + one puzzle-dominance knob.
-        "ranges": {
-            "altruism_satisfaction_theta": (0.70, 1.00),
-            "altruism_satisfaction_slope": (6.0, 13.0),
-            "altruism_response_gamma": (0.45, 0.95),
-            "election_impact_on_mutation": (2.0, 3.6),
-            # Direct puzzle-vs-power lever (knowledge coherence in altruistic voting).
-            "known_cells": (16.0, 30.0),
-        },
-        "frozen_model": {
-            **DEFAULT_FROZEN_MODEL,
-            "altruism_mode": "satisfaction",
-            "altruism_learning": False,
-            "participation_signal_mode": "group_relative_delta_rel_party",
-            # Design-0006-centered freeze values from DOE 20260302_175623.
-            "participation_init_q": 0.14,
-            "participation_alpha": 0.118717,
-            "participation_beta": 5.041759,
-            "election_cost_rate": 0.02,
-            "reward_rate_personal": 0.231437,
-            "break_even_distance_common": 0.459207,
-            "known_cells": 16,
-            "election_impact_on_mutation": 2.448928,
-            "puzzle_local_kappa": 123.302102,
-            "puzzle_shock_prob": 0.073023,
-            "mu": 0.278457,
-            "participation_signal_fee_weight": 0.6,
-            "participation_signal_group_shrink_k": 1.954833,
-            "participation_signal_clip": 0.277565,
-        },
-        "frozen_simulation": {
-            **DEFAULT_FROZEN_SIM,
-            "num_steps": 250,
-        },
-    },
-    "phase3_party_recovery_hunt_v1": {
-        "name": "phase3_party_recovery_hunt_v1",
-        # Recovery-focused search profile:
-        # - optimize for dominance-cycle recovery under party learning
-        # - keep proven stable baselines fixed where prior DOEs already converged
-        # - open only the levers that directly affect:
-        #   (1) D satisfaction -> altruism plateaus
-        #   (2) W comeback potential after suppression
-        #   (3) lock-in speed (avoid irreversible early collapse)
-        "ranges": {
-            # Participation lock-in pressure (tightened to avoid runaway freeze-out).
-            "participation_alpha": (0.100, 0.130),
-            "participation_beta": (4.95, 5.45),
-            "reward_rate_personal": (0.225, 0.275),
-            "break_even_distance_common": (0.46, 0.58),
-
-            # Puzzle / power dynamics.
-            "known_cells": (10.0, 17.0),
-            "election_impact_on_mutation": (1.00, 2.90),
-            "puzzle_local_kappa": (70.0, 130.0),
-            "puzzle_shock_prob": (0.03, 0.10),
-            "mu": (0.10, 0.26),
-
-            # Satisfaction -> altruism switch:
-            # keep the switch sharp, but with lower theta access so dominant
-            # groups can realistically hit high altruism plateaus.
-            "altruism_satisfaction_theta": (0.60, 0.75),
-            "altruism_satisfaction_slope": (5.5, 12.0),
-            "altruism_response_gamma": (0.70, 1.00),
-
-            # Party-learning shaping (retain validated fee story; tune only residual pressure).
-            "participation_signal_group_shrink_k": (1.4, 3.9),
-            "participation_signal_clip": (0.24, 0.38),
-        },
-        "frozen_model": {
-            **DEFAULT_FROZEN_MODEL,
-            "altruism_mode": "satisfaction",
-            "altruism_learning": False,
-            "participation_signal_mode": "group_relative_delta_rel_party",
-            "participation_init_q": 0.14,
-            "election_cost_rate": 0.02,
-            "participation_signal_fee_weight": 0.6,
-            "num_personality_groups": 7,
-        },
-        "frozen_simulation": {
-            **DEFAULT_FROZEN_SIM,
-            "num_steps": 160,
-        },
-    },
-    "phase3_party_recovery_hunt_v2": {
-        "name": "phase3_party_recovery_hunt_v2",
-        # Recovery-focused v2:
-        # v1/v2 scans showed many runs reaching:
-        #   D dominance + high D altruism + D turnout drop
-        # but still missing sustained W turnout rebound.
-        # This profile opens rebound-relevant levers while keeping
-        # already-stable baselines tight.
-        "ranges": {
-            # Participation responsiveness:
-            # slightly wider than v1 to allow stronger comeback dynamics.
-            "participation_alpha": (0.100, 0.150),
-            "participation_beta": (4.60, 5.30),
-            "reward_rate_personal": (0.235, 0.300),
-            "break_even_distance_common": (0.46, 0.56),
-
-            # Puzzle / power dynamics (avoid too-fast re-locking).
-            "known_cells": (10.0, 16.0),
-            "election_impact_on_mutation": (1.00, 2.20),
-            "puzzle_local_kappa": (70.0, 130.0),
-            "puzzle_shock_prob": (0.05, 0.12),
-            "mu": (0.10, 0.22),
-
-            # Satisfaction -> altruism switch:
-            # lower theta access + high slope + memory to sustain altruistic plateaus.
-            "altruism_satisfaction_theta": (0.56, 0.72),
-            "altruism_satisfaction_slope": (8.0, 14.0),
-            "altruism_response_gamma": (0.50, 0.90),
-
-            # Participation signal shaping:
-            # weaker size-shrink for small groups + higher cap for stronger rebound pushes.
-            "participation_signal_fee_weight": (0.35, 0.80),
-            "participation_signal_group_shrink_k": (0.80, 2.80),
-            "participation_signal_clip": (0.28, 0.55),
-        },
-        "frozen_model": {
-            **DEFAULT_FROZEN_MODEL,
-            "altruism_mode": "satisfaction",
-            "altruism_learning": False,
-            "participation_signal_mode": "group_relative_delta_rel_party",
-            "participation_init_q": 0.14,
-            "election_cost_rate": 0.02,
-            "num_personality_groups": 2
-        },
-        "frozen_simulation": {
-            **DEFAULT_FROZEN_SIM,
-            "num_steps": 250,
-        },
-    },
-
 }
 
 

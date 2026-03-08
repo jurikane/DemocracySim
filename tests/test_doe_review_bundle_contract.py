@@ -110,20 +110,15 @@ def test_build_doe_review_bundle_writes_bundle_artifacts(tmp_path: Path) -> None
     assert set(knob_ranges["knob"].tolist()) == {"knob_a", "knob_b"}
 
 
-def test_build_doe_review_bundle_falls_back_when_design_scores_are_empty(tmp_path: Path) -> None:
+def test_build_doe_review_bundle_with_minimal_scored_designs(tmp_path: Path) -> None:
     doe_root = tmp_path / "doe_20990101_000001"
     doe_root.mkdir(parents=True, exist_ok=True)
 
     pd.DataFrame(
-        columns=[
-            "design_id",
-            "n_primary_runs",
-            "n_primary_pass",
-            "pass_rate",
-            "quality_mean",
-            "quality_std",
-            "seed_robustness",
-            "score_total",
+        [
+            {"design_id": 0, "pass_rate": 1.0, "quality_mean": 0.7, "seed_robustness": 0.6, "score_total": 0.85},
+            {"design_id": 1, "pass_rate": 0.8, "quality_mean": 0.6, "seed_robustness": 0.5, "score_total": 0.72},
+            {"design_id": 2, "pass_rate": 0.6, "quality_mean": 0.5, "seed_robustness": 0.4, "score_total": 0.58},
         ]
     ).to_csv(doe_root / "doe_design_scores.csv", index=False)
 
@@ -166,7 +161,6 @@ def test_build_doe_review_bundle_falls_back_when_design_scores_are_empty(tmp_pat
         per_bucket=1,
         rule_name="approval",
         render_summaries=False,
-        allow_fallback_scores=True,
     )
 
     queue = pd.read_csv(artifacts.queue_csv)
@@ -174,7 +168,7 @@ def test_build_doe_review_bundle_falls_back_when_design_scores_are_empty(tmp_pat
     assert {"top", "mid", "bottom"} == set(queue["bucket"].astype(str).tolist())
 
 
-def test_build_doe_review_bundle_fails_fast_when_design_scores_are_empty_and_fallback_disabled(tmp_path: Path) -> None:
+def test_build_doe_review_bundle_fails_fast_when_design_scores_are_empty(tmp_path: Path) -> None:
     doe_root = tmp_path / "doe_20990101_000002"
     doe_root.mkdir(parents=True, exist_ok=True)
 
@@ -199,5 +193,4 @@ def test_build_doe_review_bundle_fails_fast_when_design_scores_are_empty_and_fal
             per_bucket=1,
             rule_name="approval",
             render_summaries=False,
-            allow_fallback_scores=False,
         )

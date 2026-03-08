@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 import yaml
 from typing import Optional
+from pydantic import ValidationError
 
 from src.config.schema import AppConfig
 from src.replay.replay_server import make_replay_server
@@ -57,7 +58,7 @@ def replay_main():
             server = make_replay_server(appcfg, run_dir)
             print("Starting replay server on http://127.0.0.1:8521 ...")
             server.launch(open_browser=True)
-        except Exception as e:
+        except (OSError, yaml.YAMLError, ValidationError, ValueError, RuntimeError) as e:
             print("Could not start replay server:", e)
     else:
         print("meta.yaml missing or has no config_ref; cannot start server.")

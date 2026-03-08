@@ -345,7 +345,7 @@ def _extract_design_seed(run_path: str) -> tuple[int | None, int | None]:
         design_id = int(p.parts[-4].split("_")[1])
         seed = int(p.parts[-2].split("_")[1])
         return design_id, seed
-    except Exception:
+    except (IndexError, ValueError):
         return None, None
 
 

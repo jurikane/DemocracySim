@@ -13,8 +13,8 @@ keywords = [
     "computational social choice",
     "simulated democracy"
 ]
-homepage = "https://github.com/jurikane/participation"
-repository = "https://github.com/jurikane/participation"
+homepage = "https://github.com/jurikane/DemocracySim"
+repository = "https://github.com/jurikane/DemocracySim"
 python = "^3.11"
 
 [tool.poetry.dependencies]
@@ -39,12 +39,6 @@ typing-inspection = ">=0.4.0"
 PyYAML = "6.0.3"
 toml = "0.10.2"
 tornado = ">=6.5.2,<7"
-pytest = "8.2.0"
-pytest-cov = "5.0.0"
-iniconfig = "*"
-pluggy = ">=1.5,<2.0"
-black = "24.3.0"
-mypy = "1.5.1"
 toolz = "1.0.0"
 blinker = ">=1.0.0,<2"
 gitpython = "!=3.1.19,<4,>=3.0.7"

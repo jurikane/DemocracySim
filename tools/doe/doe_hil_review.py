@@ -30,7 +30,7 @@ def _resolve_doe_root_path(raw: str) -> Path:
 def _safe_float(v: Any, ndigits: int = 3) -> str:
     try:
         f = float(v)
-    except Exception:
+    except (TypeError, ValueError):
         return "n/a"
     if pd.isna(f):
         return "n/a"
@@ -40,7 +40,7 @@ def _safe_float(v: Any, ndigits: int = 3) -> str:
 def _safe_int(v: Any) -> str:
     try:
         i = int(round(float(v)))
-    except Exception:
+    except (TypeError, ValueError):
         return "n/a"
     return str(i)
 

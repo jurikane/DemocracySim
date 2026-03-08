@@ -3,15 +3,13 @@
 [![codecov](https://codecov.io/gh/jurikane/DemocracySim/branch/main/graph/badge.svg)](https://codecov.io/gh/jurikane/DemocracySim)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[//]: # ([![pytest dev]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml/badge.svg?branch=dev&#41;]&#40;https://github.com/jurikane/DemocracySim/actions/workflows/python-app.yml&#41;)
-
 # DemocracySim: Multi-Agent Simulation of Voting Rules, Participation, and Inequality
 
 Codebase for the master thesis
 
-**"How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?"**
+****"How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?"****
 
-conducted at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de) 
+conducted at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de)
 at the [Faculty of Mathematics and Computer Science](https://www.mathcs.uni-leipzig.de/en)
 of [Leipzig University](https://www.uni-leipzig.de/en).
 
@@ -37,15 +35,15 @@ While the codebase supports additional agent behaviors, metrics, and normative e
 
 **DemocracySim** is a multi-agent simulation framework designed to study democratic participation and collective decision-making in a controlled, evolving environment.
 
-Agents are situated within a grid-based world and repeatedly participate in elections that aggregate individual preferences into collective decisions. 
+Agents are situated within a grid-based world and repeatedly participate in elections that aggregate individual preferences into collective decisions.
 These decisions affect both the distribution of rewards among agents and the subsequent evolution of the environment, creating feedback between individual behavior and collective outcomes.
 
-The environment is implemented as a toroidal grid of colored fields, where neighboring groups of cells form territories. 
-Each territory holds regular elections in which agents vote on the observed color distribution. 
+The environment is implemented as a toroidal grid of colored fields, where neighboring groups of cells form territories.
+Each territory holds regular elections in which agents vote on the observed color distribution.
 Election outcomes influence agent rewards and drive controlled mutation processes that update the environment over time.
 
-Agents have limited resources and heterogeneous preferences over current color distributions as well as possible election outcomes ("personalities"). 
-At each election, agents decide whether to participate or abstain, creating a participation dilemma. 
+Agents have limited resources and heterogeneous preferences over current color distributions as well as possible election outcomes ("personalities").
+At each election, agents decide whether to participate or abstain, creating a participation dilemma.
 When voting, agents face a trade-off between aligning with their personal preferences and contributing to collective accuracy, as collective decisions affect future rewards.
 
 ---
@@ -65,10 +63,10 @@ Personality types are distributed across the population to induce majority–min
 
 ## Elections and Voting Rules
 
-Elections aggregate individual agent inputs into collective decisions using predefined **voting rules**. 
+Elections aggregate individual agent inputs into collective decisions using predefined **voting rules**.
 Voting rules are the primary experimental manipulation in the thesis.
 
-The thesis compares a small set of canonical voting rules while keeping all other model components constant. 
+The thesis compares a small set of canonical voting rules while keeping all other model components constant.
 Elections determine collective outcomes that influence reward allocation and environmental updates.
 
 ---
@@ -98,11 +96,9 @@ The following aspects are explicitly **out of scope for the master thesis**, eve
 
 These aspects are considered directions for future research beyond the thesis.
 
-
 ---
 
 ## Project Vision (Beyond the Thesis)
 
-Beyond the scope of the master thesis, **DemocracySim** is intended as a flexible research platform for exploring more complex questions related to collective decision-making, participation, fairness, and democratic system design. 
+Beyond the scope of the master thesis, **DemocracySim** is intended as a flexible research platform for exploring more complex questions related to collective decision-making, participation, fairness, and democratic system design.
 Potential future extensions include richer agent models, alternative decision-making mechanisms, and applications to real-world collaborative or political settings.
-

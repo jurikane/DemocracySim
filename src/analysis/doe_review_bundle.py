@@ -490,60 +490,6 @@ def _copy_scoring_sidecars(*, doe_root: Path, out_dir: Path) -> None:
         shutil.copy2(src, out_dir / name)
 
 
-def _fallback_design_scores_from_runs(*, run_features_df: pd.DataFrame) -> pd.DataFrame:
-    if run_features_df.empty:
-        return pd.DataFrame(
-            columns=[
-                "design_id",
-                "pass_rate",
-                "quality_mean",
-                "seed_robustness",
-                "score_total",
-            ]
-        )
-    rf = run_features_df.copy()
-    rf["passes_hard_gates"] = pd.to_numeric(rf.get("passes_hard_gates"), errors="coerce").fillna(0.0)
-    entropy = pd.to_numeric(rf.get("winner_entropy_norm"), errors="coerce")
-    comp = pd.to_numeric(rf.get("competitive_step_share"), errors="coerce")
-    nonchaos = 1.0 - pd.to_numeric(rf.get("roll20_group_turnout_range_max"), errors="coerce")
-    parts = []
-    if entropy.notna().any():
-        parts.append(entropy.clip(lower=0.0, upper=1.0))
-    if comp.notna().any():
-        parts.append(comp.clip(lower=0.0, upper=1.0))
-    if nonchaos.notna().any():
-        parts.append(nonchaos.clip(lower=0.0, upper=1.0))
-    if parts:
-        stack = np.vstack([s.fillna(np.nan).to_numpy(dtype=float) for s in parts])
-        quality_proxy = np.nanmean(stack, axis=0)
-    else:
-        quality_proxy = np.full(len(rf), np.nan, dtype=float)
-    rf["quality_proxy"] = quality_proxy
-
-    out = (
-        rf.groupby("design_id", as_index=False)
-        .agg(
-            pass_rate=("passes_hard_gates", "mean"),
-            quality_mean=("quality_proxy", "mean"),
-        )
-        .sort_values("design_id")
-        .reset_index(drop=True)
-    )
-    out["quality_mean"] = pd.to_numeric(out["quality_mean"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
-    out["pass_rate"] = pd.to_numeric(out["pass_rate"], errors="coerce").fillna(0.0).clip(0.0, 1.0)
-    out["seed_robustness"] = np.nan
-    out["score_total"] = (0.70 * out["pass_rate"] + 0.30 * out["quality_mean"]).astype(float)
-    return out[
-        [
-            "design_id",
-            "pass_rate",
-            "quality_mean",
-            "seed_robustness",
-            "score_total",
-        ]
-    ]
-
-
 def build_doe_review_bundle(
     *,
     doe_root: Path | str,
@@ -552,7 +498,6 @@ def build_doe_review_bundle(
     rule_name: str = "approval",
     summary_profile: str = SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
     render_summaries: bool = True,
-    allow_fallback_scores: bool = False,
 ) -> DOEReviewBundleArtifacts:
     root = _resolve_doe_root(doe_root)
     if not root.exists():
@@ -581,39 +526,18 @@ def build_doe_review_bundle(
     if run_features.empty:
         raise RuntimeError(f"No run features found for rule_name={rule_name!r}")
 
-    used_fallback_scores = False
-    fallback_reason = ""
     if design_scores.empty:
-        if not bool(allow_fallback_scores):
-            raise RuntimeError(
-                "doe_design_scores.csv is empty. Run scripts/score_doe.py first "
-                "(it now infers primary/robust rules from doe_spec.json), or rerun bundle "
-                "with allow_fallback_scores=True to force heuristic ranking."
-            )
-        used_fallback_scores = True
-        fallback_reason = "empty doe_design_scores.csv"
-        design_scores = _fallback_design_scores_from_runs(run_features_df=run_features)
+        raise RuntimeError(
+            "doe_design_scores.csv is empty. Run scripts/score_doe.py first "
+            "(it infers primary/robust rules from doe_spec.json)."
+        )
 
     base_scores = design_points.merge(design_scores, on="design_id", how="inner")
     if base_scores.empty:
-        if not bool(allow_fallback_scores):
-            raise RuntimeError(
-                "doe_design_scores.csv could not be merged to doe_design_points.csv by design_id. "
-                "Run scripts/score_doe.py to regenerate scoring outputs, or rerun bundle "
-                "with allow_fallback_scores=True to force heuristic ranking."
-            )
-        base_scores = design_points.merge(design_scores, on="design_id", how="left")
-        for c in ("pass_rate", "quality_mean", "seed_robustness", "score_total"):
-            if c not in base_scores.columns:
-                base_scores[c] = np.nan
-        base_scores["pass_rate"] = pd.to_numeric(base_scores["pass_rate"], errors="coerce").fillna(0.0)
-        base_scores["quality_mean"] = pd.to_numeric(base_scores["quality_mean"], errors="coerce").fillna(0.0)
-        base_scores["score_total"] = pd.to_numeric(base_scores["score_total"], errors="coerce").fillna(
-            0.70 * base_scores["pass_rate"] + 0.30 * base_scores["quality_mean"]
+        raise RuntimeError(
+            "doe_design_scores.csv could not be merged to doe_design_points.csv by design_id. "
+            "Run scripts/score_doe.py to regenerate scoring outputs."
         )
-        used_fallback_scores = True
-        if not fallback_reason:
-            fallback_reason = "non-mergeable doe_design_scores.csv"
     buckets = _sample_buckets(base_scores, n_per_bucket=int(per_bucket))
     knob_cols = [c for c in design_points.columns if c != "design_id"]
     knob_ranges = _load_doe_knob_ranges(doe_root=root, knob_cols=knob_cols, points_df=design_points)
@@ -626,14 +550,6 @@ def build_doe_review_bundle(
         knob_ranges_rows.append({"knob": k, "range_min": lo, "range_max": hi})
     knob_ranges_csv = raw_dir / "knob_ranges.csv"
     pd.DataFrame(knob_ranges_rows).to_csv(knob_ranges_csv, index=False)
-    if used_fallback_scores:
-        (raw_dir / "bundle_notes.txt").write_text(
-            "Note: doe_design_scores.csv was empty or not mergeable. "
-            "Bundle ranking used fallback scores derived from doe_run_features.csv "
-            f"(score_total = 0.70*pass_rate + 0.30*quality_proxy). Reason: {fallback_reason}.\n",
-            encoding="utf-8",
-        )
-
     queue_rows: list[dict[str, Any]] = []
     queue_cols = [
         "doe_root",
@@ -717,7 +633,7 @@ def build_doe_review_bundle(
                 "seed_robustness": _safe_float(drow.get("seed_robustness")),
                 "gate_puzzle_anti_monopoly": bool(rep.get("gate_puzzle_anti_monopoly", True)),
                 "passes_hard_gates": bool(rep.get("passes_hard_gates", False)),
-                "bundle_used_fallback_scores": bool(used_fallback_scores),
+                "bundle_used_fallback_scores": False,
                 "run_dir": str(run_dir),
                 "summary_dir": str(summary_out_dir),
                 "run_overview_pdf": str(run_overview_pdf),
@@ -738,7 +654,7 @@ def build_doe_review_bundle(
                     "bundle_packet_dir": str(packet_dir),
                     "bundle_raw_packet_dir": str(raw_packet_dir),
                     "bundle_overview_pdf": str(run_overview_pdf),
-                    "bundle_used_fallback_scores": bool(used_fallback_scores),
+                    "bundle_used_fallback_scores": False,
                     "ai_interpretation": "",
                     "human_feedback": "",
                     "human_verdict": "",

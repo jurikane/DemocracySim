@@ -39,7 +39,6 @@ def test_compute_run_features_from_tables_contract() -> None:
         }
     )
     f = compute_run_features_from_tables(area, agents, burn_in_steps=2)
-    assert f["max_all_abstain_stretch"] == 2
     assert f["winner_changes_post_burnin"] == 2
     assert f["roll3_group_turnout_range_max"] > 0.0
     assert f["roll20_group_turnout_range_max"] == 0.0
@@ -107,7 +106,6 @@ def test_apply_hard_gates_contract() -> None:
                 "design_id": 0,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 5,
                 "winner_change_rate_post_burnin": 0.05,
                 "turnout_std": 2.0,
@@ -125,7 +123,6 @@ def test_apply_hard_gates_contract() -> None:
                 "design_id": 1,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 40,
                 "winner_changes_post_burnin": 0,
                 "winner_change_rate_post_burnin": 0.0,
                 "turnout_std": 0.0,
@@ -143,7 +140,6 @@ def test_apply_hard_gates_contract() -> None:
                 "design_id": 2,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 500,
                 "winner_change_rate_post_burnin": 0.90,
                 "turnout_std": 1.0,
@@ -161,19 +157,8 @@ def test_apply_hard_gates_contract() -> None:
     )
     out = apply_hard_gates(
         runs,
-        max_all_abstain_stretch=20,
         min_winner_changes_post_burnin=3,
-        min_group_turnout_range_mean=0.03,
-        min_roll3_group_turnout_range_max=0.3,
-        min_roll20_group_turnout_range_max=0.3,
-        min_turnout_std=0.5,
-        min_gini_std=1.0,
-        min_dist_std=0.02,
         min_winner_entropy_norm=0.2,
-        min_dist_nonzero_share=0.05,
-        min_competitive_step_share=0.05,
-        min_mean_turnout=20.0,
-        max_mean_turnout=90.0,
     )
     assert bool(out.loc[out["design_id"] == 0, "passes_hard_gates"].iloc[0]) is True
     assert bool(out.loc[out["design_id"] == 1, "passes_hard_gates"].iloc[0]) is False
@@ -187,7 +172,6 @@ def test_apply_hard_gates_lockin_is_hard_blocker() -> None:
                 "design_id": 0,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 1,  # below lock-in threshold
                 "winner_change_rate_post_burnin": 0.05,
                 "turnout_std": 2.0,
@@ -205,41 +189,29 @@ def test_apply_hard_gates_lockin_is_hard_blocker() -> None:
     )
     out = apply_hard_gates(
         runs,
-        max_all_abstain_stretch=10,
         min_winner_changes_post_burnin=2,
-        min_group_turnout_range_mean=0.03,
-        min_roll3_group_turnout_range_max=0.3,
-        min_roll20_group_turnout_range_max=0.3,
-        min_turnout_std=0.5,
-        min_gini_std=1.0,
-        min_dist_std=0.02,
         min_winner_entropy_norm=0.2,
-        min_dist_nonzero_share=0.05,
-        min_competitive_step_share=0.05,
-        min_mean_turnout=20.0,
-        max_mean_turnout=90.0,
     )
     assert bool(out.loc[0, "gate_no_lockin"]) is False
     assert bool(out.loc[0, "passes_hard_gates"]) is False
 
 
-def test_apply_hard_gates_requires_roll3_and_roll20() -> None:
+def test_apply_hard_gates_entropy_is_hard_blocker() -> None:
     runs = pd.DataFrame(
         [
             {
                 "design_id": 0,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 6,
                 "winner_change_rate_post_burnin": 0.06,
                 "turnout_std": 2.0,
                 "gini_std": 4.0,
                 "dist_std": 0.1,
                 "group_turnout_range_mean": 0.08,
-                "roll3_group_turnout_range_max": 0.35,  # passes roll3
-                "roll20_group_turnout_range_max": 0.08,  # fails roll20
-                "winner_entropy_norm": 0.6,
+                "roll3_group_turnout_range_max": 0.35,
+                "roll20_group_turnout_range_max": 0.08,
+                "winner_entropy_norm": 0.19,
                 "dist_nonzero_share": 0.3,
                 "competitive_step_share": 0.2,
                 "mean_turnout": 60.0,
@@ -248,22 +220,10 @@ def test_apply_hard_gates_requires_roll3_and_roll20() -> None:
     )
     out = apply_hard_gates(
         runs,
-        max_all_abstain_stretch=10,
         min_winner_changes_post_burnin=3,
-        min_group_turnout_range_mean=0.03,
-        min_roll3_group_turnout_range_max=0.3,
-        min_roll20_group_turnout_range_max=0.1,
-        min_turnout_std=0.5,
-        min_gini_std=1.0,
-        min_dist_std=0.02,
         min_winner_entropy_norm=0.2,
-        min_dist_nonzero_share=0.05,
-        min_competitive_step_share=0.05,
-        min_mean_turnout=20.0,
-        max_mean_turnout=90.0,
     )
-    assert bool(out.loc[0, "gate_roll3_divergence"]) is True
-    assert bool(out.loc[0, "gate_roll20_divergence"]) is False
+    assert bool(out.loc[0, "gate_winner_entropy"]) is False
     assert bool(out.loc[0, "passes_hard_gates"]) is False
 
 
@@ -274,7 +234,6 @@ def test_apply_hard_gates_fails_fast_on_missing_required_columns() -> None:
                 "design_id": 0,
                 "rule_name": "approval",
                 "seed": 101,
-                "max_all_abstain_stretch": 0,
                 "winner_changes_post_burnin": 5,
                 "turnout_std": 2.0,
                 "gini_std": 4.0,
@@ -442,14 +401,10 @@ def test_analyze_doe_root_and_score_designs(tmp_path: Path) -> None:
         root,
         burn_in_steps=2,
         thresholds={
-            "max_all_abstain_stretch": 999.0,
             "min_winner_changes_post_burnin": 0.0,
-            "min_group_turnout_range_mean": 0.0,
-            "min_roll3_group_turnout_range_max": 0.0,
-            "min_roll20_group_turnout_range_max": 0.0,
-            "min_turnout_std": 0.0,
-            "min_gini_std": 0.0,
-            "min_dist_std": 0.0,
+            "min_winner_change_rate_post_burnin": 0.0,
+            "max_winner_change_rate_post_burnin": 1.0,
+            "min_winner_entropy_norm": 0.0,
         },
     )
     assert out["run_features_csv"].exists()
@@ -494,7 +449,7 @@ def test_load_selection_objective_contract(tmp_path: Path) -> None:
         json.dumps(
                 {
                     "version": "v1",
-                    "thresholds": {"max_all_abstain_stretch": 7.0},
+                    "thresholds": {"min_winner_changes_post_burnin": 7.0},
                     "weights": {"quality_mean": 0.5, "seed_robustness": 0.5},
                     "stage_weights": {"viability": 0.7, "quality_bundle": 0.3},
                     "strict_completeness": False,
@@ -503,7 +458,7 @@ def test_load_selection_objective_contract(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     obj = load_selection_objective(p)
-    assert float(obj["thresholds"]["max_all_abstain_stretch"]) == 7.0
+    assert float(obj["thresholds"]["min_winner_changes_post_burnin"]) == 7.0
     assert float(obj["weights"]["quality_mean"]) == 0.5
     assert float(obj["stage_weights"]["viability"]) == 0.7
     assert bool(obj["strict_completeness"]) is False
@@ -519,19 +474,14 @@ def test_analyze_doe_root_reads_objective_contract(tmp_path: Path) -> None:
                 {
                     "version": "v1",
                     "thresholds": {
-                        "max_all_abstain_stretch": 999.0,
                         "min_winner_changes_post_burnin": 0.0,
-                        "min_group_turnout_range_mean": 0.0,
-                        "min_roll3_group_turnout_range_max": 0.0,
-                        "min_roll20_group_turnout_range_max": 0.0,
-                    "min_turnout_std": 0.0,
-                    "min_gini_std": 0.0,
-                    "min_dist_std": 0.0,
-                    "min_winner_entropy_norm": 0.0,
-                    "min_dist_nonzero_share": 0.0,
+                        "min_winner_change_rate_post_burnin": 0.0,
+                        "max_winner_change_rate_post_burnin": 1.0,
+                        "min_winner_entropy_norm": 0.0,
                         "min_competitive_step_share": 0.0,
-                        "min_mean_turnout": 0.0,
-                        "max_mean_turnout": 100.0,
+                        "min_puzzle_conflict_step_share_for_gate": 0.0,
+                        "max_puzzle_dominance_share_conflict": 1.0,
+                        "min_power_recovery_share_conflict": 0.0,
                     },
                     "weights": {"quality_mean": 0.45, "seed_robustness": 0.55},
                     "stage_weights": {"viability": 0.6, "quality_bundle": 0.4},
@@ -544,7 +494,7 @@ def test_analyze_doe_root_reads_objective_contract(tmp_path: Path) -> None:
     spec = json.loads(out["selection_spec_json"].read_text(encoding="utf-8"))
     assert spec["objective_config_path"].endswith("objective.json")
     assert bool(spec["strict_completeness"]) is False
-    assert float(spec["thresholds"]["max_all_abstain_stretch"]) == 999.0
+    assert float(spec["thresholds"]["min_winner_changes_post_burnin"]) == 0.0
 
 
 def test_score_designs_reports_selection_score_only() -> None:
@@ -692,19 +642,14 @@ def test_analyze_doe_root_strict_completeness_filters_incomplete_designs(tmp_pat
         root,
         burn_in_steps=0,
         thresholds={
-            "max_all_abstain_stretch": 999.0,
             "min_winner_changes_post_burnin": 0.0,
-            "min_group_turnout_range_mean": 0.0,
-            "min_roll3_group_turnout_range_max": 0.0,
-            "min_roll20_group_turnout_range_max": 0.0,
-            "min_turnout_std": 0.0,
-            "min_gini_std": 0.0,
-            "min_dist_std": 0.0,
+            "min_winner_change_rate_post_burnin": 0.0,
+            "max_winner_change_rate_post_burnin": 1.0,
             "min_winner_entropy_norm": 0.0,
-            "min_dist_nonzero_share": 0.0,
             "min_competitive_step_share": 0.0,
-            "min_mean_turnout": 0.0,
-            "max_mean_turnout": 100.0,
+            "min_puzzle_conflict_step_share_for_gate": 0.0,
+            "max_puzzle_dominance_share_conflict": 1.0,
+            "min_power_recovery_share_conflict": 0.0,
         },
     )
     ds = pd.read_csv(out["design_scores_csv"])

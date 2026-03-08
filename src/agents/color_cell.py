@@ -65,8 +65,8 @@ class ColorCell(Agent):
 
     def color_step(self):
         """
-        Determines the cells' color for the next step.
-        TODO
+        Determine the cell color for the next step.
+        Currently a no-op because color updates are handled by area-level logic.
         """
         # _neighbor_iter = self.model.grid.iter_neighbors(
         #     (self._row, self._col), True)

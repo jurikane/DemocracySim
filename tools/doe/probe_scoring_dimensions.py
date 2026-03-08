@@ -45,7 +45,7 @@ def _prompt_int(label: str, default: int, help_text: str, *, min_value: int | No
             return int(default)
         try:
             v = int(raw)
-        except Exception:
+        except ValueError:
             print("Enter a valid integer.")
             continue
         if min_value is not None and v < min_value:
@@ -68,7 +68,7 @@ def _prompt_float(
             return float(default)
         try:
             v = float(raw)
-        except Exception:
+        except ValueError:
             print("Enter a valid number.")
             continue
         if min_value is not None and v < min_value:
@@ -199,7 +199,7 @@ def _infer_rules_from_doe_spec(root: Path) -> tuple[str, str]:
         return default_primary, default_robust
     try:
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return default_primary, default_robust
     if not isinstance(spec, dict):
         return default_primary, default_robust
@@ -216,7 +216,7 @@ def _required_seed_coverage(doe_root: Path, strict: bool) -> tuple[int | None, i
         return None, None
     try:
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return None, None
     if not isinstance(spec, dict):
         return None, None
@@ -452,21 +452,10 @@ def main() -> None:
 
     gated = apply_hard_gates(
         run_features,
-        max_all_abstain_stretch=float(thr["max_all_abstain_stretch"]),
         min_winner_changes_post_burnin=float(thr["min_winner_changes_post_burnin"]),
         min_winner_change_rate_post_burnin=float(thr["min_winner_change_rate_post_burnin"]),
         max_winner_change_rate_post_burnin=float(thr["max_winner_change_rate_post_burnin"]),
-        min_group_turnout_range_mean=float(thr["min_group_turnout_range_mean"]),
-        min_roll3_group_turnout_range_max=float(thr["min_roll3_group_turnout_range_max"]),
-        min_roll20_group_turnout_range_max=float(thr["min_roll20_group_turnout_range_max"]),
-        min_turnout_std=float(thr["min_turnout_std"]),
-        min_gini_std=float(thr["min_gini_std"]),
-        min_dist_std=float(thr["min_dist_std"]),
         min_winner_entropy_norm=float(thr["min_winner_entropy_norm"]),
-        min_dist_nonzero_share=float(thr["min_dist_nonzero_share"]),
-        min_competitive_step_share=float(thr["min_competitive_step_share"]),
-        min_mean_turnout=float(thr["min_mean_turnout"]),
-        max_mean_turnout=float(thr["max_mean_turnout"]),
         min_puzzle_conflict_step_share_for_gate=float(thr["min_puzzle_conflict_step_share_for_gate"]),
         max_puzzle_dominance_share_conflict=float(thr["max_puzzle_dominance_share_conflict"]),
         min_power_recovery_share_conflict=float(thr["min_power_recovery_share_conflict"]),

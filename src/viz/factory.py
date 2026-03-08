@@ -1,27 +1,16 @@
 from __future__ import annotations
-from src.config.schema import VisualizationConfig
 from src.config.loader import AppConfig
 from mesa.visualization.modules import CanvasGrid, ChartModule
 from src.agents.color_cell import ColorCell
 from src.viz.color_palette import COLORS
-
-# Module-level store for visualization config
-_VIS_CFG: VisualizationConfig | None = None
-
-
-def get_vis_cfg() -> VisualizationConfig | None:
-    return _VIS_CFG
-
 
 def make_canvas(cfg: AppConfig) -> CanvasGrid:
     """
     Build a CanvasGrid using the current config.
     Expects cfg like: { 'model': {...}, 'visualization': {...}}.
     """
-    global _VIS_CFG
     model_cfg = cfg.model
     vis_cfg = cfg.visualization
-    _VIS_CFG = vis_cfg  # expose to other visualization modules
 
     width = int(model_cfg.width)
     height = int(model_cfg.height)
@@ -123,7 +112,7 @@ def make_charts(cfg: AppConfig) -> list:
     )
 
     # Advanced matplotlib-based elements
-    from src.viz.visualisation_elements import (
+    from src.viz.visualization_elements import (
         ReplayGridStepStatusElement,
         PersonalityGroupDistribution,
         AreaDiagnosticsPanel,

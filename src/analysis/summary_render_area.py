@@ -25,9 +25,25 @@ from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
 from src.utils.social_welfare_functions import approval_voting, borda_rule, majority_rule, schulze_rule, utilitarian_rule
 from src.viz.color_palette import COLORS as SIM_COLORS
-from src.viz.group_palette import get_group_color
+from src.viz.color_palette import get_group_color
 
 _Y_PAD_PERCENT = 1.5
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _run_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(meta.get("run")) if isinstance(meta, dict) else {}
+
+
+def _int_with_default(value: Any, default: int) -> int:
+    try:
+        return int(value or default)
+    except (TypeError, ValueError):
+        return int(default)
+
 
 def _render_area_detail_pdfs(
     *,
@@ -81,23 +97,22 @@ def _render_area_detail_pdf(
         turnout = area_series["turnout"].to_numpy(dtype=float)
 
         # Compact static info block for area context.
-        areas_info = (((static.get("personality_group_info", {}) or {}).get("areas", {})) or {})
-        area_info = areas_info.get(str(int(area_id)), {}) if isinstance(areas_info, dict) else {}
-        area_n = int(area_info.get("num_agents", -1)) if isinstance(area_info, dict) else -1
-        pg_dist = np.asarray(area_info.get("personality_group_distribution", []), dtype=float) if isinstance(area_info, dict) else np.asarray([], dtype=float)
-        personality_groups = np.asarray(
-            ((static.get("personality_group_info", {}) or {}).get("personality_groups", [])),
-            dtype=int,
-        )
+        pgi = _as_dict(static.get("personality_group_info"))
+        areas_info = _as_dict(pgi.get("areas"))
+        area_info = _as_dict(areas_info.get(str(int(area_id))))
+        area_n = _int_with_default(area_info.get("num_agents"), -1)
+        pg_dist = np.asarray(area_info.get("personality_group_distribution", []), dtype=float)
+        personality_groups = np.asarray(pgi.get("personality_groups", []), dtype=int)
+        run_meta = _run_meta(meta)
         majority_txt = "n/a"
         if pg_dist.size > 0 and np.isfinite(pg_dist).any():
             gidx = int(np.nanargmax(pg_dist))
             majority_txt = f"g{gidx} ({100.0 * float(pg_dist[gidx]):.1f}%)"
         suptitle = (
-            f"Area {area_id} Detail | run_seed={meta['run']['run_seed']} | "
-            f"rule={meta['run'].get('rule_name')} | area_agents={area_n} | majority_group={majority_txt}"
+            f"Area {area_id} Detail | run_seed={run_meta.get('run_seed')} | "
+            f"rule={run_meta.get('rule_name')} | area_agents={area_n} | majority_group={majority_txt}"
         )
-        current_rule_idx = int(((meta.get("run", {}) or {}).get("rule_idx", -1)) or -1)
+        current_rule_idx = _int_with_default(run_meta.get("rule_idx"), -1)
         power_dirs = _compute_area_power_direction_orderings(
             area_group_series=area_group_series,
             personality_groups=personality_groups,
@@ -1372,7 +1387,7 @@ def _compute_area_power_direction_orderings(
     # Keep this panel deterministic and interpretable: exclude Random baseline.
     rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
     rule_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze"]
-    run_seed = int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0)
+    run_seed = _int_with_default(_run_meta(meta).get("run_seed"), 0)
     out: list[dict[str, Any]] = []
     for idx, (fn, name) in enumerate(zip(rule_fns, rule_names)):
         rng = np.random.default_rng((run_seed * 1_000_003 + 97 * (idx + 1)) % (2**63 - 1))
@@ -1468,7 +1483,7 @@ def _compute_area_puzzle_power_distances(
     has_puzzle_ids = "puzzle_ordering_id" in area_series.columns
     grid_prev = None
     puzzle_prev = None
-    tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 4242)
+    tie_rng = np.random.default_rng(_int_with_default(_run_meta(meta).get("run_seed"), 0) + 4242)
 
     win_ids = area_series["winning_option_id"].to_numpy(dtype=int) if "winning_option_id" in area_series.columns else np.full(xlen, -1, dtype=int)
     for i in range(xlen):
@@ -1793,7 +1808,7 @@ def _compute_group_puzzle_opportunity_distances(
     x = area_series["step"].to_numpy(dtype=int)
     out = pd.DataFrame({"step": x.astype(np.int32)})
     prev_ord = None
-    tie_rng = np.random.default_rng(int(((meta.get("run", {}) or {}).get("run_seed", 0)) or 0) + 7171)
+    tie_rng = np.random.default_rng(_int_with_default(_run_meta(meta).get("run_seed"), 0) + 7171)
     options = np.asarray(list(itertools.permutations(range(int(num_colors)))), dtype=int)
     puzzle_orders: list[np.ndarray | None] = []
     for _, r in area_series.iterrows():

@@ -19,7 +19,7 @@ from src.analysis.summary_render_area import (
 )
 from src.analysis.summary_render_common import _adjacent_abs_change_series, _rolling_mean_nan, _set_percent_ylim_visible, _set_unit_ylim_visible
 from src.analysis.thesis_endpoints import step_volatility_l1_normalized
-from src.viz.group_palette import get_group_color
+from src.viz.color_palette import get_group_color
 
 _SMOOTH_WINDOW_STEPS = 9
 
