@@ -39,8 +39,12 @@ def _run_meta(meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def _int_with_default(value: Any, default: int) -> int:
+    if value is None:
+        return int(default)
+    if isinstance(value, str) and value.strip() == "":
+        return int(default)
     try:
-        return int(value or default)
+        return int(value)
     except (TypeError, ValueError):
         return int(default)
 
