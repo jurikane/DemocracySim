@@ -83,6 +83,7 @@ data/
 configs/*.yaml
 !configs/default.yaml
 !configs/doe.yaml
+!configs/toy.yaml
 
 # Local env and secrets
 .env

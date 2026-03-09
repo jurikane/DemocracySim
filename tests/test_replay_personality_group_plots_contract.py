@@ -12,7 +12,7 @@ def v2_run_dir(tmp_path):
     out_dir = tmp_path / "v2_run"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = load_config("configs/test.yaml")
+    cfg = load_config("configs/toy.yaml")
     cfg_for_run = cfg.model_copy(deep=True)
     setattr(cfg_for_run.simulation, "num_steps", 2)
     setattr(cfg_for_run.simulation, "store_grid", True)
@@ -29,7 +29,7 @@ def test_replay_has_personality_group_info_for_plots(v2_run_dir):
     This catches static.json key mismatches (e.g. writing personality_info instead
     of personality_group_info).
     """
-    appcfg = load_config("configs/test.yaml")
+    appcfg = load_config("configs/toy.yaml")
     model = ReplayModel(appcfg=appcfg, run_dir=v2_run_dir)
 
     # Create-once plots are rendered at scheduler.steps == 0.

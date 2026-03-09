@@ -80,7 +80,7 @@ def v2_run_dir(tmp_path: Path) -> Path:
     out_root = tmp_path / "out"
     out_root.mkdir(parents=True, exist_ok=True)
 
-    cfg = load_config("test.yaml")
+    cfg = load_config("toy.yaml")
     run_dir = out_root / "run_0"
     run_once(run_id=0, cfg=cfg, out_dir=run_dir)
     return run_dir

@@ -1,0 +1,75 @@
+# To use this configuration, set: CONFIG_FILE=toy.yaml
+model:
+  # Random Seed
+  seed: 42
+
+  # Elections
+  election_cost_rate: 0.01  # As fraction of common assets
+  reward_rate_personal: 0.02
+  break_even_distance_common: 0.25 # Quality threshold for the mode-aware quality_distance gate
+  election_impact_on_mutation: 1.8
+  mu: 0.05
+  rule_idx: 1
+  distance_idx: 0
+
+  # Model parameters
+  num_agents: 50
+  num_colors: 4
+  color_patches_steps: 3
+  patch_power: 1.0
+  heterogeneity: 0.3  # color_heterogeneity
+  known_cells: 5
+
+  # Voting Agents
+  num_personality_groups: 3
+
+  # Grid parameters
+  height: 20            # (grid_rows)
+  width: 10             # (grid_cols)
+
+  # Voting Areas
+  num_areas: 2
+  av_area_height: 10
+  av_area_width: 10
+  area_size_variance: 0.0
+
+  # Adaptive participation learning
+  participation_alpha: 0.05
+  participation_beta: 1.0
+  participation_init_q: 0.0
+  participation_q_max: 2.0
+  participation_baseline_alpha: 0.1
+
+  # (In-Group variation of) Per-agent personal_opt_dist (static)
+  personal_preference_peakedness: 1.0
+
+  # Adaptive altruism learning (reality-weight)
+  altruism_alpha: 0.05
+  altruism_init: 0.5
+  altruism_clip_min: 0.0
+  altruism_clip_max: 1.0
+  altruism_mode: surprise_learning
+  altruism_response_gamma: 1.0
+  altruism_satisfaction_theta: 0.5
+  altruism_satisfaction_slope: 4.0
+  altruism_learning: true
+  altruism_static: 0.5
+  # Satisfaction value (learning signal; used by altruism learning)
+  satisfaction_mode: area
+  satisfaction_baseline_alpha: 0.1
+
+# Visualization parameters
+visualization:
+  # Grid parameters
+  cell_size: 30
+  draw_borders: true
+  # Statistics and Views
+  show_area_stats: true
+  calibration_mode: true
+
+simulation:
+  runs:         1     # number of independent seeds
+  num_steps:    400
+  store_grid:   true  # set true only if full grid is needed
+  grid_interval: 1    # save every i'th step if grids enabled
+  base_seed:    42    # base random seed

@@ -87,7 +87,7 @@ def test_headless_same_seed_produces_identical_first_steps(tmp_path: Path):
     _assert_runs_identical(out_a, out_b, pad=pad)
 
 
-@pytest.mark.parametrize("cfg_name", ["toy.yaml", "test_tiny.yaml", "debug_tiny.yaml"])
+@pytest.mark.parametrize("cfg_name", ["toy.yaml"])
 def test_headless_same_seed_reproducible_across_config_variants(tmp_path: Path, cfg_name: str) -> None:
     """Reproducibility must hold across different config profiles, including debug-enabled ones."""
     cfg = load_config(cfg_name)

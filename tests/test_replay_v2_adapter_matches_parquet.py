@@ -18,7 +18,7 @@ def v2_run_dir(tmp_path):
     out_dir = tmp_path / "v2_run"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cfg = load_config("configs/test.yaml")
+    cfg = load_config("configs/toy.yaml")
 
     # Ensure the run is small/fast for CI.
     # We'll clone the config so we don't mutate globals.
@@ -37,7 +37,7 @@ def v2_run_dir(tmp_path):
 
 def _steps_from_replay(run_dir):
     """Load v2 run via ReplayModel and materialize all recorded steps into DataFrames."""
-    appcfg = load_config("configs/test.yaml")
+    appcfg = load_config("configs/toy.yaml")
     model = ReplayModel(appcfg=appcfg, run_dir=run_dir)
 
     # ReplayModel starts at step 0 (grid only). Materialize all recorded steps.

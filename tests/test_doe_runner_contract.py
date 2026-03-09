@@ -53,7 +53,7 @@ def test_build_run_plan_primary_plus_robust_every_2(tmp_path: Path) -> None:
 
 
 def test_apply_doe_overrides_sets_frozen_and_run_controls() -> None:
-    cfg = load_config("test_small.yaml")
+    cfg = load_config("toy.yaml")
     params = {
         "election_cost_rate": 0.07,
         "reward_rate_personal": 0.04,
@@ -176,7 +176,7 @@ def test_select_farthest_seeds_from_descriptors() -> None:
 
 
 def test_select_stratified_seeds_returns_subset() -> None:
-    cfg = load_config("test_small.yaml")
+    cfg = load_config("toy.yaml")
     candidates = [101, 202, 303, 404]
     selected = select_stratified_seeds(
         cfg,

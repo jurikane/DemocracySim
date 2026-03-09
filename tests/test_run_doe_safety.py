@@ -19,7 +19,7 @@ def test_run_doe_profile_choices_match_doe_runner_profiles() -> None:
 
 
 def test_execute_run_plan_continue_on_error(tmp_path: Path) -> None:
-    cfg = load_config("test_small.yaml")
+    cfg = load_config("toy.yaml")
     tasks = [
         DOERunTask(design_id=0, seed=101, rule_idx=1, out_dir=tmp_path / "a", params={}),
         DOERunTask(design_id=0, seed=202, rule_idx=1, out_dir=tmp_path / "b", params={}),
@@ -43,7 +43,7 @@ def test_execute_run_plan_continue_on_error(tmp_path: Path) -> None:
 
 
 def test_execute_run_plan_raises_without_continue(tmp_path: Path) -> None:
-    cfg = load_config("test_small.yaml")
+    cfg = load_config("toy.yaml")
     tasks = [
         DOERunTask(design_id=0, seed=101, rule_idx=1, out_dir=tmp_path / "a", params={}),
     ]

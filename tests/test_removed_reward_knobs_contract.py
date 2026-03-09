@@ -18,7 +18,7 @@ REMOVED_KNOBS = {
 
 
 def test_model_config_rejects_removed_reward_knobs() -> None:
-    cfg = load_config("test_tiny.yaml")
+    cfg = load_config("toy.yaml")
     base = cfg.model.model_dump()
     for key in REMOVED_KNOBS:
         payload = dict(base)
