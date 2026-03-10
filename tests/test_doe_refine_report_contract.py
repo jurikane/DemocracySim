@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import subprocess
-import sys
 import json
 
 import pandas as pd
@@ -60,31 +58,3 @@ def test_build_inference_report_outputs_files(tmp_path: Path) -> None:
     pareto = pd.read_csv(out["pareto_designs_csv"])
     assert {"design_id", "is_pareto"}.issubset(set(pareto.columns))
     assert "seed_fixed_effects" in spec["methods"]
-
-
-def test_doe_inference_cli(tmp_path: Path) -> None:
-    root = tmp_path / "doe_mock_cli"
-    root.mkdir(parents=True, exist_ok=True)
-    _write_mock_doe_tables(root)
-    cmd = [
-        sys.executable,
-        "-m",
-        "tools.doe.doe_inference",
-        "--doe-root",
-        str(root),
-        "--bootstrap-reps",
-        "50",
-        "--random-seed",
-        "13",
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    assert res.returncode == 0, res.stderr
-    assert (root / "doe_knob_importance.csv").exists() is False
-    assert (root / "doe_suggested_ranges.json").exists() is False
-    assert (root / "doe_inference_spec.json").exists()
-    assert (root / "doe_seed_fixed_effects.csv").exists()
-    assert (root / "doe_nonlinear_importance.csv").exists()
-    assert (root / "doe_interaction_maps.csv").exists()
-    assert (root / "doe_bootstrap_design_ci.csv").exists()
-    assert (root / "doe_pareto_designs.csv").exists()
-    assert (root / "doe_inference_summary.json").exists() is False

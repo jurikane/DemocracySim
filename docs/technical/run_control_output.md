@@ -59,46 +59,6 @@ Optional objective override:
 python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp> --objective-config configs/doe_selection_objective_v1.json
 ```
 
-## DOE Support Tools
-
-### Build HIL queue
-
-```bash
-python -m tools.doe.build_doe_hil_queue --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Review HIL queue
-
-```bash
-python -m tools.doe.doe_hil_review --print-commands
-python -m tools.doe.doe_hil_review --populate-ai
-python -m tools.doe.doe_hil_review --bucket top --limit 5 --run-fast
-```
-
-### Probe scoring dimensions
-
-```bash
-python -m tools.doe.probe_scoring_dimensions --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Recovery scan
-
-```bash
-python -m tools.doe.recovery_scan --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Seed selection helper
-
-```bash
-python -m tools.doe.select_balanced_seeds --config doe.yaml --doe-profile <profile> --target <n>
-```
-
-### DOE inference report
-
-```bash
-python -m tools.doe.doe_inference --doe-root data/simulation_output/doe_<timestamp>
-```
-
 ## Output Structure (Headless/DOE)
 
 Typical run output root:
@@ -125,5 +85,5 @@ Common files:
 
 1. Run simulations or DOE.
 2. Score DOE outputs.
-3. Inspect top/mid/bottom designs with HIL queue + summaries.
+3. Inspect selected runs by generating summary artifacts.
 4. Freeze selected configuration and generate thesis runs.
