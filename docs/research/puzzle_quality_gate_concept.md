@@ -3,13 +3,14 @@
 This defines the conceptual and technical role of the puzzle process used for decision-quality evaluation.
 
 Canonical term in thesis text: **Puzzle Quality Gate**.
-Optional metaphor: "zeitgeist" or "window of opportunity".
+Allowed shorthand in prose after definition: **puzzle**.
+Avoid rotating through alternative labels in main thesis text.
 
 ## 1. Why the Puzzle Quality Gate Exists
 
-The thesis requires a quality-pressure mechanism: decisions should be rewardable or punishable based on alignment with an external viability criterion.
+The thesis requires a quality-pressure mechanism: decisions should be rewardable or punishable based on alignment with the current puzzle.
 
-Originally, this quality reference was coupled to current grid state.
+Prior to the puzzle, the quality reference was coupled to current grid state.
 However, this created lock-in states by favoring alignment with start conditions and majority, that are not very interesting to study.
 Now it is separated into its own stochastic process.
 
@@ -17,7 +18,7 @@ Key reason for the split:
 
 - avoid fixed directional lock-in in quality pressure
 - keep quality pressure symmetric over the simplex in expectation
-- allow the realized grid state and quality reference to diverge
+- allow the realized grid state and the quality-pressure mechanism to diverge
 
 ## 2. Implemented Process
 

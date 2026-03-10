@@ -7,7 +7,7 @@ This is to explain why participation learning is group-relative in the thesis ba
 The model intentionally combines:
 
 - participation fee paid only by participants
-- collective reward/punishment mode based on decision quality gate
+- collective reward/punishment mode based on the Puzzle Quality Gate
 - reward magnitude tied to preference alignment
 - both fees and rewards are relative to agents assets
 
@@ -15,7 +15,7 @@ Consequence:
 
 - participation cost is individually concentrated
 - quality sign is socially shared
-- within personality groups, reward components are identical, while fee remains an individual participation signal
+- within preference groups, reward components are identical, while fee remains an individual participation signal
 
 This creates a structured free-rider tension.
 

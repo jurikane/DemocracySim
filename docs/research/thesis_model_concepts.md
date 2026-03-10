@@ -25,7 +25,7 @@ They do not learn strategic ballot manipulation.
 
 ## 2. Core Entities and Representations
 
-- Agents belong to personality groups defined by preference orderings over colors.
+- Agents have individual preferences over the available colors, which naturally group them into *preference groups* defined by shared ordinal rankings over colors.
 - Each agent also has a per-agent preferred color distribution (`personal_opt_dist`) consistent with that ordering.
 - Elections aggregate participant ballots into a winning color ordering.
 - Assets represent a generic resource/capacity state (not literal money).
@@ -44,7 +44,7 @@ The current model separates two environmental roles that were previously conflat
     - It is path-dependent memory of collective decisions.
     - Agent satisfaction/dissatisfaction is computed against this realized state (depending on satisfaction mode).
 
-2. Puzzle Quality Gate (quality reference process)
+2. *Puzzle Quality Gate* (stochastic puzzle process)
 
     - In `quality_target_mode=puzzle`, each area maintains a Puzzle Quality Gate distribution on the simplex.
     - The puzzle process evolves via a local Dirichlet random walk with occasional redraw shocks.
@@ -54,7 +54,7 @@ The current model separates two environmental roles that were previously conflat
 Conceptual role of the split:
 
 - Grid = what society has currently become.
-- Puzzle Quality Gate = external directional reality, conditioning or window of opportunity / quality gate for whether decisions are rewarded.
+- Puzzle Quality Gate = the current puzzle that determines whether collective decisions are rewarded or penalized.
 
 ## 4. Election-to-Learning Causal Loop (Per Step)
 
@@ -72,7 +72,7 @@ For each area and step, the implemented order is:
    - altruistic ballot with probability `altruism_factor`
    - otherwise self-regarding ballot
 8. Voting rule selects winning ordering.
-9. Quality gate computes decision quality:
+9. Puzzle Quality Gate computes decision quality:
    - puzzle mode: `puzzle_distance`
    - reality mode: `dist_to_reality`
 10. Reward/punishment sign is binary by quality threshold; magnitude scales with group alignment.
@@ -105,8 +105,8 @@ The model intentionally includes participation cost and non-excludable outcome e
 This creates a free-rider structure:
 
 - Participation is costly (fee paid only by participants).
-- Reward/punishment mode is collective (quality gate), not participation-conditional.
-- Within personality groups, reward components are strongly shared; fee is the key individual difference.
+- Reward/punishment mode is collective (Puzzle Quality Gate), not participation-conditional.
+- Within preference groups, reward components are strongly shared; fee is the key individual difference.
 
 Naive individual reward-learning can collapse into synchronized or weakly informative participation dynamics.
 
@@ -126,9 +126,9 @@ Conceptual effect:
 
 ## 7. Decision-Quality and Social-Tension Interpretation
 
-The quality gate formalizes a "decision viability" pressure:
+The Puzzle Quality Gate formalizes a changing viability pressure:
 
-- If elected ordering aligns sufficiently with quality reference, rewards are positive mode.
+- If elected ordering aligns sufficiently with the current puzzle, rewards are positive mode.
 - If not, negative mode applies.
 
 At the same time, self-regarding voting can pull outcomes away from this reference.

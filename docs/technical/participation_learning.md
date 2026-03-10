@@ -29,7 +29,7 @@ Participation probability is logistic in `q_participation`:
 
 `participation_signal_mode = group_relative_delta_rel_party`
 
-For each personality group `g`:
+For each preference group `g`:
 
 - `mu_g = mean(delta_rel of eligible agents in group g)`
 - `mu_groups = mean(mu_g across groups)`
