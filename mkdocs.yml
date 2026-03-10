@@ -35,6 +35,7 @@ nav:
         - Structural Topology: technical/structural_topology.md
         - Population & Preferences: technical/population_preferences.md
         - Run Control & Output: technical/run_control_output.md
+        - Reproducibility: technical/reproducibility.md
         - Learning:
             - Participation Learning: technical/participation_learning.md
             - Altruism Voting Behavior: technical/altruism_learning.md

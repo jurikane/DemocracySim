@@ -1,0 +1,87 @@
+{
+  "stage": "doe_selection",
+  "burn_in_steps": 0,
+  "primary_rule_name": "approval",
+  "objective_config_path": "configs/doe_selection_objective_thesis_recovery_v1.json",
+  "objective_config_version": "thesis-recovery-v6-no-moderate-selector",
+  "thresholds": {
+    "min_winner_changes_post_burnin": 3.0,
+    "min_winner_change_rate_post_burnin": 0.02,
+    "max_winner_change_rate_post_burnin": 0.8,
+    "min_winner_entropy_norm": 0.3,
+    "min_competitive_step_share": 0.08,
+    "puzzle_conflict_min_dist": 0.33,
+    "min_puzzle_conflict_step_share_for_gate": 0.25,
+    "max_puzzle_dominance_share_conflict": 0.93,
+    "min_power_recovery_share_conflict": 0.04,
+    "puzzle_dominance_share_score_low": 0.3,
+    "puzzle_dominance_share_score_high": 0.55,
+    "turnout_start_score_low": 30.0,
+    "turnout_start_score_high": 70.0,
+    "turnout_end_score_low": 20.0,
+    "turnout_end_score_high": 80.0,
+    "turnout_drop_score_good_max": 15.0,
+    "turnout_drop_score_zero_at": 60.0,
+    "turnout_decline_score_good_max": 0.08,
+    "turnout_decline_score_zero_at": 0.5,
+    "turnout_outside_band_share_good_max": 0.2,
+    "turnout_outside_band_share_zero_at": 0.8
+  },
+  "weights": {
+    "quality_mean": 0.7,
+    "seed_robustness": 0.3
+  },
+  "stage_weights": {
+    "viability": 0.5,
+    "quality_bundle": 0.5
+  },
+  "quality_component_weights": {
+    "z_quality_dist_std": 0.03719008264462811,
+    "z_group_turnout_structure": 0.3223140495867769,
+    "z_pa_gap": 0.0,
+    "z_winner_entropy": 0.3305785123966943,
+    "z_turnout_shape": 0.11983471074380167,
+    "z_participant_composition_dynamics": 0.08264462809917357,
+    "z_puzzle_dom_balance_conflict": 0.10743801652892564
+  },
+  "strict_completeness": true,
+  "effective_weights": {
+    "quality_mean": 0.7,
+    "seed_robustness": 0.3
+  },
+  "effective_stage_weights": {
+    "viability": 0.5,
+    "quality_bundle": 0.5
+  },
+  "effective_quality_component_weights": {
+    "z_quality_dist_std": 0.0371900826446281,
+    "z_group_turnout_structure": 0.32231404958677684,
+    "z_pa_gap": 0.0,
+    "z_winner_entropy": 0.3305785123966942,
+    "z_turnout_shape": 0.11983471074380164,
+    "z_participant_composition_dynamics": 0.08264462809917356,
+    "z_puzzle_dom_balance_conflict": 0.10743801652892561
+  },
+  "required_primary_runs": 50,
+  "dropped_incomplete_designs": 0,
+  "optional_metric_diagnostics": {
+    "missing_optional_columns": [],
+    "optional_na_counts": {
+      "participant_share_max_abs_drift_20": 0,
+      "participant_share_mean_abs_drift_20_w": 0,
+      "participant_share_turnover_rate_w": 0,
+      "puzzle_dominance_share_conflict": 0
+    }
+  },
+  "score_formula": "score_total = s_v*pass_rate + s_q*(w_q*quality_mean + w_r*seed_robustness)",
+  "quality_components": [
+    "z_quality_dist_std",
+    "z_group_turnout_structure",
+    "z_pa_gap",
+    "z_winner_entropy",
+    "z_turnout_shape",
+    "z_participant_composition_dynamics",
+    "z_puzzle_dom_balance_conflict"
+  ],
+  "note": "burn_in_steps is an analysis warm-up exclusion window only (no simulation burn-in mutation/reset logic)."
+}

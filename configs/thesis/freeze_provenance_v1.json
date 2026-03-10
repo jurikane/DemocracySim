@@ -1,21 +1,48 @@
 {
   "version": "freeze_provenance_v1",
-  "generated_at_utc": "2026-03-08T18:05:04+00:00",
-  "git_head": "c936c219fd1b9240dfac94dadf8f02334370599c",
+  "generated_at_utc": "2026-03-10T10:31:11+00:00",
+  "git_head": "dfbc1dfe70df04c69d20ceecb846a4fac9ef5256",
   "git_dirty": true,
+  "release": {
+    "tag": null,
+    "url": null
+  },
   "source": {
-    "doe_root": "data/simulation_output/doe_20260302_175623",
+    "doe_batch_id": "DOE-20260302-175623",
     "doe_profile": "phase3_party_altruism_sharp_local_v1",
-    "selected_design_id": 149
+    "selected_design_id": 149,
+    "doe_selection_provenance_v1_json": "configs/thesis/doe_selection_provenance_v1.json",
+    "doe_selection_bundle_dir": "configs/thesis/doe_selection_bundle_v1",
+    "doe_selection_bundle_files": [
+      "configs/thesis/doe_selection_bundle_v1/README.md",
+      "configs/thesis/doe_selection_bundle_v1/doe_design_points.csv",
+      "configs/thesis/doe_selection_bundle_v1/doe_design_scores.csv",
+      "configs/thesis/doe_selection_bundle_v1/doe_run_features.csv",
+      "configs/thesis/doe_selection_bundle_v1/doe_seed_selection.json",
+      "configs/thesis/doe_selection_bundle_v1/doe_selection_spec.json",
+      "configs/thesis/doe_selection_bundle_v1/doe_spec.json",
+      "configs/thesis/doe_selection_bundle_v1/doe_top_designs.json"
+    ]
   },
   "artifacts": {
     "final_model_v1_yaml": "configs/thesis/final_model_v1.yaml",
     "final_seed_list_v1_json": "configs/thesis/final_seed_list_v1.json",
     "final_run_manifest_v1_csv": "configs/thesis/final_run_manifest_v1.csv",
+    "doe_selection_provenance_v1_json": "configs/thesis/doe_selection_provenance_v1.json",
+    "doe_selection_bundle_dir": "configs/thesis/doe_selection_bundle_v1",
     "sha256": {
       "configs/thesis/final_model_v1.yaml": "3f4adfa658e64d20a7f5c53bf73cb85c685009485f44b36d887db46d5a5d1e00",
       "configs/thesis/final_seed_list_v1.json": "bb5b5008d8aef3a0abd2cd749338488475356a35bd793b7f01961ebc84b8fabe",
-      "configs/thesis/final_run_manifest_v1.csv": "5cd0ef46e1ce96abcaf08498c83ce88d57cc02751594a7f22096acaea473f41d"
+      "configs/thesis/final_run_manifest_v1.csv": "5cd0ef46e1ce96abcaf08498c83ce88d57cc02751594a7f22096acaea473f41d",
+      "configs/thesis/doe_selection_provenance_v1.json": "b3b8a9b43d9bb3a26f5d1aab06da303e4f7d7009c540428cc31fdf3acbd59ce6",
+      "configs/thesis/doe_selection_bundle_v1/README.md": "c1ea45761bd65ee80d42412fc7b4ab857fb12065083913671bc500498d9d9788",
+      "configs/thesis/doe_selection_bundle_v1/doe_design_points.csv": "6913dce6608c3e9f58e1dc2464ba38a434259352b1ec8d3a8c274c83da3e95f4",
+      "configs/thesis/doe_selection_bundle_v1/doe_design_scores.csv": "3b1050f019223b3f8e64987e9f9df1dd77fc7d6fac46b6911bac4e72eb99144a",
+      "configs/thesis/doe_selection_bundle_v1/doe_run_features.csv": "f3c1be8be971dcb8d07819d04b0d1ff2d1c085fddbab745389f159b6eab9ff72",
+      "configs/thesis/doe_selection_bundle_v1/doe_seed_selection.json": "05e9bf5bb124d624e647f528b0a4420b6998fd4592fd199c1d441f6698c5862b",
+      "configs/thesis/doe_selection_bundle_v1/doe_selection_spec.json": "445c699dd387cc5a5f34d342d9aba892ca6183036538c33789179dbce4a66b0b",
+      "configs/thesis/doe_selection_bundle_v1/doe_spec.json": "a4598e289b4cb7252d97e144eabe4bf433a309c65ca3954d34ca62e7a9c6d56b",
+      "configs/thesis/doe_selection_bundle_v1/doe_top_designs.json": "f4e98387e91e3140e3657ec9e66a6f6f6b7c4d1598c1dbf4779e0b4784ae5ab4"
     }
   },
   "run_plan_counts": {

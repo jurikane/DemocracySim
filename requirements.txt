@@ -1,5 +1,5 @@
 mesa==2.3.0
-mesa-replay @ git+https://github.com/Logende/mesa-replay.git@main
+mesa-replay @ git+https://github.com/Logende/mesa-replay.git@75cbc4b7f923fff0658d09438e2eb893aae35b05
 numpy==1.26.4
 pandas==2.2.2
 matplotlib==3.9.0

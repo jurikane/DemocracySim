@@ -1,0 +1,45 @@
+{
+  "version": "doe_selection_provenance_v1",
+  "generated_at_utc": "2026-03-10T10:29:37.970264+00:00",
+  "doe_batch_id": "DOE-20260302-175623",
+  "doe_profile": "phase3_party_altruism_sharp_local_v1",
+  "selected_design_id": 149,
+  "bundle_dir": "configs/thesis/doe_selection_bundle_v1",
+  "artifacts": [
+    {
+      "relative_path": "doe_spec.json",
+      "bytes": 2884,
+      "sha256": "a4598e289b4cb7252d97e144eabe4bf433a309c65ca3954d34ca62e7a9c6d56b"
+    },
+    {
+      "relative_path": "doe_design_points.csv",
+      "bytes": 43871,
+      "sha256": "6913dce6608c3e9f58e1dc2464ba38a434259352b1ec8d3a8c274c83da3e95f4"
+    },
+    {
+      "relative_path": "doe_seed_selection.json",
+      "bytes": 5057,
+      "sha256": "05e9bf5bb124d624e647f528b0a4420b6998fd4592fd199c1d441f6698c5862b"
+    },
+    {
+      "relative_path": "doe_selection_spec.json",
+      "bytes": 3064,
+      "sha256": "445c699dd387cc5a5f34d342d9aba892ca6183036538c33789179dbce4a66b0b"
+    },
+    {
+      "relative_path": "doe_design_scores.csv",
+      "bytes": 21560,
+      "sha256": "3b1050f019223b3f8e64987e9f9df1dd77fc7d6fac46b6911bac4e72eb99144a"
+    },
+    {
+      "relative_path": "doe_top_designs.json",
+      "bytes": 2506,
+      "sha256": "f4e98387e91e3140e3657ec9e66a6f6f6b7c4d1598c1dbf4779e0b4784ae5ab4"
+    },
+    {
+      "relative_path": "doe_run_features.csv",
+      "bytes": 9128212,
+      "sha256": "f3c1be8be971dcb8d07819d04b0d1ff2d1c085fddbab745389f159b6eab9ff72"
+    }
+  ]
+}

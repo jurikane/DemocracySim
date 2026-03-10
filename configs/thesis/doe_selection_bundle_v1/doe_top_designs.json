@@ -1,0 +1,80 @@
+{
+  "top_5_designs": [
+    {
+      "design_id": 149,
+      "n_primary_runs": 50,
+      "n_primary_pass": 50,
+      "pass_rate": 1.0,
+      "quality_mean": 0.742619320136456,
+      "quality_std": 0.037489637113726555,
+      "seed_robustness": 0.9854350539855561,
+      "weight_quality_effective": 0.7,
+      "weight_seed_robustness_effective": 0.3,
+      "quality_bundle": 0.815464040291186,
+      "stage_weight_viability": 0.5,
+      "stage_weight_quality_bundle": 0.5,
+      "score_total": 0.907732020145593
+    },
+    {
+      "design_id": 169,
+      "n_primary_runs": 50,
+      "n_primary_pass": 49,
+      "pass_rate": 0.98,
+      "quality_mean": 0.7609486636988496,
+      "quality_std": 0.03703948110729319,
+      "seed_robustness": 1.0,
+      "weight_quality_effective": 0.7,
+      "weight_seed_robustness_effective": 0.3,
+      "quality_bundle": 0.8326640645891947,
+      "stage_weight_viability": 0.5,
+      "stage_weight_quality_bundle": 0.5,
+      "score_total": 0.9063320322945974
+    },
+    {
+      "design_id": 143,
+      "n_primary_runs": 50,
+      "n_primary_pass": 50,
+      "pass_rate": 1.0,
+      "quality_mean": 0.7487316308672216,
+      "quality_std": 0.03858261290195899,
+      "seed_robustness": 0.9500714619792457,
+      "weight_quality_effective": 0.7,
+      "weight_seed_robustness_effective": 0.3,
+      "quality_bundle": 0.8091335802008288,
+      "stage_weight_viability": 0.5,
+      "stage_weight_quality_bundle": 0.5,
+      "score_total": 0.9045667901004144
+    },
+    {
+      "design_id": 85,
+      "n_primary_runs": 50,
+      "n_primary_pass": 50,
+      "pass_rate": 1.0,
+      "quality_mean": 0.753077595919258,
+      "quality_std": 0.03893322529386068,
+      "seed_robustness": 0.9387272824346837,
+      "weight_quality_effective": 0.7,
+      "weight_seed_robustness_effective": 0.3,
+      "quality_bundle": 0.8087725018738857,
+      "stage_weight_viability": 0.5,
+      "stage_weight_quality_bundle": 0.5,
+      "score_total": 0.9043862509369429
+    },
+    {
+      "design_id": 108,
+      "n_primary_runs": 50,
+      "n_primary_pass": 50,
+      "pass_rate": 1.0,
+      "quality_mean": 0.7506522423747897,
+      "quality_std": 0.03888872885362975,
+      "seed_robustness": 0.9401669794298062,
+      "weight_quality_effective": 0.7,
+      "weight_seed_robustness_effective": 0.3,
+      "quality_bundle": 0.8075066634912946,
+      "stage_weight_viability": 0.5,
+      "stage_weight_quality_bundle": 0.5,
+      "score_total": 0.9037533317456473
+    }
+  ],
+  "num_designs": 170
+}

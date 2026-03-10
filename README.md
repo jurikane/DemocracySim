@@ -19,6 +19,20 @@ This project is kindly supported by [OpenPetition](https://osd.foundation).
 
 Additional [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-pages.
 
+### Reproducibility
+
+Public reproducibility scope, artifacts, and commands are documented in:
+
+- `docs/technical/reproducibility.md`
+
+Quick checks:
+
+```bash
+PYTHONPATH=. python scripts/repro/verify_thesis_repro_bundle.py
+PYTHONPATH=. python scripts/repro/audit_doe_design_lock.py
+PYTHONPATH=. python scripts/run_final_manifest.py --dry-run
+```
+
 ---
 
 ## Thesis Scope
