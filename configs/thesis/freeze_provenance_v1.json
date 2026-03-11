@@ -1,8 +1,8 @@
 {
   "version": "freeze_provenance_v1",
-  "generated_at_utc": "2026-03-10T10:31:11+00:00",
-  "git_head": "dfbc1dfe70df04c69d20ceecb846a4fac9ef5256",
-  "git_dirty": true,
+  "generated_at_utc": "2026-03-11T01:34:15+00:00",
+  "git_head": "573b6e19739e9ed402f709af7d5b6d18d40479c5",
+  "git_dirty": false,
   "release": {
     "tag": null,
     "url": null
