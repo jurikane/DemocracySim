@@ -24,6 +24,8 @@ Additional [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-p
 Public reproducibility scope, artifacts, and commands are documented in:
 
 - `docs/technical/reproducibility.md`
+- `docs/technical/hand_in_guide.md`
+- `docs/technical/final_analysis_package.md`
 
 Quick checks:
 
@@ -31,6 +33,7 @@ Quick checks:
 PYTHONPATH=. python scripts/repro/verify_thesis_repro_bundle.py
 PYTHONPATH=. python scripts/repro/audit_doe_design_lock.py
 PYTHONPATH=. python scripts/run_final_manifest.py --dry-run
+PYTHONPATH=. python scripts/build_thesis_analysis_package.py --dry-run
 ```
 
 ---
@@ -92,9 +95,11 @@ The simulation infrastructure supports the collection of a wide range of behavio
 The **core thesis analysis** focuses on:
 
 - **Participation rate**: the proportion of agents participating in elections over time
-- **Inequality**: measured using the Gini index over agent resources
+- **Asset inequality**: measured using the Gini index over agent resources
+- **Dissatisfaction inequality**: measured using the Gini index over agent dissatisfaction
+- **Quality distance**: the distance between collective outcomes and the active puzzle target
 
-Additional metrics such as collective accuracy or average rewards may be logged for descriptive or explanatory purposes but are not the primary focus of the thesis analysis.
+Additional summaries such as average dissatisfaction, collective asset levels, or auxiliary run diagnostics may be used descriptively, but they are not part of the main confirmatory endpoint set.
 
 ---
 

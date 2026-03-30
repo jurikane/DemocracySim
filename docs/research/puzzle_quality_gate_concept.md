@@ -11,7 +11,7 @@ Avoid rotating through alternative labels in main thesis text.
 The thesis requires a quality-pressure mechanism: decisions should be rewardable or punishable based on alignment with the current puzzle.
 
 Prior to the puzzle, the quality reference was coupled to current grid state.
-However, this created lock-in states by favoring alignment with start conditions and majority, that are not very interesting to study.
+However, this created lock-in states by favoring alignment with start conditions and plurality, that are not very interesting to study.
 Now it is separated into its own stochastic process.
 
 Key reason for the split:

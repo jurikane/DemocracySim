@@ -233,5 +233,6 @@ def test_write_run_manifest(tmp_path: Path) -> None:
 
 
 def test_rule_label_mapping_includes_schulze_before_random() -> None:
+    assert rule_label(0) == "majority"
     assert rule_label(4) == "schulze"
     assert rule_label(5) == "random"

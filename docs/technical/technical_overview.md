@@ -11,7 +11,7 @@
 
 ## Implemented Voting Rules
 
-- `majority_rule`
+- `plurality_rule`
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`

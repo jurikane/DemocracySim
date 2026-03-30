@@ -616,6 +616,46 @@ def test_score_designs_required_primary_runs_filters_incomplete_designs() -> Non
     assert set(out["design_id"].tolist()) == {0}
 
 
+def test_score_designs_accepts_legacy_majority_label_as_plurality() -> None:
+    base = {
+        "passes_hard_gates": True,
+        "turnout_std": 1.0,
+        "gini_std": 1.0,
+        "dist_std": 0.1,
+        "group_participation_std": 0.1,
+        "group_turnout_range_mean": 0.1,
+        "roll3_group_turnout_range_mean": 0.1,
+        "roll3_group_turnout_range_max": 0.2,
+        "roll20_group_turnout_range_mean": 0.1,
+        "roll20_group_turnout_range_max": 0.2,
+        "group_turnout_residual_abs_mean": 0.1,
+        "participant_abstainer_delta_rel_gap_abs": 0.1,
+        "group_participant_abstainer_delta_rel_gap_abs": 0.1,
+        "winner_entropy_norm": 0.4,
+        "dist_nonzero_share": 0.2,
+        "competitive_step_share": 0.2,
+        "winner_changes_post_burnin": 5.0,
+        "winner_change_rate_post_burnin": 0.05,
+        "mean_turnout": 50.0,
+        "turnout_start_window_mean": 52.0,
+        "turnout_end_window_mean": 49.0,
+        "turnout_drop_start_end": 3.0,
+        "turnout_decline_slope_norm": 0.05,
+        "turnout_outside_20_80_share": 0.04,
+        "mean_gini": 20.0,
+        "mean_dist": 0.2,
+    }
+    runs = pd.DataFrame(
+        [
+            {**base, "design_id": 0, "rule_name": "majority", "seed": 101},
+            {**base, "design_id": 1, "rule_name": "majority", "seed": 102, "mean_turnout": 48.0},
+        ]
+    )
+
+    out = score_designs(runs, primary_rule_name="plurality")
+    assert set(out["design_id"].tolist()) == {0, 1}
+
+
 def test_analyze_doe_root_strict_completeness_filters_incomplete_designs(tmp_path: Path) -> None:
     root = tmp_path / "doe_incomplete"
     # design 0 complete for two seeds in both rules

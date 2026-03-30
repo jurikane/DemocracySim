@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from src.utils.social_welfare_functions import majority_rule
+from src.utils.social_welfare_functions import plurality_rule
 
 # Simple and standard cases (lower values = higher rank)
 
@@ -46,20 +46,20 @@ paradoxical = np.array([
     [0.4, 0. , 0.3, 0.1, 0.2]
 ])  # Plurality => a, e, d, b, c ~ 0, 4, 3, 1, 2
 
-majority_simple_cases = [
+plurality_simple_cases = [
     (simple, [2, 1, 0]),
     (paradoxical, [0, 4, 3, 1, 2])
 ]
 
-def test_majority_rule():
+def test_plurality_rule():
     # Test predefined cases
-    for pref_table, expected in majority_simple_cases:
-        res_ranking = majority_rule(pref_table, rng=np.random.default_rng())
+    for pref_table, expected in plurality_simple_cases:
+        res_ranking = plurality_rule(pref_table, rng=np.random.default_rng())
         assert list(res_ranking) == expected
 
-def majority_rule_with_ties_all(pref_rel, expected_winners, iterations=1000):
+def plurality_rule_with_ties_all(pref_rel, expected_winners, iterations=1000):
     """
-    Run majority rule with ties multiple times, check winners
+    Run plurality rule with ties multiple times, check winners
     and calculate the coefficient of variation (CV) of the winners.
     :param pref_rel: Preference relation matrix.
     :param expected_winners: An ordered list of expected winners, i.e. [0, 1].
@@ -68,8 +68,8 @@ def majority_rule_with_ties_all(pref_rel, expected_winners, iterations=1000):
     :return: Coefficient of variation (CV) of the winners.
     """
     winners_from_ties = {}
-    for _ in range(iterations):
-        ranking = majority_rule(pref_rel, rng=np.random.default_rng())
+    for i in range(iterations):
+        ranking = plurality_rule(pref_rel, rng=np.random.default_rng(10_000 + i))
         winner = ranking[0]
         winners_from_ties[winner] = winners_from_ties.get(winner, 0) + 1
     winners = list(winners_from_ties.keys())
@@ -111,7 +111,7 @@ all_equally_possible = [with_ties_all, with_overall_tie, with_ties_mixed]
 
 def test_equally_possible(cv_threshold=0.125):
     for pref_rel in all_equally_possible:
-        cv = majority_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
+        cv = plurality_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
         print(f"CV: {cv}")
         assert cv < cv_threshold
 
@@ -139,7 +139,7 @@ with_ties_unequal = [with_ties_unequal, with_ties_all_ab, with_ties_ab]
 
 def test_with_ties_unequal():
     for pref_rel in with_ties_unequal:
-        cv = majority_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
+        cv = plurality_rule_with_ties_all(pref_rel, [0, 1, 2, 3])
         print(f"CV: {cv}")
         assert cv > 0.125
 
@@ -152,9 +152,9 @@ def random_pref_profile(num_agents, num_options, rng=None):
     matrix_rand = rand_matrix / rand_matrix.sum(axis=1, keepdims=True)
     return matrix_rand
 
-def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000, rng=None):
+def plurality_rule_with_rand_matrix(num_agents, num_options, iterations=1000, rng=None):
     """
-    Run majority rule with ties multiple times, check winners
+    Run plurality rule with ties multiple times, check winners
     and calculate the coefficient of variation (CV) of the winners.
     :param num_agents: Number of agents.
     :param num_options: Number of options.
@@ -167,7 +167,7 @@ def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000, rng
     for _ in range(iterations):
         # Create random matrix
         matrix_rand = random_pref_profile(num_agents, num_options, rng=rng)
-        ranking = majority_rule(matrix_rand, rng=rng)
+        ranking = plurality_rule(matrix_rand, rng=rng)
         winner = ranking[0]
         # Count winners
         winner_counts[winner] = winner_counts.get(winner, 0) + 1
@@ -176,7 +176,7 @@ def majority_rule_with_rand_matrix(num_agents, num_options, iterations=1000, rng
 
 def test_with_random_matrix_small():
     """
-    Test majority rule on a small random matrix with many iterations.
+    Test plurality rule on a small random matrix with many iterations.
     """
     num_agents = np.random.randint(2, 200)
     # Keep num options small to expect all options to win at least once.
@@ -184,7 +184,7 @@ def test_with_random_matrix_small():
     iterations = 100*num_options
     rng = np.random.default_rng(0)
     start_time = time.time()
-    wc = majority_rule_with_rand_matrix(num_agents, num_options, iterations, rng=rng)
+    wc = plurality_rule_with_rand_matrix(num_agents, num_options, iterations, rng=rng)
     stop_time = time.time()
     # Extract winners from winner-counts dictionary and sort them
     sorted_winners = list(wc.keys())
@@ -204,16 +204,16 @@ def test_with_random_matrix_small():
 
 def test_with_random_matrix_large():
     """
-    Test majority rule on a large random matrix (many agents, many options).
+    Test plurality rule on a large random matrix (many agents, many options).
     """
     num_its = 100
     # Deterministic sizing: avoid flakiness from global np.random state.
     rng = np.random.default_rng(0)
     num_agents = int(rng.integers(1000, 3000))
     num_options = int(rng.integers(2000, 3000))
-    # Run majority rule test with random matrix
+    # Run plurality rule test with random matrix
     start_time = time.time()
-    wc = majority_rule_with_rand_matrix(num_agents, num_options, num_its, rng=rng)
+    wc = plurality_rule_with_rand_matrix(num_agents, num_options, num_its, rng=rng)
     stop_time = time.time()
     # Len of winners should be approximately equal to the number of iterations
     # because with a large number of options, winners should be mostly unique.

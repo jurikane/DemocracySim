@@ -36,6 +36,8 @@ nav:
         - Population & Preferences: technical/population_preferences.md
         - Run Control & Output: technical/run_control_output.md
         - Reproducibility: technical/reproducibility.md
+        - Hand-In Guide: technical/hand_in_guide.md
+        - Final Analysis Package: technical/final_analysis_package.md
         - Learning:
             - Participation Learning: technical/participation_learning.md
             - Altruism Voting Behavior: technical/altruism_learning.md

@@ -6,7 +6,7 @@ import pytest
 from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
-    majority_rule,
+    plurality_rule,
     utilitarian_rule,
 )
 
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.phase1
 
 @pytest.mark.parametrize(
     "rule",
-    [majority_rule, approval_voting, utilitarian_rule, borda_rule],
+    [plurality_rule, approval_voting, utilitarian_rule, borda_rule],
 )
 def test_rule_is_neutral_under_option_relabeling(rule) -> None:
     """

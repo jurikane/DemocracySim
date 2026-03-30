@@ -11,6 +11,7 @@ import copy
 
 
 RULE_LABELS = {
+    # Keep the frozen machine-readable label for thesis manifests and DOE bundles.
     0: "majority",
     1: "approval",
     2: "utilitarian",
@@ -250,7 +251,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
             "altruism_response_gamma": 1.0,
-            # Freeze the post-Stage-A/majority-confirmed mapping while testing puzzle-motion effects.
+            # Freeze the post-Stage-A/plurality-confirmed mapping while testing puzzle-motion effects.
             "altruism_satisfaction_theta": 0.7,
             "altruism_satisfaction_slope": 2.0,
             "participation_signal_mode": "group_centered_delta_rel_plus_fee",
@@ -775,7 +776,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "break_even_distance_common": (0.34, 0.62),
 
             # Puzzle/power regime knobs:
-            # keep enough spread for seed-heterogeneous majority structure.
+            # keep enough spread for seed-heterogeneous plurality structure.
             "known_cells": (8.0, 16.0),
             "election_impact_on_mutation": (1.10, 2.95),
             "puzzle_local_kappa": (28.0, 100.0),
@@ -854,7 +855,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
         # - keep most freeze-successful knobs tight
         # - deliberately open the unresolved deadlock drivers:
         #   altruism nonlinearity + puzzle motion + election-impact speed
-        # - include known_cells because majority deadlock sensitivity is
+        # - include known_cells because plurality deadlock sensitivity is
         #   strongly affected by information breadth in recent analyses.
         "ranges": {
             # Keep stable participation/economy neighborhood mostly tight.

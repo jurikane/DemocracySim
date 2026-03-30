@@ -91,7 +91,7 @@ Instead:
 
 - Dissatisfaction is computed as distance between agent preference distribution and target distribution (baseline mode usually `area`).
 - Satisfaction proxy is `1 - dissatisfaction`.
-- `altruism_factor` is updated by sigmoid mapping with threshold/slope and optional smoothing. This enables it to free simulations from too many majority deadlocks.
+- `altruism_factor` is updated by sigmoid mapping with threshold/slope and optional smoothing. This enables it to free simulations from too many plurality deadlocks.
 - During vote casting, `altruism_factor` is used as the probability of voting altruistically.
 
 Interpretation:

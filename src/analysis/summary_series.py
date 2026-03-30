@@ -13,7 +13,7 @@ from src.utils.ballots import score_options_c2
 from src.utils.distance_functions import kendall_tau_order, spearman_fr_order
 from src.utils.metrics import gini_index_0_100
 from src.utils.representations import distribution_to_ordering_tie_aware
-from src.utils.social_welfare_functions import approval_voting, borda_rule, majority_rule, random_rule, schulze_rule, utilitarian_rule
+from src.utils.social_welfare_functions import approval_voting, borda_rule, plurality_rule, random_rule, schulze_rule, utilitarian_rule
 
 _MODE_ALIGNMENT_LOW_SUPPORT_VOTES = 5
 _SMALL_GROUP_MIN_RESIDENTS = 5

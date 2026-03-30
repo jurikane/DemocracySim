@@ -13,6 +13,8 @@ The final thesis run setup is fully specified in the repository via:
 - `configs/thesis/final_run_manifest_v1.csv`
 - `configs/thesis/freeze_provenance_v1.json`
 
+Legacy frozen manifest and copied final-run directory labels are preserved for compatibility with the cited freeze.
+
 Frozen run matrix:
 
 - main family: `5 rules x 200 matched seeds = 1000 runs`
@@ -73,6 +75,12 @@ This checks:
 - manifest structure and counts,
 - deterministic regeneration of the `final_run_manifest_v1.csv` hash.
 
+Resolve the thesis analysis package paths without rebuilding it:
+
+```bash
+PYTHONPATH=. python scripts/build_thesis_analysis_package.py --dry-run
+```
+
 Audit the DOE design lock:
 
 ```bash
@@ -114,3 +122,7 @@ PYTHONPATH=. python scripts/repro/restamp_freeze_provenance.py --release-tag the
 ```
 
 This records git_head, git_dirty, release metadata, and the artifact hash block.
+
+## Hand-In Snapshot
+
+For the curated USB hand-in workflow and the exact verification-first sequence, see `docs/technical/hand_in_guide.md`.

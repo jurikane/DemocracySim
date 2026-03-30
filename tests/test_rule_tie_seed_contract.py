@@ -6,7 +6,7 @@ import pytest
 from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
-    majority_rule,
+    plurality_rule,
     utilitarian_rule,
 )
 
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.phase1
 
 @pytest.mark.parametrize(
     "rule",
-    [majority_rule, approval_voting, utilitarian_rule, borda_rule],
+    [plurality_rule, approval_voting, utilitarian_rule, borda_rule],
 )
 def test_rule_tie_breaking_is_seed_deterministic(rule) -> None:
     pref = np.full((12, 5), 0.5, dtype=np.float64)
@@ -27,7 +27,7 @@ def test_rule_tie_breaking_is_seed_deterministic(rule) -> None:
 
 @pytest.mark.parametrize(
     "rule",
-    [majority_rule, approval_voting, utilitarian_rule, borda_rule],
+    [plurality_rule, approval_voting, utilitarian_rule, borda_rule],
 )
 def test_rule_tie_breaking_varies_across_seeds(rule) -> None:
     pref = np.full((12, 5), 0.5, dtype=np.float64)

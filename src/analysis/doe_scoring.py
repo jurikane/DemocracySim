@@ -16,14 +16,12 @@ from src.utils.distance_functions import kendall_tau_order, spearman_fr_order
 from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
-    majority_rule,
+    plurality_rule,
     schulze_rule,
     random_rule,
     utilitarian_rule,
 )
 from src.utils.representations import distribution_to_ordering_tie_aware
-
-
 DEFAULT_SCORING_THRESHOLDS: dict[str, float] = {
     "min_winner_changes_post_burnin": 3.0,
     "min_winner_change_rate_post_burnin": 0.01,
@@ -107,6 +105,11 @@ PRIMARY_QUALITY_COMPONENT_KEYS: tuple[str, ...] = (
     "z_participant_composition_dynamics",
     "z_puzzle_dom_balance_conflict",
 )
+
+
+def _canonical_rule_name(value: Any) -> str:
+    raw = str(value).strip().lower()
+    return "plurality" if raw == "majority" else raw
 
 
 def _require_columns(df: pd.DataFrame, required: tuple[str, ...], *, context: str) -> None:
@@ -387,7 +390,7 @@ def _current_rule_power_ordering_for_run(
     if not pref_rows:
         return None
     pref_table = np.vstack(pref_rows)
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
+    rule_fns = [plurality_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
     fn = rule_fns[rule_idx]
     seed = int(run_meta.get("run_seed", 0))
     rng = np.random.default_rng((seed * 1_000_003 + 97 * (rule_idx + 1)) % (2**63 - 1))
@@ -954,9 +957,12 @@ def score_designs(
     w = DEFAULT_SCORING_WEIGHTS if weights is None else weights
     sw = DEFAULT_STAGE_WEIGHTS if stage_weights is None else stage_weights
     df = run_features.copy()
+    if "rule_name" in df.columns:
+        df["rule_name"] = df["rule_name"].map(_canonical_rule_name)
     if "passes_hard_gates" not in df.columns:
         df = apply_hard_gates(df)
 
+    primary_rule_name = _canonical_rule_name(primary_rule_name)
     primary = df.loc[df["rule_name"] == str(primary_rule_name)].copy()
     if len(primary) == 0:
         raise ValueError(f"No primary-rule rows found for rule_name={primary_rule_name!r}.")
@@ -1196,6 +1202,7 @@ def analyze_doe_root(
     root = Path(doe_root)
     out = root if out_dir is None else Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    primary_rule_name = _canonical_rule_name(primary_rule_name)
 
     objective_payload: dict[str, Any] | None = None
     if objective_config_path is not None:

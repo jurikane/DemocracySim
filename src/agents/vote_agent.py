@@ -11,9 +11,9 @@ def _sigmoid(x: float) -> float:
     # Numerically stable-ish sigmoid.
     if x >= 0:
         z = np.exp(-x)
-        return float(1.0 / (1.0 + z))
+        return 1.0 / (1.0 + z)
     z = np.exp(x)
-    return float(z / (1.0 + z))
+    return z / (1.0 + z)
 
 
 if TYPE_CHECKING:  # Type hint for IDEs
@@ -302,11 +302,11 @@ class VoteAgent(Agent):
 
         And saves delta_abs into award_history.
         """
-        assets_pre = float(self.assets)
-        raw_delta_abs = float(self._reward_personal - self._fee)
+        assets_pre = self.assets
+        raw_delta_abs = self._reward_personal - self._fee
         assets_post = max(0.0, assets_pre + raw_delta_abs)
-        self._delta_abs = float(assets_post - assets_pre)
-        self._delta_rel = float(self._delta_abs / assets_pre) if assets_pre > 0.0 else 0.0
+        self._delta_abs = assets_post - assets_pre
+        self._delta_rel = self._delta_abs / assets_pre if assets_pre > 0.0 else 0.0
 
         self.award_history.append(self._delta_abs)
         self.assets = assets_post
@@ -417,10 +417,10 @@ class VoteAgent(Agent):
         with optional symmetric clipping by participation_q_max.
         """
         alpha = self.model.participation_alpha
-        q = self.q_participation + alpha * float(q_push)
+        q = self.q_participation + alpha * q_push
         q_max = self.model.participation_q_max
         if q_max > 0:
-            q = float(np.clip(q, -q_max, q_max))
+            q = np.clip(q, -q_max, q_max)
         self.q_participation = q
 
     def apply_participation_update(self, participation_signal: float) -> None:
@@ -430,7 +430,7 @@ class VoteAgent(Agent):
         that still pass a raw participation signal.
         """
         sign = 1.0 if self._participating else -1.0
-        self.apply_participation_q_push(sign * float(participation_signal))
+        self.apply_participation_q_push(sign * participation_signal)
 
     def apply_altruism_update(self, dissatisfaction_signal: float) -> None:
         """Participant-only learning of altruism_factor (reality-weight).
@@ -441,18 +441,18 @@ class VoteAgent(Agent):
         """
         if not self.participating:
             return
-        alpha = float(self.model.altruism_alpha)
+        alpha = self.model.altruism_alpha
         if alpha == 0.0:
             return
         if not np.isfinite(dissatisfaction_signal):
             return
 
-        a = float(self.altruism_factor)
-        a = a - alpha * float(dissatisfaction_signal)
+        a = self.altruism_factor
+        a = a - alpha * dissatisfaction_signal
 
-        lo = float(self.model.altruism_clip_min)
-        hi = float(self.model.altruism_clip_max)
-        a = float(np.clip(a, lo, hi))
+        lo = self.model.altruism_clip_min
+        hi = self.model.altruism_clip_max
+        a = np.clip(a, lo, hi)
         self.altruism_factor = a
 
     def apply_altruism_satisfaction_mode(self, dissatisfaction_value: float) -> None:
@@ -467,25 +467,25 @@ class VoteAgent(Agent):
         """
         if not np.isfinite(dissatisfaction_value):
             return
-        d = float(np.clip(float(dissatisfaction_value), 0.0, 1.0))
+        d = np.clip(dissatisfaction_value, 0.0, 1.0)
         s = 1.0 - d
-        theta = float(getattr(self.model, "altruism_satisfaction_theta", 0.5))
-        theta = float(np.clip(theta, 0.0, 1.0))
-        slope = float(getattr(self.model, "altruism_satisfaction_slope", 4.0))
+        theta = getattr(self.model, "altruism_satisfaction_theta", 0.5)
+        theta = np.clip(theta, 0.0, 1.0)
+        slope = getattr(self.model, "altruism_satisfaction_slope", 4.0)
         if not np.isfinite(slope) or slope <= 0.0:
             return
-        z = float(slope * (s - theta))
-        target = float(1.0 / (1.0 + np.exp(-z)))
-        gamma = float(getattr(self.model, "altruism_response_gamma", 1.0))
-        gamma = float(np.clip(gamma, 0.0, 1.0))
+        z = slope * (s - theta)
+        target = 1.0 / (1.0 + np.exp(-z))
+        gamma = getattr(self.model, "altruism_response_gamma", 1.0)
+        gamma = np.clip(gamma, 0.0, 1.0)
         if gamma >= 1.0:
             a = target
         else:
-            a_prev = float(self.altruism_factor)
+            a_prev = self.altruism_factor
             a = (1.0 - gamma) * a_prev + gamma * target
-        lo = float(self.model.altruism_clip_min)
-        hi = float(self.model.altruism_clip_max)
-        self.altruism_factor = float(np.clip(a, lo, hi))
+        lo = self.model.altruism_clip_min
+        hi = self.model.altruism_clip_max
+        self.altruism_factor = np.clip(a, lo, hi)
 
     def _init_personal_opt_dist(self) -> np.ndarray:
         """Create a per-agent personal_opt_dist (distribution)
@@ -502,7 +502,7 @@ class VoteAgent(Agent):
             return np.asarray([], dtype=np.float32)
 
         personality_group = np.asarray(self.personality_group)
-        peakedness = float(self.model.personal_preference_peakedness)
+        peakedness = self.model.personal_preference_peakedness
 
         # Sample positive intensities, sort descending, then assign by rank position.
         rng = self.model.np_random
@@ -519,7 +519,7 @@ class VoteAgent(Agent):
             dist[color] = float(vals[rank_pos])
 
         # Normalize to sum to 1.
-        s = float(dist.sum())
+        s = dist.sum()
         if s <= 0:
             dist[:] = 1.0 / num_colors
         else:
@@ -539,6 +539,6 @@ class VoteAgent(Agent):
         scores = np.zeros(int(options.shape[0]), dtype=np.float32)
         for i, opt in enumerate(options):
             scores[i] = np.float32(
-                float(dist_func(target_ordering, np.asarray(opt, dtype=np.int64), search_pairs))
+                dist_func(target_ordering, np.asarray(opt, dtype=np.int64), search_pairs)
             )
         return scores

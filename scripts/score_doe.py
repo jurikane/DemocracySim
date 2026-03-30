@@ -32,8 +32,7 @@ def _infer_primary_rule_from_doe_spec(root: Path) -> str:
         return default_primary
     if not isinstance(spec, dict):
         return default_primary
-    primary = str(spec.get("primary_rule_name", default_primary) or default_primary)
-    return primary
+    return str(spec.get("primary_rule_name", default_primary) or default_primary).strip().lower()
 
 
 def main() -> None:
@@ -91,7 +90,7 @@ def main() -> None:
 
     root = _resolve_default_doe_root() if args.doe_root is None else Path(args.doe_root)
     inferred_primary = _infer_primary_rule_from_doe_spec(root)
-    primary_rule = str(args.primary_rule or inferred_primary)
+    primary_rule = str(args.primary_rule or inferred_primary).strip().lower()
     out = analyze_doe_root(
         root,
         out_dir=args.out_dir,
