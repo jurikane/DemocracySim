@@ -1,0 +1,13 @@
+endpoint,endpoint_name,contrast,left_rule,right_rule,n_pairs,confirmatory_time_mean_effect,last_third_mean_effect,final_value_effect,sign_match_last_third,sign_match_final,hypothesis_id
+turnout_mean,Mean turnout,utilitarian - borda,utilitarian,borda,200,0.36001999999999995,0.16220238095238015,0.065,True,True,H1
+turnout_mean,Mean turnout,utilitarian - schulze,utilitarian,schulze,200,0.62652,0.5070238095238089,0.275,True,True,H1
+turnout_mean,Mean turnout,borda - schulze,borda,schulze,200,0.2665,0.3448214285714288,0.21,True,True,H1
+gini_assets_mean,Mean asset inequality,utilitarian - borda,utilitarian,borda,200,1.60156,0.7441666666666663,0.54,True,True,H2
+gini_assets_mean,Mean asset inequality,utilitarian - schulze,utilitarian,schulze,200,0.9706599999999999,0.7026190476190479,0.655,True,True,H2
+gini_assets_mean,Mean asset inequality,borda - schulze,borda,schulze,200,-0.6308999999999999,-0.041547619047618535,0.115,True,False,H2
+gini_dissatisfaction_mean,Mean dissatisfaction inequality,utilitarian - borda,utilitarian,borda,200,1.14222,1.2524404761904764,0.765,True,True,H3
+gini_dissatisfaction_mean,Mean dissatisfaction inequality,utilitarian - schulze,utilitarian,schulze,200,0.4600199999999998,0.514404761904762,0.275,True,True,H3
+gini_dissatisfaction_mean,Mean dissatisfaction inequality,borda - schulze,borda,schulze,200,-0.6822000000000003,-0.7380357142857144,-0.49,True,True,H3
+quality_distance_mean,Mean quality distance,utilitarian - borda,utilitarian,borda,200,0.008579999999999999,0.01379464285714286,0.0275,True,True,H4
+quality_distance_mean,Mean quality distance,utilitarian - schulze,utilitarian,schulze,200,0.006575000000000002,0.007038690476190471,0.02125,True,True,H4
+quality_distance_mean,Mean quality distance,borda - schulze,borda,schulze,200,-0.0020049999999999972,-0.006755952380952388,-0.00625,True,True,H4

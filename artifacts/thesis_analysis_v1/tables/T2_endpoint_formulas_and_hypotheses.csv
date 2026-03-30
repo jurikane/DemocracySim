@@ -1,0 +1,5 @@
+endpoint,endpoint_name,source_series,summary_operator,hypothesis_id,canonical_test_pool,reference_test_pool
+turnout_mean,Mean turnout,steps.turnout,time mean over 250 steps,H1,yes,yes
+gini_assets_mean,Mean asset inequality,steps.gini_index,time mean over 250 steps,H2,yes,yes
+gini_dissatisfaction_mean,Mean dissatisfaction inequality,agents.dissatisfaction_value -> gini_dissatisfaction,time mean over 250 steps,H3,yes,yes
+quality_distance_mean,Mean quality distance,area_steps.puzzle_distance (puzzle mode) / area_steps.dist_to_reality (reality mode),time mean over 250 steps,H4,yes,yes

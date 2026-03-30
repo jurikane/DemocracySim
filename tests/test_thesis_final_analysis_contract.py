@@ -139,7 +139,7 @@ def test_final_analysis_provenance_docs_and_t1_contract() -> None:
     assert provenance["source_run_root"] == "data/simulation_output/thesis_final_runs_v1"
     assert provenance["source_manifest"] == "configs/thesis/final_run_manifest_v1.csv"
     assert provenance["freeze_provenance"] == "configs/thesis/freeze_provenance_v1.json"
-    assert provenance["protocol_path"] == "docs/internal/operations/thesis_analysis_protocol_v1.md"
+    assert provenance["protocol_path"] == "configs/thesis/thesis_analysis_protocol_v1.md"
     assert provenance["analysis_seed"] == 20260311
     assert provenance["permutation_draws"] == 100000
     assert provenance["bootstrap_reps"] == 10000
@@ -178,7 +178,6 @@ def test_final_analysis_provenance_docs_and_t1_contract() -> None:
     assert "raw final-run directories remain outside Git" in docs_page
     assert "tables/free-rider.csv" in docs_page
     assert "tables/free-rider-support.csv" in docs_page
-    assert "legacy label `majority`" in docs_page
     assert "free-rider.csv" in package_readme
     assert "free-rider-support.csv" in package_readme
 

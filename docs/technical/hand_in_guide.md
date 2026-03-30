@@ -38,8 +38,7 @@ USB-side extras outside the repo checkout:
 
 - `README.md` at the top level of the USB folder
 - `SHA256SUMS.txt` at the top level of the USB folder
-- `code_appendix/thesis.pdf`
-- `code_appendix/README.md`
+- `thesis_kuehnel.pdf` at the top level of the USB folder
 
 To keep the clean checkout readable without changing tracked ignore rules, add local excludes for `data/` and `artifacts/` in `.git/info/exclude`.
 

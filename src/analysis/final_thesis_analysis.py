@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FINAL_RUN_ROOT = Path("data/simulation_output/thesis_final_runs_v1")
 DEFAULT_FINAL_MANIFEST = Path("configs/thesis/final_run_manifest_v1.csv")
 DEFAULT_FREEZE_PROVENANCE = Path("configs/thesis/freeze_provenance_v1.json")
-DEFAULT_PROTOCOL = Path("docs/internal/operations/thesis_analysis_protocol_v1.md")
+DEFAULT_PROTOCOL = Path("configs/thesis/thesis_analysis_protocol_v1.md")
 DEFAULT_PACKAGE_OUT_DIR = Path("artifacts/thesis_analysis_v1")
 
 DEFAULT_ANALYSIS_SEED = 20260311
@@ -298,6 +298,8 @@ def _build_package_readme(*, include_deliverables: bool = False) -> str:
                 "- `derived/reference_pairwise_effects.csv`",
                 "- `derived/robustness_alternative_readouts.csv`",
                 "- `tables/T1_frozen_run_protocol_provenance.csv` through `tables/T6_robustness_summaries.csv`",
+                "- `tables/free-rider.csv`",
+                "- `tables/free-rider-support.csv`",
                 "- `figures/F1_primary_metric_trajectories.(png|pdf)` through `figures/F4_reference_family_effect_panel.(png|pdf)`",
             ]
         )

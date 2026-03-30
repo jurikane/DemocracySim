@@ -1,0 +1,65 @@
+{
+  "version": "thesis_analysis_v1",
+  "generated_at_utc": "2026-03-30T16:47:42.640907+00:00",
+  "source_run_root": "data/simulation_output/thesis_final_runs_v1",
+  "source_manifest": "configs/thesis/final_run_manifest_v1.csv",
+  "freeze_provenance": "configs/thesis/freeze_provenance_v1.json",
+  "protocol_path": "configs/thesis/thesis_analysis_protocol_v1.md",
+  "git_head": "eb837fe78c9f355bc85923609f3f0129f3bb2de2",
+  "analysis_seed": 20260311,
+  "permutation_draws": 100000,
+  "bootstrap_reps": 10000,
+  "expected_runs_total": 1050,
+  "rule_counts_expected": {
+    "approval": 50,
+    "borda": 200,
+    "plurality": 200,
+    "random": 200,
+    "schulze": 200,
+    "utilitarian": 200
+  },
+  "known_caveats": [
+    {
+      "id": "seed_level_config_used",
+      "summary": "config_used.yaml is stored at seed level rather than inside run_0."
+    },
+    {
+      "id": "stale_params_json_rule_idx",
+      "summary": "params_json.rule_idx is stale auxiliary metadata in many manifest rows; manifest rule fields and meta.yaml remain authoritative."
+    },
+    {
+      "id": "asset_scale_explosive_but_finite",
+      "summary": "collective asset magnitudes can become very large without producing numeric corruption."
+    }
+  ],
+  "realized_runs_total": 1050,
+  "rule_counts_realized": {
+    "approval": 50,
+    "borda": 200,
+    "plurality": 200,
+    "random": 200,
+    "schulze": 200,
+    "utilitarian": 200
+  },
+  "generated_artifacts": [
+    "artifacts/thesis_analysis_v1/derived/run_level_endpoint_summary.csv",
+    "artifacts/thesis_analysis_v1/derived/rule_step_primary_summary.csv",
+    "artifacts/thesis_analysis_v1/derived/canonical_pairwise_effects.csv",
+    "artifacts/thesis_analysis_v1/derived/reference_pairwise_effects.csv",
+    "artifacts/thesis_analysis_v1/derived/robustness_alternative_readouts.csv",
+    "artifacts/thesis_analysis_v1/tables/T1_frozen_run_protocol_provenance.csv",
+    "artifacts/thesis_analysis_v1/tables/T2_endpoint_formulas_and_hypotheses.csv",
+    "artifacts/thesis_analysis_v1/tables/T3_endpoint_summaries_per_rule.csv",
+    "artifacts/thesis_analysis_v1/tables/T4_canonical_confirmatory_results.csv",
+    "artifacts/thesis_analysis_v1/tables/T5_reference_family_results.csv",
+    "artifacts/thesis_analysis_v1/tables/T6_robustness_summaries.csv",
+    "artifacts/thesis_analysis_v1/figures/F1_primary_metric_trajectories.png",
+    "artifacts/thesis_analysis_v1/figures/F1_primary_metric_trajectories.pdf",
+    "artifacts/thesis_analysis_v1/figures/F2_paired_endpoint_comparisons.png",
+    "artifacts/thesis_analysis_v1/figures/F2_paired_endpoint_comparisons.pdf",
+    "artifacts/thesis_analysis_v1/figures/F3_canonical_confirmatory_effect_forest.png",
+    "artifacts/thesis_analysis_v1/figures/F3_canonical_confirmatory_effect_forest.pdf",
+    "artifacts/thesis_analysis_v1/figures/F4_reference_family_effect_panel.png",
+    "artifacts/thesis_analysis_v1/figures/F4_reference_family_effect_panel.pdf"
+  ]
+}

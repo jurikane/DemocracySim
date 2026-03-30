@@ -1,0 +1,10 @@
+key,value
+git_head,573b6e19739e9ed402f709af7d5b6d18d40479c5
+doe_batch_id,DOE-20260302-175623
+selected_design_id,149
+config_hash,3f4adfa658e64d20a7f5c53bf73cb85c685009485f44b36d887db46d5a5d1e00
+manifest_hash,5cd0ef46e1ce96abcaf08498c83ce88d57cc02751594a7f22096acaea473f41d
+schema_version,schema-v2
+expected_runs,1050
+realized_runs,1050
+steps_per_run,250
