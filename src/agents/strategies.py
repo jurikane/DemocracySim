@@ -45,9 +45,9 @@ class DefaultVotingStrategy:
     """
 
     def score_options(self, agent: Any, area: Any, options: np.ndarray) -> np.ndarray:
-        altruism_factor = float(np.clip(float(agent.altruism_factor), 0.0, 1.0))
+        altruism_factor = float(np.clip(agent.altruism_factor, 0.0, 1.0))
         # Dedicated voting stream (already isolated from participation RNG).
-        if float(agent.model.voting_rng.random()) < altruism_factor:
+        if agent.model.voting_rng.random() < altruism_factor:
             # Assumes Area._tally_votes already populated agent.known_cells for this election.
             est_real_dist, _conf = agent.estimate_real_distribution(area)
             target_ordering = ordering_from_distribution(

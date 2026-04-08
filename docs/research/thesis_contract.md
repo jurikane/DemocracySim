@@ -29,7 +29,7 @@ Baseline family:
 
 Implemented voting-rule mapping (`rule_idx`):
 
-- `0 = majority`
+- `0 = plurality`
 - `1 = approval`
 - `2 = utilitarian`
 - `3 = borda`
@@ -39,7 +39,7 @@ Implemented voting-rule mapping (`rule_idx`):
 ## 3. Rule-Family Framing for Thesis Inference
 
 - confirmatory canonical family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
-- reference family: `majority (0)`, `random (5)`
+- reference family: `plurality (0)`, `random (5)`
 - context-only calibration arm: `approval (1)`
 
 Family labels define reporting roles, not implementation differences in runtime mechanics.

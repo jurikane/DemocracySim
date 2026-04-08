@@ -6,8 +6,8 @@ This page documents how `altruism_factor` is set and updated.
 
 `altruism_factor` in `[0,1]` controls vote mode selection:
 
-- with probability `altruism_factor`: altruistic (reality-tracking)
-- with probability `1 - altruism_factor`: self-regarding (personality-ordering)
+- with probability `altruism_factor`: altruistic (puzzle-aligned)
+- with probability `1 - altruism_factor`: self-regarding (preference-ordering)
 
 ## Runtime Locations
 

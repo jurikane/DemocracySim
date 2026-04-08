@@ -5,100 +5,103 @@
 
 # DemocracySim: Multi-Agent Simulation of Voting Rules, Participation, and Inequality
 
-Codebase for the master thesis
+DemocracySim is a Mesa-based research platform for studying how voting rules shape
+participation, inequality, and collective outcomes in a dynamic multi-agent
+environment.
 
-****"How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?"****
+The project started as a master's thesis and continues as the public branch for
+further experiments and development. The thesis freeze is kept separately on
+branch `thesis`.
 
-conducted at the group [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de)
-at the [Faculty of Mathematics and Computer Science](https://www.mathcs.uni-leipzig.de/en)
-of [Leipzig University](https://www.uni-leipzig.de/en).
+The associated thesis asks:
 
-This project is kindly supported by [OpenPetition](https://osd.foundation).
+> How do different voting rules influence the temporal evolution of
+> participation rates and inequality in a simple multi-agent system with
+> adaptive agents?
 
-## Documentation
+This project was supported by [OpenPetition](https://osd.foundation),
+and developed in the [Swarm Intelligence and Complex Systems](https://siks.informatik.uni-leipzig.de)
+group at [Leipzig University](https://www.uni-leipzig.de/en).
 
-Additional [documentation](https://jurikane.github.io/DemocracySim/) on GitHub-pages.
+## Start Here
 
----
+Documentation:
 
-## Thesis Scope
-
-The master thesis associated with this repository focuses on a *controlled subset* of the simulation framework.
-
-Specifically, the thesis investigates how different **voting rules** influence the **temporal evolution of participation rates and inequality** in a simple multi-agent simulation with adaptive agents. The analysis is based on time-series data generated under fixed environmental and behavioral assumptions, comparing outcomes across a small number of canonical voting rules.
-
-While the codebase supports additional agent behaviors, metrics, and normative evaluation criteria, these features are **explicitly out of scope for the thesis contribution** and are considered extensions for future research.
-
----
-
-## Overview
-
-**DemocracySim** is a multi-agent simulation framework designed to study democratic participation and collective decision-making in a controlled, evolving environment.
-
-Agents are situated within a grid-based world and repeatedly participate in elections that aggregate individual preferences into collective decisions.
-These decisions affect both the distribution of rewards among agents and the subsequent evolution of the environment, creating feedback between individual behavior and collective outcomes.
-
-The environment is implemented as a toroidal grid of colored fields, where neighboring groups of cells form territories.
-Each territory holds regular elections in which agents vote on the observed color distribution.
-Election outcomes influence agent rewards and drive controlled mutation processes that update the environment over time.
-
-Agents have limited resources and heterogeneous preferences over current color distributions as well as possible election outcomes ("personalities").
-At each election, agents decide whether to participate or abstain, creating a participation dilemma.
-When voting, agents face a trade-off between aligning with their personal preferences and contributing to collective accuracy, as collective decisions affect future rewards.
+- [Project docs on GitHub Pages](https://jurikane.github.io/DemocracySim/)
+- [Technical overview](docs/technical/technical_overview.md)
+- [Voting rules](docs/technical/voting_rules.md)
 
 ---
 
-## Agents
+Create a local environment:
 
-Agents are heterogeneous and bounded in their decision-making capabilities. Each agent:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-- Possesses preferences over possible outcomes (personality types)
-- Has limited resources that evolve over time
-- Decides whether to participate in elections
-- Adapts its behavior based on experienced outcomes via a fixed learning mechanism
+Run the interactive Mesa server:
 
-Personality types are distributed across the population to induce majority–minority situations, but the thesis does not focus on group-specific optimization or strategic behavior.
+```bash
+python -m scripts.run --config configs/default.yaml
+```
 
----
+Run a headless batch from the default config:
 
-## Elections and Voting Rules
+```bash
+python -m scripts.run_headless --config configs/default.yaml
+```
 
-Elections aggregate individual agent inputs into collective decisions using predefined **voting rules**.
-Voting rules are the primary experimental manipulation in the thesis.
+Replay an existing stored run:
 
-The thesis compares a small set of canonical voting rules while keeping all other model components constant.
-Elections determine collective outcomes that influence reward allocation and environmental updates.
+```bash
+python -m scripts.run_replay <run_dir>
+```
 
----
+## What This Repository Contains
 
-## Metrics and Data Collection
+- interactive simulation via Mesa
+- headless and batch execution pipelines
+- replay tooling for stored run artifacts
+- configurable voting rules and adaptive participation behavior
+- structured outputs for summaries, diagnostics, and further analysis
 
-The simulation infrastructure supports the collection of a wide range of behavioral and system-level metrics.
+## Model Snapshot
 
-The **core thesis analysis** focuses on:
+Agents live in a grid-based environment that evolves over time. Areas hold
+repeated elections, and agents decide whether to participate or abstain before
+their preferences are aggregated under a voting rule.
 
-- **Participation rate**: the proportion of agents participating in elections over time
-- **Inequality**: measured using the Gini index over agent resources
+Election outcomes affect both rewards and the subsequent state of the
+environment, creating feedback between collective decisions and later
+conditions. The framework is designed to make these dynamics inspectable rather
+than hiding them behind a single end metric.
 
-Additional metrics such as collective accuracy or average rewards may be logged for descriptive or explanatory purposes but are not the primary focus of the thesis analysis.
+Core ingredients:
 
----
+- heterogeneous agent preferences
+- adaptive participation behavior
+- multiple voting rules
+- path-dependent environmental change
+- structured logging for replay and downstream analysis
 
-## Out of Scope (Thesis)
+## Thesis Context
 
-The following aspects are explicitly **out of scope for the master thesis**, even if partially supported by the codebase:
+The thesis focuses on a controlled subset of this broader framework. It compares
+how different voting rules affect turnout and inequality under fixed model
+assumptions.
 
-- Strategic voting or game-theoretic equilibrium analysis
-- Complex or multi-stage learning mechanisms
-- Empirical validation or real-world policy recommendations
-- Normative evaluation frameworks (e.g. utilitarian, egalitarian, Rawlsian optimization)
-- Claims about collective intelligence or optimal democratic design
+The public `main` branch keeps that context visible, but it is not the archival
+freeze or the university hand-in branch. It should remain useful for further
+experiments, cleanup, and public exploration of the project.
 
-These aspects are considered directions for future research beyond the thesis.
+## Out of Scope for the Thesis
 
----
+- strategic voting equilibria
+- empirical calibration to real election data
+- policy recommendations
+- claims about globally optimal democratic design
 
-## Project Vision (Beyond the Thesis)
-
-Beyond the scope of the master thesis, **DemocracySim** is intended as a flexible research platform for exploring more complex questions related to collective decision-making, participation, fairness, and democratic system design.
-Potential future extensions include richer agent models, alternative decision-making mechanisms, and applications to real-world collaborative or political settings.
+These remain possible directions for future work rather than claims made by the
+thesis itself.

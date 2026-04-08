@@ -23,11 +23,12 @@ from src.analysis.summary_series import (
 )
 from src.analysis.doe_scoring import DEFAULT_SCORING_THRESHOLDS
 from src.utils.ballots import score_options_c2
-from src.utils.social_welfare_functions import approval_voting, borda_rule, majority_rule, schulze_rule, utilitarian_rule
+from src.utils.social_welfare_functions import approval_voting, borda_rule, plurality_rule, schulze_rule, utilitarian_rule
 from src.viz.color_palette import COLORS as SIM_COLORS
 from src.viz.color_palette import get_group_color
 
 _Y_PAD_PERCENT = 1.5
+_PUZZLE_DISTANCE_PANEL_TITLE = "Puzzle Distance vs Outcome / Power\n(background: voted ordering by step)"
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -39,8 +40,12 @@ def _run_meta(meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def _int_with_default(value: Any, default: int) -> int:
+    if value is None:
+        return int(default)
+    if isinstance(value, str) and value.strip() == "":
+        return int(default)
     try:
-        return int(value or default)
+        return int(value)
     except (TypeError, ValueError):
         return int(default)
 
@@ -318,7 +323,7 @@ def _render_area_detail_pdf(
                 label="threshold",
                 zorder=2,
             )
-        ax_pdist.set_title("Puzzle Distance vs Outcome / Power")
+        ax_pdist.set_title(_PUZZLE_DISTANCE_PANEL_TITLE)
         ax_pdist.set_ylabel("distance [0..1]")
         _set_unit_ylim_visible(ax_pdist)
         if len(ax_pdist.lines) > 0:
@@ -1260,7 +1265,7 @@ def _draw_area_personality_group_distribution(
     personality_groups: np.ndarray,
     num_colors: int,
 ) -> None:
-    ax.set_title("Personality Group Dists")
+    ax.set_title("Preference Groups")
     dist = np.asarray(pg_dist, dtype=float).reshape(-1)
     if dist.size == 0 or not np.isfinite(dist).any():
         ax.axis("off")
@@ -1385,8 +1390,8 @@ def _compute_area_power_direction_orderings(
     pref_table = np.vstack(pref_rows)
 
     # Keep this panel deterministic and interpretable: exclude Random baseline.
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
-    rule_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze"]
+    rule_fns = [plurality_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
+    rule_names = ["Plurality", "Approval", "Utilitarian", "Borda", "Schulze"]
     run_seed = _int_with_default(_run_meta(meta).get("run_seed"), 0)
     out: list[dict[str, Any]] = []
     for idx, (fn, name) in enumerate(zip(rule_fns, rule_names)):

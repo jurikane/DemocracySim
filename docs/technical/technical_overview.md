@@ -2,6 +2,12 @@
 
 **DemocracySim** is a multi-agent simulation framework for studying how voting rules shape participation, inequality, and outcome dynamics.
 
+## First Steps
+
+- `python -m scripts.run --config configs/default.yaml` launches the interactive Mesa server.
+- `python -m scripts.run_headless --config configs/default.yaml` runs a headless batch.
+- `python -m scripts.run_replay <run_dir>` opens a replay for a stored run directory.
+
 ## Scope
 
 - Agents have limited information, preferences, assets, and adaptive behavior.
@@ -11,7 +17,7 @@
 
 ## Implemented Voting Rules
 
-- `majority_rule`
+- `plurality_rule`
 - `approval_voting`
 - `utilitarian_rule`
 - `borda_rule`

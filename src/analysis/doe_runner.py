@@ -11,7 +11,7 @@ import copy
 
 
 RULE_LABELS = {
-    0: "majority",
+    0: "plurality",
     1: "approval",
     2: "utilitarian",
     3: "borda",
@@ -250,7 +250,7 @@ DEFAULT_DOE_PROFILES: dict[str, dict[str, Any]] = {
             "altruism_mode": "satisfaction",
             "altruism_learning": False,
             "altruism_response_gamma": 1.0,
-            # Freeze the post-Stage-A/majority-confirmed mapping while testing puzzle-motion effects.
+            # Freeze the post-Stage-A/plurality-confirmed mapping while testing puzzle-motion effects.
             "altruism_satisfaction_theta": 0.7,
             "altruism_satisfaction_slope": 2.0,
             "participation_signal_mode": "group_centered_delta_rel_plus_fee",

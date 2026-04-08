@@ -1,6 +1,6 @@
 # Project information
 site_name: DemocracySim
-site_description: <b>How do different voting rules influence the temporal evolution of participation rates and inequality in a simple multi-agent system with adaptive agents?</b>
+site_description: <b>Mesa-based simulation platform for voting rules, participation, and inequality dynamics.</b>
 site_url: https://jurikane.github.io/DemocracySim/
 site_author: Paul Kühnel
 exclude_docs: |
@@ -8,8 +8,7 @@ exclude_docs: |
 
 # Repository
 repo_url: https://github.com/jurikane/DemocracySim
-
-edit_uri: edit/dev/docs/
+edit_uri: edit/main/docs/
 
 # Configuration
 nav:

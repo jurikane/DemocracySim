@@ -135,7 +135,7 @@ Additional `summary_stats.json` endpoints (final values, volatility, diversity e
 Rule-family roles for reporting:
 
 - canonical confirmatory family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
-- reference family: `majority (0)`, `random (5)`
+- reference family: `plurality (0)`, `random (5)`
 - context-only calibration arm: `approval (1)`
 
 Family boundaries must remain explicit in results reporting.

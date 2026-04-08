@@ -33,7 +33,7 @@ It is not learned nor strategic.
 
 ## 3. Satisfaction-Mode Mapping to Altruism
 
-If `altruism_mode=satisfaction` (as in thesis runs), the mapping is:
+If `altruism_mode=satisfaction`, the mapping is:
 
 - `s = 1 - dissatisfaction_value`
 - `target = sigmoid(k * (s - theta))`

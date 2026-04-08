@@ -1,6 +1,6 @@
 # Metric Glossary
 
-This glossary is the field-to-meaning dictionary for thesis analysis.
+This glossary is the field-to-meaning dictionary for the analysis.
 It complements:
 
 - `docs/research/thesis_measurement_spec.md`
@@ -61,5 +61,5 @@ Aggregation semantics:
 ### Rule-family labels used in reporting
 
 - canonical confirmatory family: `utilitarian (2)`, `borda (3)`, `schulze (4)`
-- reference family: `majority (0)`, `random (5)`
+- reference family: `plurality (0)`, `random (5)`
 - context-only calibration arm: `approval (1)`

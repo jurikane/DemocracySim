@@ -1,6 +1,6 @@
 # Grid State Concept
 
-Explains the conceptual role of the color grid as implemented in the thesis model.
+Explains the conceptual role of the color grid as implemented in the model.
 
 ## 1. What the Grid Represents
 
@@ -27,7 +27,7 @@ So the grid has lagged dynamics: decisions shape future environment, not the sam
 
 ## 3. Why This Matters Conceptually
 
-This lag creates a feedback structure that is central to the thesis:
+This lag creates a feedback structure that is central to the simulation:
 
 - agents vote under current state constraints
 - decision outcomes update resource signals and learning
@@ -35,7 +35,7 @@ This lag creates a feedback structure that is central to the thesis:
 
 ## 4. Grid and Satisfaction
 
-Agent dissatisfaction is computed by comparing each agent's preferred distribution to a target distribution (typically the current area grid distribution in thesis baseline).
+Agent dissatisfaction is computed by comparing each agent's preferred distribution to a target distribution (typically the current area grid distribution).
 
 Therefore:
 
