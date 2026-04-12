@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -56,7 +56,7 @@ def test_num_agents_integration_logging_agents_and_area_rows(tmp_path):
         max_steps=1,
     )
 
-    logger = RunLoggerV2(
+    logger = RunLogger(
         out_dir=tmp_path,
         run_seed=1,
         rule_idx=int(model.rule_idx),

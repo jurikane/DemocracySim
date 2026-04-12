@@ -57,6 +57,13 @@ def get_area_color_distribution(area: Area) -> Optional[list[float]]:
     return area.color_distribution.tolist() if isinstance(area, Area) else None
 
 
+def get_area_puzzle_distribution(area: Area) -> Optional[list[float]]:
+    if not isinstance(area, Area):
+        return None
+    puzzle = area.puzzle_distribution
+    return puzzle.tolist() if isinstance(puzzle, np.ndarray) else None
+
+
 def get_election_results(area: Area) -> Optional[list[int]]:
     """
     Returns the voted ordering as a list or None if not available.

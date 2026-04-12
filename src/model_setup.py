@@ -75,8 +75,7 @@ def build_model_kwargs(model_cfg: ModelConfig) -> dict:
     Create a kwargs dict for ParticipationModel from a config mapping
     (used for headless or non-interactive runs).
     """
-    return {k: getattr(model_cfg, k) for k in _ALLOWED_KW if
-            hasattr(model_cfg, k)}
+    return model_cfg.model_dump(include=_ALLOWED_KW)
 
 
 def build_model_params(model_cfg: ModelConfig) -> dict:
@@ -98,14 +97,14 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "height": model_cfg.height,
         "width": model_cfg.width,
         "rule_idx": mesa.visualization.Slider(
-            name=f"Rule {social_welfare_function_short_names}",
+            name=f"Rule [{', '.join(social_welfare_function_short_names)}]",
             value=model_cfg.rule_idx,
             min_value=0,
             max_value=len(social_welfare_functions) - 1,
             step=1,
         ),
         "distance_idx": mesa.visualization.Slider(
-            name=f"Dist {distance_function_short_names}",
+            name=f"Dist [{', '.join(distance_function_short_names)}]",
             value=model_cfg.distance_idx,
             min_value=0,
             max_value=len(distance_functions) - 1,
@@ -134,21 +133,21 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         ),
         "quality_target_mode": mesa.visualization.Slider(
             name="Quality target mode (0=reality, 1=puzzle)",
-            value=1 if str(getattr(model_cfg, "quality_target_mode", "puzzle")) == "puzzle" else 0,
+            value=1 if model_cfg.quality_target_mode == "puzzle" else 0,
             min_value=0,
             max_value=1,
             step=1,
         ),
         "puzzle_local_kappa": mesa.visualization.Slider(
             name="Puzzle local kappa (higher=smaller jumps)",
-            value=float(getattr(model_cfg, "puzzle_local_kappa", 30.0)),
+            value=model_cfg.puzzle_local_kappa,
             min_value=0.1,
             max_value=200.0,
             step=0.1,
         ),
         "puzzle_shock_prob": mesa.visualization.Slider(
             name="Puzzle shock probability",
-            value=float(getattr(model_cfg, "puzzle_shock_prob", 0.05)),
+            value=model_cfg.puzzle_shock_prob,
             min_value=0.0,
             max_value=1.0,
             step=0.01,
@@ -204,21 +203,21 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         ),
         "altruism_response_gamma": mesa.visualization.Slider(
             name="Altruism response gamma (satisfaction mode)",
-            value=float(getattr(model_cfg, "altruism_response_gamma", 1.0)),
+            value=model_cfg.altruism_response_gamma,
             min_value=0.0,
             max_value=1.0,
             step=0.01,
         ),
         "altruism_satisfaction_theta": mesa.visualization.Slider(
             name="Altruism satisfaction theta (threshold)",
-            value=float(getattr(model_cfg, "altruism_satisfaction_theta", 0.5)),
+            value=model_cfg.altruism_satisfaction_theta,
             min_value=0.0,
             max_value=1.0,
             step=0.01,
         ),
         "altruism_satisfaction_slope": mesa.visualization.Slider(
             name="Altruism satisfaction slope",
-            value=float(getattr(model_cfg, "altruism_satisfaction_slope", 4.0)),
+            value=model_cfg.altruism_satisfaction_slope,
             min_value=0.1,
             max_value=20.0,
             step=0.1,
@@ -226,7 +225,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
         "altruism_mode": mesa.visualization.Slider(
             name="Altruism mode (0=static, 1=surprise, 2=satisfaction)",
             value={"static": 0, "surprise_learning": 1, "satisfaction": 2}.get(
-                str(getattr(model_cfg, "altruism_mode", "satisfaction")),
+                model_cfg.altruism_mode,
                 2,
             ),
             min_value=0,
@@ -269,7 +268,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             step=1,
         ),
         "num_personality_groups": mesa.visualization.Slider(
-            name="# different personality_groups",
+            name="# preference groups",
             value=model_cfg.num_personality_groups,
             min_value=1,
             max_value=max(1, factorial(model_cfg.num_colors)),
@@ -379,7 +378,7 @@ def make_server(cfg: AppConfig) -> ModularServer:
     """
     vis_cfg = cfg.visualization
     elements = [make_canvas(cfg), *make_charts(cfg)]
-    title = getattr(vis_cfg, "title", "Participation Model")
+    title = "Participation Model"
 
     # Use interactive model parameters (sliders appear in the UI)
     params = build_model_params(cfg.model)

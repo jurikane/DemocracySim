@@ -6,7 +6,7 @@ from math import factorial
 import numpy as np
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -66,7 +66,7 @@ def test_num_personality_groups_integration_static_metadata_lengths(tmp_path):
         num_areas=2,
         num_agents=20,
     )
-    logger = RunLoggerV2(
+    logger = RunLogger(
         out_dir=tmp_path,
         run_seed=1,
         rule_idx=int(model.rule_idx),

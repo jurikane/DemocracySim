@@ -3,6 +3,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 from mesa.visualization import TextElement
 import matplotlib.patches as patches
+from matplotlib.colors import to_rgba
 from src.viz.factory import COLORS
 from src.viz.color_palette import get_group_color
 import base64
@@ -24,6 +25,68 @@ def save_plot_to_base64(fig) -> str:
     return f'<img src="data:image/png;base64,{image_base64}" />'
 
 
+def _float_array(values) -> np.ndarray:
+    arr = np.empty(len(values), dtype=np.float64)
+    for i, value in enumerate(values):
+        arr[i] = np.nan if value is None else value
+    return arr
+
+
+def _vector_matrix(values, width: int) -> np.ndarray:
+    matrix = np.full((len(values), width), np.nan, dtype=np.float64)
+    for row_idx, value in enumerate(values):
+        if value is None:
+            continue
+        row = np.asarray(value, dtype=np.float64)
+        matrix[row_idx, : min(width, row.size)] = row[:width]
+    return matrix
+
+
+def _ordering_rank_matrix(values, width: int) -> np.ndarray:
+    ranks = np.full((len(values), width), -1, dtype=np.int16)
+    for row_idx, value in enumerate(values):
+        if value is None:
+            continue
+        ordering = np.asarray(value, dtype=np.int16)
+        limit = min(width, ordering.size)
+        ranks[row_idx, ordering[:limit]] = np.arange(limit, dtype=np.int16)
+    return ranks
+
+
+def wrap_html_panel(
+    content: str,
+    *,
+    title: str,
+    collapsible: bool = True,
+    default_open: bool = False,
+) -> str:
+    if not content:
+        return ""
+    if not collapsible:
+        return content
+    open_attr = " open" if default_open else ""
+    return (
+        f"<details{open_attr} style='margin:8px 0;'>"
+        f"<summary style='cursor:pointer; font-weight:600;'>{title}</summary>"
+        f"<div style='padding-top:8px'>{content}</div>"
+        f"</details>"
+    )
+
+
+def _with_alpha(color: str, alpha: float) -> tuple[float, float, float, float]:
+    r, g, b, _ = to_rgba(color)
+    return (r, g, b, alpha)
+
+
+def _step_axis(model, model_vars: dict[str, list[object]], num_steps: int) -> np.ndarray:
+    if "step" in model_vars:
+        return _float_array(model_vars["step"])
+
+    starts_at_zero = num_steps == model.scheduler.steps + 1
+    start = 0.0 if starts_at_zero else 1.0
+    return np.arange(start, start + num_steps, dtype=float)
+
+
 class AreaDiagnosticsPanel(TextElement):
     """Per-area diagnostics panel.
 
@@ -33,54 +96,55 @@ class AreaDiagnosticsPanel(TextElement):
         2) elected ordering
         3) mean common + mean personal rewards
       Row 2 (Diagnostics):
-        4) turnout by personality_group
-        5) mean assets by personality_group
-        6) mean delta_rel by personality_group
+        4) turnout by preference group
+        5) mean assets by preference group
+        6) mean delta_rel by preference group
       Row 3 (Reserved):
-        7) mean altruism by personality_group
-        8) mean q_participation by personality_group (participants dotted)
-        9) mean dissatisfaction by personality_group
+        7) mean altruism by preference group
+        8) mean q_participation by preference group (participants dotted)
+        9) mean dissatisfaction by preference group
     """
 
     def __init__(self, max_steps: int = 10):
         super().__init__()
-        self.max_steps = int(max_steps)
+        self.max_steps = max_steps
+        self._cached_step = -1
+        self._cached_html = ""
 
     def render(self, model) -> str:
         step = model.scheduler.steps
         if step == 0:
             return ""
+        if step == self._cached_step:
+            return self._cached_html
 
         areas = [a for a in model.areas if a is not None and a.unique_id != -1]
         if not areas:
             return ""
-        areas = sorted(areas, key=lambda a: int(a.unique_id))
+        areas = sorted(areas, key=lambda a: a.unique_id)
 
-        # Diagnostics histories
-        histories = []
-        for area in areas:
-            hist = getattr(area, "diag_history", [])
-            histories.append(hist[-self.max_steps:] if hist else [])
-
-        # AreaStats series from datacollector
         data = model.datacollector.get_agent_vars_dataframe()
-        if data is None or len(data) == 0:
+        if data is None or data.empty:
             return ""
-        if ('area_color_distribution' not in data.columns
-                or 'quality_distance' not in data.columns
-                or 'elected_color' not in data.columns):
-            return ""
-
-        color_distribution = data['area_color_distribution'].dropna()
-        quality_distance = data['quality_distance'].dropna()
-        dist_to_reality = data['dist_to_reality'].dropna() if 'dist_to_reality' in data.columns else None
-        puzzle_distance = data['puzzle_distance'].dropna() if 'puzzle_distance' in data.columns else None
-        election_results = data['elected_color'].dropna()
-
-        if len(color_distribution) == 0:
+        required_columns = {
+            "area_color_distribution",
+            "quality_distance",
+            "elected_color",
+        }
+        if not required_columns.issubset(data.columns):
             return ""
 
-        num_colors = len(color_distribution.iloc[0])
+        recent = data.groupby(level=1, sort=False).tail(self.max_steps)
+        area_frames = {
+            area_id: frame
+            for area_id, frame in recent.groupby(level=1, sort=False)
+        }
+        sample_frame = next(iter(area_frames.values()), None)
+        if sample_frame is None or sample_frame.empty:
+            return ""
+
+        sample_colors = sample_frame["area_color_distribution"].iloc[0]
+        num_colors = len(sample_colors)
         num_areas = len(areas)
         fig, axes = plt.subplots(
             nrows=num_areas * 3,
@@ -90,73 +154,82 @@ class AreaDiagnosticsPanel(TextElement):
         )
 
         for i, area in enumerate(areas):
+            frame = area_frames.get(area.unique_id)
+            if frame is None or frame.empty:
+                continue
+
             row_top = i * 3
             row_mid = row_top + 1
             row_bot = row_top + 2
+            steps = frame.index.get_level_values(0).to_numpy(dtype=float)
+            color_matrix = _vector_matrix(frame["area_color_distribution"].tolist(), num_colors)
+            quality_series = _float_array(frame["quality_distance"].tolist())
+            elected_ranks = _ordering_rank_matrix(frame["elected_color"].tolist(), num_colors)
 
-            # --- AreaStats (top row) ---
-            area_cd = color_distribution.xs(area.unique_id, level=1)
-            area_qdist = quality_distance.xs(area.unique_id, level=1)
-            area_elec = election_results.xs(area.unique_id, level=1)
-            area_dist = None
-            if dist_to_reality is not None and len(dist_to_reality) > 0:
-                try:
-                    area_dist = dist_to_reality.xs(area.unique_id, level=1)
-                except KeyError:
-                    area_dist = None
-            area_pdist = None
-            if puzzle_distance is not None and len(puzzle_distance) > 0:
-                try:
-                    area_pdist = puzzle_distance.xs(area.unique_id, level=1)
-                except KeyError:
-                    area_pdist = None
+            dist_series = None
+            if "dist_to_reality" in frame.columns:
+                dist_series = _float_array(frame["dist_to_reality"].tolist())
 
-            # limit to last N steps for AreaStats
-            area_cd = area_cd.tail(self.max_steps)
-            area_qdist = area_qdist.tail(self.max_steps)
-            area_elec = area_elec.tail(self.max_steps)
-            if area_dist is not None:
-                area_dist = area_dist.tail(self.max_steps)
-            if area_pdist is not None:
-                area_pdist = area_pdist.tail(self.max_steps)
+            puzzle_distance_series = None
+            if "puzzle_distance" in frame.columns:
+                puzzle_distance_series = _float_array(frame["puzzle_distance"].tolist())
+
+            puzzle_color_matrix = None
+            if "puzzle_color_distribution" in frame.columns and frame["puzzle_color_distribution"].notna().any():
+                puzzle_color_matrix = _vector_matrix(frame["puzzle_color_distribution"].tolist(), num_colors)
 
             ax0 = axes[row_top][0]
             ax1 = axes[row_top][1]
             ax2 = axes[row_top][2]
 
-            ax0.plot(area_qdist.index, area_qdist.values, color='Black', linestyle='--', linewidth=1.6, label='quality_distance')
-            q_mode = str(getattr(model, "quality_target_mode", "reality")).strip().lower()
+            ax0.plot(steps, quality_series, color="black", linestyle="--", linewidth=1.6, label="quality_distance")
+            q_mode = model.quality_target_mode.strip().lower()
             if q_mode == "puzzle":
-                if area_pdist is not None:
-                    ax0.plot(area_pdist.index, area_pdist.values, color='tab:blue', linestyle=':', linewidth=1.0, alpha=0.8, label='puzzle_distance')
-                if area_dist is not None:
-                    ax0.plot(area_dist.index, area_dist.values, color='tab:green', linestyle=':', linewidth=1.0, alpha=0.8, label='dist_to_reality')
-            elif area_pdist is not None:
-                ax0.plot(area_pdist.index, area_pdist.values, color='tab:blue', linestyle=':', linewidth=1.0, alpha=0.8, label='puzzle_distance')
+                if puzzle_distance_series is not None:
+                    ax0.plot(steps, puzzle_distance_series, color="tab:blue", linestyle=":", linewidth=1.0, alpha=0.8, label="puzzle_distance")
+                if dist_series is not None:
+                    ax0.plot(steps, dist_series, color="tab:green", linestyle=":", linewidth=1.0, alpha=0.8, label="dist_to_reality")
+            elif puzzle_distance_series is not None:
+                ax0.plot(steps, puzzle_distance_series, color="tab:blue", linestyle=":", linewidth=1.0, alpha=0.8, label="puzzle_distance")
+
             for color_idx in range(num_colors):
-                cdata = area_cd.apply(lambda x: x[color_idx])
-                ax0.plot(cdata.index, cdata.values, color=COLORS[color_idx])
+                ax0.plot(steps, color_matrix[:, color_idx], color=COLORS[color_idx], linewidth=1.2, label=f"grid c{color_idx}")
+                if puzzle_color_matrix is not None:
+                    ax0.plot(
+                        steps,
+                        puzzle_color_matrix[:, color_idx],
+                        color=COLORS[color_idx],
+                        linestyle="--",
+                        linewidth=1.0,
+                        alpha=0.8,
+                        label=f"puzzle c{color_idx}",
+                    )
             source = "puzzle_distance" if q_mode == "puzzle" else "dist_to_reality"
-            ax0.set_title(f'Area {area.unique_id} color-dst | quality_distance ({source})')
-            ax0.set_xlabel('Step')
-            ax0.set_ylabel('Color dist')
+            ax0.set_title(f"Area {area.unique_id} grid/puzzle color-dst | quality_distance ({source})")
+            ax0.set_xlabel("Step")
+            ax0.set_ylabel("Color dist")
             ax0.legend(fontsize=6, loc='best')
 
             for color_id in range(num_colors):
-                cdata = area_elec.apply(lambda x: list(x).index(color_id) if color_id in x else None)
-                ax1.plot(cdata.index, cdata.values, marker='o',
-                         label=f'Color {color_id}', color=COLORS[color_id],
-                         linewidth=0.2)
-            ax1.set_title('Elected ordering')
-            ax1.set_xlabel('Step')
-            ax1.set_ylabel('Rank')
+                valid = elected_ranks[:, color_id] >= 0
+                if np.any(valid):
+                    ax1.plot(
+                        steps[valid],
+                        elected_ranks[valid, color_id],
+                        marker="o",
+                        label=f"Color {color_id}",
+                        color=COLORS[color_id],
+                        linewidth=0.2,
+                    )
+            ax1.set_title("Elected ordering")
+            ax1.set_xlabel("Step")
+            ax1.set_ylabel("Rank")
             ax1.invert_yaxis()
 
-            # rewards (top row, col 3)
-            hist = histories[i]
+            hist = area.diag_history[-self.max_steps:]
             if hist:
                 hist_len = len(hist)
-                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
+                step_axis = np.arange(step - hist_len + 1, step + 1)
                 group_personal = [h.get("group_mean_personal_reward", []) for h in hist]
                 group_fee = [h.get("group_mean_fee", []) for h in hist]
 
@@ -184,7 +257,7 @@ class AreaDiagnosticsPanel(TextElement):
 
             if hist:
                 hist_len = len(hist)
-                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
+                step_axis = np.arange(step - hist_len + 1, step + 1)
 
                 group_turnout = [h.get("group_turnout", []) for h in hist]
                 overall_turnout = [h.get("turnout", float("nan")) for h in hist]
@@ -226,7 +299,7 @@ class AreaDiagnosticsPanel(TextElement):
 
             if hist:
                 hist_len = len(hist)
-                step_axis = np.arange(int(step) - hist_len + 1, int(step) + 1)
+                step_axis = np.arange(step - hist_len + 1, step + 1)
 
                 group_altruism = [h.get("group_mean_altruism", []) for h in hist]
                 group_q_p = [h.get("group_mean_q_participation_participants", []) for h in hist]
@@ -257,13 +330,17 @@ class AreaDiagnosticsPanel(TextElement):
             ax8.set_title("mean dissatisfaction by group")
 
         plt.tight_layout()
-        return save_plot_to_base64(fig)
+        self._cached_html = save_plot_to_base64(fig)
+        self._cached_step = step
+        return self._cached_html
 
 
 class PersonalityGroupDistribution(TextElement):
-    def __init__(self):
+    def __init__(self, *, collapsible: bool = True, default_open: bool = False):
         super().__init__()
         self.pers_dist_plot = None
+        self.collapsible = collapsible
+        self.default_open = default_open
 
     def create_once(self, model):
         dists = model.personality_group_distribution
@@ -287,77 +364,184 @@ class PersonalityGroupDistribution(TextElement):
                                          color=colors[color_idx])
                 ax.add_patch(rect)
 
-        ax.set_xlabel('"Personality Group" ID')
+        ax.set_xlabel('"Preference Group" ID')
         ax.set_ylabel(f'Percentage of the {num_agents} Agents')
-        ax.set_title('Global distribution of personality groups among agents')
+        ax.set_title('Global distribution of preference groups among agents')
         plt.tight_layout()
         self.pers_dist_plot = save_plot_to_base64(fig)
 
     def render(self, model) -> str:
         if model.scheduler.steps == 0:
             self.create_once(model)
-        return self.pers_dist_plot or ""
+        return wrap_html_panel(
+            self.pers_dist_plot or "",
+            title="Global preference-group distribution",
+            collapsible=self.collapsible,
+            default_open=self.default_open,
+        )
 
 
-class _AreaTimeSeriesElement(TextElement):
-    """Base class for per-area time series plots backed by agent vars dataframe."""
-
-    series_column: str = ""
-    title: str = ""
-    ylabel: str = ""
-
-    def _get_series(self, model):
-        data = model.datacollector.get_agent_vars_dataframe()
-        if data is None or data.empty:
-            return None
-        if self.series_column not in data.columns:
-            return None
-        series = data[self.series_column].dropna()
-        return None if series.empty else series
-
-    @staticmethod
-    def _line_style(i: int) -> str:
-        if i < 10:
-            return "-"
-        if i < 20:
-            return ":"
-        return "--"
+class AreaPuzzleColorDistributionElement(TextElement):
+    def __init__(self, *, collapsible: bool = True, default_open: bool = False):
+        super().__init__()
+        self.collapsible = collapsible
+        self.default_open = default_open
+        self._cached_step = -1
+        self._cached_html = ""
 
     def render(self, model) -> str:
-        series = self._get_series(model)
-        if series is None:
+        step = model.scheduler.steps
+        if step == self._cached_step:
+            return self._cached_html
+
+        data = model.datacollector.get_agent_vars_dataframe()
+        if data is None or data.empty or "puzzle_color_distribution" not in data.columns:
             return ""
 
-        area_ids = series.index.get_level_values(1).unique()
-        fig, ax = plt.subplots(figsize=(8, 6))
+        puzzle_rows = data[data["puzzle_color_distribution"].notna()]
+        if puzzle_rows.empty:
+            return ""
 
-        for i, area_id in enumerate(area_ids):
-            # If index isn't a MultiIndex with that level, let it fail loudly.
-            area_data = series.xs(area_id, level=1)
-            ax.plot(
-                area_data.index,
-                area_data.values,
-                label=f"Area {area_id}",
-                linestyle=self._line_style(i),
-            )
+        area_frames = {
+            area_id: frame
+            for area_id, frame in puzzle_rows.groupby(level=1, sort=False)
+        }
+        area_ids = sorted(area_frames)
+        if not area_ids:
+            return ""
 
-        ax.set_title(self.title)
-        ax.set_xlabel("Step")
-        ax.set_ylabel(self.ylabel)
-        ax.legend()
-        return save_plot_to_base64(fig)
+        sample = area_frames[area_ids[0]]["puzzle_color_distribution"].iloc[0]
+        num_colors = len(sample)
+
+        n_areas = len(area_ids)
+        fig, axes = plt.subplots(nrows=n_areas, ncols=1, figsize=(10, max(3.0, 2.5 * n_areas)), sharex=True)
+        axes_list = axes.flatten() if hasattr(axes, "flatten") else [axes]
+
+        for ax, area_id in zip(axes_list, area_ids):
+            area_frame = area_frames[area_id]
+            steps = area_frame.index.get_level_values(0).to_numpy(dtype=float)
+            puzzle_matrix = _vector_matrix(area_frame["puzzle_color_distribution"].tolist(), num_colors)
+            for color_idx in range(num_colors):
+                ax.plot(steps, puzzle_matrix[:, color_idx], color=COLORS[color_idx], linewidth=1.2, label=f"c{color_idx}")
+            ax.set_ylabel(f"Area {area_id}")
+            ax.set_ylim(0.0, 1.0)
+            ax.grid(alpha=0.2, linewidth=0.5)
+            if num_colors <= 8:
+                ax.legend(fontsize=7, loc="best")
+
+        axes_list[-1].set_xlabel("Step")
+        fig.suptitle("Puzzle Color Distribution by Area", fontsize=12)
+        plt.tight_layout()
+        self._cached_html = wrap_html_panel(
+            save_plot_to_base64(fig),
+            title="Puzzle color distribution by area",
+            collapsible=self.collapsible,
+            default_open=self.default_open,
+        )
+        self._cached_step = step
+        return self._cached_html
 
 
-class VoterTurnoutElement(_AreaTimeSeriesElement):
-    series_column = "turnout"
-    title = "Voter Turnout by Area Over Time"
-    ylabel = "Voter Turnout (%)"
+class MainMetricsElement(TextElement):
+    """Compact 2x2 overview of thesis metrics by preference group."""
 
+    _METRICS = (
+        ("turnout", "group_turnout", "Turnout and Turnout by Group", "overall turnout", "group", "Turnout (%)", None, "black", (0.0, 100.0), None),
+        ("gini_index", "group_mean_assets_share", "Asset Gini and Relative Mean Assets by Group", "overall asset gini", "group", "Gini (0-100)", "Relative mean assets", "black", (0.0, 100.0), (0.0, 1.0)),
+        ("gini_dissatisfaction", "group_mean_dissatisfaction", "Dissatisfaction Gini and Mean Dissatisfaction by Group", "overall dissatisfaction gini", "group", "Gini (0-100)", "Mean dissatisfaction", "black", (0.0, 100.0), (0.0, 1.0)),
+        ("quality_distance", "group_outcome_distance", "Quality Distance and Group Distance to Outcome", "overall quality distance", "group", "Distance", None, "black", (0.0, 1.0), None),
+    )
 
-class AreaGiniElement(_AreaTimeSeriesElement):
-    series_column = "gini_index"
-    title = "Gini Index by Area Over Time"
-    ylabel = "Gini Index (0-100)"
+    def __init__(self, *, collapsible: bool = False, default_open: bool = True):
+        super().__init__()
+        self.collapsible = collapsible
+        self.default_open = default_open
+        self._cached_step = -1
+        self._cached_html = ""
+
+    def render(self, model) -> str:
+        step = model.scheduler.steps
+        if step == self._cached_step:
+            return self._cached_html
+
+        model_vars = model.datacollector.model_vars
+        if not model_vars:
+            return ""
+
+        required = {group_col for _, group_col, *_ in self._METRICS}
+        if not required.issubset(model_vars):
+            return ""
+
+        n_groups = model.num_personality_groups
+        if n_groups == 0:
+            return ""
+
+        num_steps = len(next(iter(model_vars.values())))
+        x = _step_axis(model, model_vars, num_steps)
+        fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(11.5, 7.0), sharex=True)
+        axes_flat = axes.flatten()
+        has_step_zero = num_steps > 0 and x[0] == 0.0
+
+        for ax, metric in zip(axes_flat, self._METRICS):
+            overall_col, group_col, title, overall_label, group_label_prefix, left_ylabel, right_ylabel, overall_color, overall_ylim, group_ylim = metric
+            group_mat = _vector_matrix(model_vars[group_col], n_groups)
+            overall = None
+            if overall_col in model_vars:
+                overall = _float_array(model_vars[overall_col])
+
+            if has_step_zero:
+                if overall_col in {"turnout", "gini_dissatisfaction"}:
+                    group_mat[0, :] = np.nan
+                    if overall is not None:
+                        overall[0] = np.nan
+                elif overall_col == "quality_distance" and overall is not None:
+                    overall[0] = np.nan
+
+            any_group_line = False
+            group_ax = ax.twinx() if group_ylim is not None else ax
+            for g in range(n_groups):
+                y = group_mat[:, g]
+                if not np.isfinite(y).any():
+                    continue
+                any_group_line = True
+                line_color = _with_alpha(get_group_color(g), 0.35 if overall_col == "quality_distance" else 0.45)
+                group_ax.plot(x, y, color=line_color, linewidth=1.4, label=f"{group_label_prefix} {g}")
+
+            if overall is not None:
+                if np.isfinite(overall).any():
+                    ax.plot(x, overall, color=overall_color, linewidth=1.25, linestyle="--", alpha=0.85, label=overall_label)
+                    ax.set_title(title)
+                else:
+                    ax.set_title(title)
+            else:
+                ax.set_title(title)
+
+            ax.set_ylim(*overall_ylim)
+            ax.set_ylabel(left_ylabel)
+            if group_ylim is not None:
+                group_ax.set_ylim(*group_ylim)
+                group_ax.set_yticks([])
+                group_ax.set_ylabel(right_ylabel)
+            ax.grid(alpha=0.2, linewidth=0.5)
+            if any_group_line and n_groups <= 8:
+                if group_ax is ax:
+                    group_ax.legend(fontsize=7, loc="best")
+                else:
+                    overall_handles, overall_labels = ax.get_legend_handles_labels()
+                    group_handles, group_labels = group_ax.get_legend_handles_labels()
+                    group_ax.legend(overall_handles + group_handles, overall_labels + group_labels, fontsize=7, loc="best")
+
+        axes[1][0].set_xlabel("Step")
+        axes[1][1].set_xlabel("Step")
+        plt.tight_layout()
+        self._cached_html = wrap_html_panel(
+            save_plot_to_base64(fig),
+            title="Main metrics by preference group",
+            collapsible=self.collapsible,
+            default_open=self.default_open,
+        )
+        self._cached_step = step
+        return self._cached_html
 
 class MatplotlibElement(TextElement):
     def render(self, model) -> str:
@@ -393,8 +577,8 @@ class ReplayGridStepStatusElement(TextElement):
         if not hasattr(model, "replay_recorded_step") or not hasattr(model, "replay_grid_source_step"):
             return ""
 
-        rec = int(getattr(model, "replay_recorded_step", getattr(model.scheduler, "steps", 0)))
-        src = int(getattr(model, "replay_grid_source_step", rec))
+        rec = model.replay_recorded_step
+        src = model.replay_grid_source_step
 
         if rec == src:
             return (
@@ -413,9 +597,11 @@ class ReplayGridStepStatusElement(TextElement):
 
 
 class AreaPersonalityGroupDists(TextElement):
-    def __init__(self):
+    def __init__(self, *, collapsible: bool = True, default_open: bool = False):
         super().__init__()
         self.areas_pers_dist_plot = None
+        self.collapsible = collapsible
+        self.default_open = default_open
 
     def create_once(self, model):
         colors = COLORS[:model.num_colors]
@@ -466,7 +652,12 @@ class AreaPersonalityGroupDists(TextElement):
     def render(self, model) -> str:
         if model.scheduler.steps == 0:
             self.create_once(model)
-        return self.areas_pers_dist_plot or ""
+        return wrap_html_panel(
+            self.areas_pers_dist_plot or "",
+            title="Per-area preference-group distributions",
+            collapsible=self.collapsible,
+            default_open=self.default_open,
+        )
 
 
 class AgentLearningHistograms(TextElement):
@@ -484,16 +675,16 @@ class AgentLearningHistograms(TextElement):
     """
 
     def render(self, model) -> str:
-        step = int(model.scheduler.steps)
+        step = model.scheduler.steps
         agents = [a for a in model.voting_agents if a is not None]
         if not agents:
             return ""
 
         # Collect vectors (fail loudly if model/agent contract is broken)
-        p = np.asarray([float(a.participation_probability()) for a in agents], dtype=np.float64)
-        q = np.asarray([float(a.q_participation) for a in agents], dtype=np.float64)
-        altruism = np.asarray([float(a.altruism_factor) for a in agents], dtype=np.float64)
-        assets = np.asarray([float(a.assets) for a in agents], dtype=np.float64)
+        p = np.asarray([a.participation_probability() for a in agents], dtype=np.float64)
+        q = np.asarray([a.q_participation for a in agents], dtype=np.float64)
+        altruism = np.asarray([a.altruism_factor for a in agents], dtype=np.float64)
+        assets = np.asarray([a.assets for a in agents], dtype=np.float64)
 
         # Require something meaningful
         if p.size == 0:
@@ -508,10 +699,10 @@ class AgentLearningHistograms(TextElement):
         if p_f.size == 0 or a_f.size == 0:
             return ""
 
-        p_mean = float(np.mean(p_f))
-        p_median = float(np.median(p_f))
-        a_mean = float(np.mean(a_f))
-        a_median = float(np.median(a_f))
+        p_mean = np.mean(p_f)
+        p_median = np.median(p_f)
+        a_mean = np.mean(a_f)
+        a_median = np.median(a_f)
 
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(8, 6))
         ax = axes[0][0]
@@ -544,7 +735,7 @@ class CohortElectionLearningDiagnostics(TextElement):
 
     Reads directly from model.voting_agents and uses per-election variables stored on agents.
 
-    Per personality_group (cohort), we compute (eligible agents only):
+    Per preference group (cohort), we compute (eligible agents only):
       - counts + participation_rate
       - mean/median delta for participants vs abstainers
       - mean fee (participants), mean personal reward
@@ -561,7 +752,7 @@ class CohortElectionLearningDiagnostics(TextElement):
 
     def __init__(self, top_k: int = 8):
         super().__init__()
-        self.top_k = int(top_k)
+        self.top_k = top_k
 
     @staticmethod
     def _safe_mean(x: np.ndarray) -> float:
@@ -581,18 +772,19 @@ class CohortElectionLearningDiagnostics(TextElement):
         # Build per-agent rows (eligible only)
         rows = []
         for a in agents:
-            eligible = bool(getattr(a, "eligible_for_election", False))  # Has to be robust to account for replay agent-stubs
+            # Has to be robust to account for replay agent-stubs
+            eligible = a.eligible_for_election
             if not eligible:
                 continue
-            gid_i = int(a.personality_group_idx)
+            gid_i = a.personality_group_idx
 
             participated = a.participating
             delta = a.election_delta_abs
             fee = getattr(a, "_fee")
-            personal = float(getattr(a, "reward_personal", 0.0))
-            altruism = float(a.altruism_factor)
+            personal = a.reward_personal
+            altruism = a.altruism_factor
             try:
-                p_part = float(a.participation_probability())
+                p_part = a.participation_probability()
             except ValueError:
                 p_part = float("nan")
 
@@ -627,11 +819,11 @@ class CohortElectionLearningDiagnostics(TextElement):
             show_groups = unique_g
             other_groups = set()
 
-        labels = [str(int(g)) for g in show_groups]
+        labels = [str(g) for g in show_groups]
         if show_other:
             labels.append("other")
 
-        group_ids = [int(g) for g in show_groups]
+        group_ids = [g for g in show_groups]
         if show_other:
             group_ids.append(-1)
 
@@ -662,7 +854,7 @@ class CohortElectionLearningDiagnostics(TextElement):
             abst_mask = mask & (~participated)
             part_n = int(np.sum(part_mask))
             abst_n = int(np.sum(abst_mask))
-            rate = float(part_n / elig_n) if elig_n > 0 else float("nan")
+            rate = part_n / elig_n if elig_n > 0 else float("nan")
 
             out["eligible"].append(elig_n)  # type: ignore[arg-type]
             out["participants"].append(part_n)  # type: ignore[arg-type]
@@ -690,12 +882,15 @@ class CohortElectionLearningDiagnostics(TextElement):
         for k in list(out.keys()):
             if k == "labels":
                 continue
+            if k == "group_ids":
+                out[k] = np.asarray(out[k], dtype=np.int64)
+                continue
             out[k] = np.asarray(out[k], dtype=np.float64)
 
         return out
 
     def render(self, model) -> str:
-        step = int(model.scheduler.steps)
+        step = model.scheduler.steps
         if step == 0:
             # Avoid noisy empty plots before the first election has happened.
             return ""
@@ -708,7 +903,7 @@ class CohortElectionLearningDiagnostics(TextElement):
         group_ids = stats.get("group_ids", list(range(len(labels))))
         n = len(labels)
         x = np.arange(n)
-        group_colors = [get_group_color(int(g)) for g in group_ids]
+        group_colors = [get_group_color(g) for g in group_ids]
 
         fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(12, 7))
 
@@ -719,7 +914,7 @@ class CohortElectionLearningDiagnostics(TextElement):
         ax.set_ylim(0.0, 1.0)
         ax.set_xticks(x)
         ax.set_xticklabels(labels, rotation=45, ha="right")
-        ax.set_title("Participation rate by personality_group")
+        ax.set_title("Participation rate by preference group")
         ax.set_ylabel("participant_count / eligible")
 
         # Panel B: mean delta participants vs abstainers
@@ -761,9 +956,9 @@ class CohortElectionLearningDiagnostics(TextElement):
         ax.set_title("Mean altruism_factor and p_participation")
         ax.legend(fontsize=6)
 
-        elig = stats["eligible"].astype(int)
-        parts = stats["participants"].astype(int)
-        abst = stats["abstainers"].astype(int)
+        elig = stats["eligible"]
+        parts = stats["participants"]
+        abst = stats["abstainers"]
         fig.suptitle(
             f"Cohort election learning diagnostics (step={step}) | eligible/part/abst per group: "
             + ", ".join([f"{labels[i]}:{elig[i]}/{parts[i]}/{abst[i]}" for i in range(n)])

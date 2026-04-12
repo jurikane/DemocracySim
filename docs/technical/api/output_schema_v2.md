@@ -14,7 +14,7 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
 
 - `meta.yaml` – schema + run metadata, plus config reference
 - `config_used.yaml` – canonical batch config (stored at batch root; `meta.yaml` points to it via `config_ref`)
-- `static.json` – static model info (grid size, personality_groups, file patterns)
+- `static.json` – static model info (grid size, preference-group metadata via `personality_groups`, file patterns)
 - `steps.parquet`
 - `area_steps.parquet`
 - `agents.parquet`
@@ -133,7 +133,7 @@ Agent snapshot table (**agent state only**).
 | agent_id                             |   int32 |                                                |
 | assets                               | float32 | matches simulation internal type               |
 | num_elections_participated           |   int32 | cumulative counter across all areas/steps      |
-| personality_group_idx                |   int16 |                                                |
+| personality_group_idx                |   int16 | stored preference-group index                  |
 | eligible_for_election                | boolean | eligibility flag in this area/step election    |
 | participating                        | boolean | participation decision in this area/step       |
 | election_fee                         | float32 | charged fee in this area/step                  |

@@ -20,20 +20,18 @@ def _assert_is_dist(x: np.ndarray, *, tol: float = 1e-6) -> None:
 
 def test_personal_opt_dist_is_valid_and_matches_personality_group_ordering() -> None:
     model, _cfg = create_test_model()
-    agents = list(getattr(model, "voting_agents", []) or [])
+    agents = [a for a in model.voting_agents if a is not None]
     assert agents, "Expected test model to create voting_agents"
 
     for a in agents:
-        if a is None:
-            continue
-        dist = np.asarray(getattr(a, "personal_opt_dist"))
+        dist = np.asarray(a.personal_opt_dist)
         _assert_is_dist(dist)
 
-        ordering = np.asarray(getattr(a, "personality_group"))
+        ordering = np.asarray(a.personality_group)
         implied = np.argsort(dist)[::-1]
         assert implied.shape == ordering.shape
         assert np.array_equal(implied, ordering), (
-            f"personal_opt_dist ordering mismatch for agent {getattr(a, 'unique_id', '?')}: "
+            f"personal_opt_dist ordering mismatch for agent {a.unique_id}: "
             f"implied={implied.tolist()} personality_group={ordering.tolist()}"
         )
 
@@ -41,12 +39,12 @@ def test_personal_opt_dist_is_valid_and_matches_personality_group_ordering() -> 
 def test_personal_opt_dist_ordering_from_distribution_matches_personality_group() -> None:
     """Contract: converting personal_opt_dist to an ordering reproduces personality_group."""
     model, _cfg = create_test_model(seed=124)
-    agents = [a for a in (getattr(model, "voting_agents", []) or []) if a is not None]
+    agents = [a for a in model.voting_agents if a is not None]
     assert agents
 
     for a in agents:
-        dist = np.asarray(getattr(a, "personal_opt_dist"), dtype=np.float32)
-        ordering = np.asarray(getattr(a, "personality_group"), dtype=np.int64)
+        dist = np.asarray(a.personal_opt_dist, dtype=np.float32)
+        ordering = np.asarray(a.personality_group, dtype=np.int64)
         derived = ordering_from_distribution(dist)
         assert np.array_equal(np.asarray(derived, dtype=np.int64), ordering)
 
@@ -56,8 +54,8 @@ def test_personal_opt_dist_is_deterministic_given_seed() -> None:
     m1, _ = create_test_model(seed=123)
     m2, _ = create_test_model(seed=123)
 
-    a1 = [a for a in (getattr(m1, "voting_agents", []) or []) if a is not None]
-    a2 = [a for a in (getattr(m2, "voting_agents", []) or []) if a is not None]
+    a1 = [a for a in m1.voting_agents if a is not None]
+    a2 = [a for a in m2.voting_agents if a is not None]
     assert len(a1) == len(a2)
 
     # Match by agent_id to be robust to list ordering.
@@ -66,14 +64,14 @@ def test_personal_opt_dist_is_deterministic_given_seed() -> None:
     assert by_id_1.keys() == by_id_2.keys()
 
     for aid in sorted(by_id_1.keys()):
-        dx = np.asarray(getattr(by_id_1[aid], "personal_opt_dist"), dtype=np.float32)
-        dy = np.asarray(getattr(by_id_2[aid], "personal_opt_dist"), dtype=np.float32)
+        dx = np.asarray(by_id_1[aid].personal_opt_dist, dtype=np.float32)
+        dy = np.asarray(by_id_2[aid].personal_opt_dist, dtype=np.float32)
         np.testing.assert_allclose(dx, dy, rtol=0, atol=0)
 
 
 @pytest.fixture()
-def v2_run_dir(tmp_path: Path) -> Path:
-    """Run a tiny schema v2 headless run and return the run dir."""
+def run_dir(tmp_path: Path) -> Path:
+    """Run a tiny headless run and return the run directory."""
     from src.config.loader import load_config
     from scripts.run_headless import run_once
 
@@ -86,9 +84,9 @@ def v2_run_dir(tmp_path: Path) -> Path:
     return run_dir
 
 
-def test_personal_opt_dist_is_written_to_static_json(v2_run_dir: Path) -> None:
-    p = v2_run_dir / "static.json"
-    assert p.exists(), f"Missing static.json in {v2_run_dir}"
+def test_personal_opt_dist_is_written_to_static_json(run_dir: Path) -> None:
+    p = run_dir / "static.json"
+    assert p.exists(), f"Missing static.json in {run_dir}"
 
     static = json.loads(p.read_text())
     assert "personal_opt_dist" in static, "static.json missing personal_opt_dist"

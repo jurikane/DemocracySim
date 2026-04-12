@@ -47,6 +47,16 @@ def combine_and_normalize(arr_1: np.ndarray, arr_2: np.ndarray, factor: float):
     return res / total
 
 
+def _resolve_personality_group_idx(model: "ParticipationModel", personality_group, personality_group_idx):
+    if personality_group_idx is not None:
+        return int(personality_group_idx)
+    agent_group = np.asarray(personality_group)
+    for idx, group in enumerate(model.personality_groups):
+        if np.array_equal(agent_group, np.asarray(group)):
+            return idx
+    raise ValueError("personality_group is not registered in model.personality_groups")
+
+
 class VoteAgent(Agent):
     """An agent with resources and preferences that may participate in elections."""
 
@@ -96,7 +106,11 @@ class VoteAgent(Agent):
         # personality_group: ColorOrdering (permutation)
         # personality: ColorDistribution (per-agent color intensity dist)
         self.personality_group = np.asarray(personality_group)  # ordering / group identity
-        self.personality_group_idx = personality_group_idx
+        self.personality_group_idx = _resolve_personality_group_idx(
+            model,
+            self.personality_group,
+            personality_group_idx,
+        )
         # ColorCell objects the agent knows (knowledge)
         self.known_cells: List[Optional[ColorCell] | int] = [None] * model.known_cells
         if add:  # Add the agent to the models' agent list and the cell

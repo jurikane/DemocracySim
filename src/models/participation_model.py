@@ -3,7 +3,7 @@ import mesa
 import numpy as np
 from math import factorial
 from src.agents import Area, VoteAgent, ColorCell
-from src.utils.social_welfare_functions import (majority_rule, approval_voting,
+from src.utils.social_welfare_functions import (plurality_rule, approval_voting,
                                                 utilitarian_rule, borda_rule, schulze_rule, random_rule)
 from src.utils.distance_functions import (
     spearman_fr_order,
@@ -11,11 +11,16 @@ from src.utils.distance_functions import (
 )
 from src.utils.ballots import score_options_c2
 from itertools import permutations, product, combinations
-from src.utils.metrics import (compute_gini_index, compute_collective_assets,
+from src.utils.metrics import (build_step_metrics_snapshot,
+                               compute_gini_index, compute_collective_assets,
+                               compute_gini_dissatisfaction, compute_global_quality_distance,
+                               compute_group_mean_assets_share, compute_group_mean_dissatisfaction,
+                               compute_group_outcome_distance, compute_group_turnout,
                                get_voter_turnout, get_grid_colors)
 from src.utils.helpers import (get_area_voter_turnout, is_rate_btw_0_and_1,
                                 get_area_dist_to_reality, get_election_results,
                                 get_area_color_distribution, get_area_gini_index,
+                                get_area_puzzle_distribution,
                                 get_area_puzzle_distance, get_area_quality_distance,
                                 is_learning_rate, ensure_rate_0_1, ensure_choice,
                                 ensure_int_ge_0, ensure_finite_ge_0, ensure_finite_gt_0)
@@ -33,8 +38,8 @@ from src.utils.rng import (
 )
 
 # Voting rules to be accessible by index
-social_welfare_functions = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
-social_welfare_function_short_names = ["Majority", "Approval", "Utilitarian", "Borda", "Schulze", "Random"]
+social_welfare_functions = [plurality_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
+social_welfare_function_short_names = ["Plurality", "Approval", "Utilitarian", "Borda", "Schulze", "Random"]
 # Distance functions
 # (explicitly ordering-based)
 distance_functions = [spearman_fr_order, kendall_tau_order]
@@ -480,11 +485,11 @@ class ParticipationModel(mesa.Model):
         self._seed = seed
         self._av_area_color_dst = np.asarray([], dtype=np.float64)
         self.global_color_dst = np.asarray([], dtype=np.float64)
-        self.step_metrics_snapshot: dict[str, float | int] = {}
-        # Optional schema-v2 logging sinks (set by RunLoggerV2 in headless runs).
-        self._schema_v2_vote_sink = None
-        self._schema_v2_area_snapshot_sink = None
-        # --- Core sizing validation (fail-loud; avoids factorial explosions) ---
+        self.step_metrics_snapshot: dict[str, object] = {}
+        # Optional output logging sinks (set by RunLogger in headless runs).
+        self._output_vote_sink = None
+        self._output_area_snapshot_sink = None
+        # Core sizing validation (avoids factorial explosions)
         num_colors, num_personality_groups = self._validate_color_and_personality_space(
             num_colors=num_colors,
             num_personality_groups=num_personality_groups,
@@ -609,13 +614,11 @@ class ParticipationModel(mesa.Model):
         self._analyze_area_coverage()
         self._assert_dense_area_state()
         # Data collector
+        self.step_metrics_snapshot = self._compute_step_metrics_snapshot()
         self.datacollector: Optional[mesa.DataCollector] = None
         if bool(enable_datacollector):
             self.datacollector = self.initialize_datacollector()
-            # Collect initial data
             self.datacollector.collect(self)
-        # Canonical step-metrics snapshot used by headless logger.
-        self.step_metrics_snapshot = self._compute_step_metrics_snapshot()
 
     def _analyze_area_coverage(self) -> None:
         """Compute and cache area coverage/overlap information.
@@ -679,6 +682,10 @@ class ParticipationModel(mesa.Model):
         return len(self.areas)
 
     @property
+    def num_personality_groups(self) -> int:
+        return len(self.personality_groups)
+
+    @property
     def preset_color_dst(self) -> np.ndarray:
         return self._preset_color_dst
 
@@ -736,15 +743,15 @@ class ParticipationModel(mesa.Model):
         self.altruistic_score_cache_misses += 1
         return scores
 
-    def register_schema_v2_sinks(self, *, vote_sink, area_snapshot_sink) -> None:
-        """Register schema-v2 sink callbacks used by logging."""
-        self._schema_v2_vote_sink = vote_sink
-        self._schema_v2_area_snapshot_sink = area_snapshot_sink
+    def register_output_sinks(self, *, vote_sink, area_snapshot_sink) -> None:
+        """Register output sink callbacks used by logging."""
+        self._output_vote_sink = vote_sink
+        self._output_area_snapshot_sink = area_snapshot_sink
 
-    def clear_schema_v2_sinks(self) -> None:
-        """Clear schema-v2 sink callbacks used by logging."""
-        self._schema_v2_vote_sink = None
-        self._schema_v2_area_snapshot_sink = None
+    def clear_output_sinks(self) -> None:
+        """Clear output sink callbacks used by logging."""
+        self._output_vote_sink = None
+        self._output_area_snapshot_sink = None
 
     def _initialize_color_cells(self, id_start=0) -> None:
         """
@@ -959,34 +966,20 @@ class ParticipationModel(mesa.Model):
         # Live (run.py) visualization expects snake_case keys.
         color_data = {f"color_{i}": get_color_distribution_function(i) for i in range(self.num_colors)}
 
-        def mean_p_participation(m: "ParticipationModel") -> float:
-            agents = m.voting_agents
-            if not agents:
-                return 0.0
-            vals = [float(a.participation_probability()) for a in agents]
-            return float(np.mean(vals)) if vals else 0.0
-
-        def mean_altruism(m: "ParticipationModel") -> float:
-            agents = m.voting_agents
-            if not agents:
-                return 0.0
-            vals = [float(a.altruism_factor) for a in agents]
-            return float(np.mean(vals)) if vals else 0.0
-        def mean_dissatisfaction(m: "ParticipationModel") -> float:
-            agents = m.voting_agents
-            if not agents:
-                return 0.0
-            vals = [float(a.dissatisfaction_value) for a in agents]
-            return float(np.mean(vals)) if vals else 0.0
-
         return mesa.DataCollector(
             model_reporters={
                 "collective_assets": compute_collective_assets,
                 "gini_index": compute_gini_index,
+                "gini_dissatisfaction": compute_gini_dissatisfaction,
                 "turnout": get_voter_turnout,
-                "mean_p_participation": mean_p_participation,
-                "mean_altruism": mean_altruism,
-                "mean_dissatisfaction": mean_dissatisfaction,
+                "quality_distance": compute_global_quality_distance,
+                "group_turnout": compute_group_turnout,
+                "group_mean_assets_share": compute_group_mean_assets_share,
+                "group_mean_dissatisfaction": compute_group_mean_dissatisfaction,
+                "group_outcome_distance": compute_group_outcome_distance,
+                "mean_p_participation": lambda m: m.step_metrics_snapshot["mean_p_participation"],
+                "mean_altruism": lambda m: m.step_metrics_snapshot["mean_altruism"],
+                "mean_dissatisfaction": lambda m: m.step_metrics_snapshot["mean_dissatisfaction"],
                 **color_data,
                 "grid_colors": get_grid_colors,
             },
@@ -997,30 +990,15 @@ class ParticipationModel(mesa.Model):
                 "dist_to_reality": get_area_dist_to_reality,
                 "puzzle_distance": get_area_puzzle_distance,
                 "area_color_distribution": get_area_color_distribution,
+                "puzzle_color_distribution": get_area_puzzle_distribution,
                 "elected_color": get_election_results,
                 "gini_index": get_area_gini_index,
             },
         )
 
-    def _compute_step_metrics_snapshot(self) -> dict[str, float | int]:
-        """Build canonical scalar step metrics for logging."""
-        agents = self.voting_agents
-        assets = [float(a.assets) for a in agents]
-        collective_assets = float(np.sum(assets)) if assets else 0.0
-        from src.utils.metrics import gini_index_0_100
-        gini_index = int(gini_index_0_100(assets)) if assets else 0
-        total_participants = float(sum(int(area.num_agents_participated_last or 0) for area in self.areas))
-        total_resident = float(sum(int(area.num_agents) for area in self.areas))
-        turnout = (100.0 * total_participants / total_resident) if total_resident > 0.0 else 0.0
-        mean_altruism = float(np.mean([float(a.altruism_factor) for a in agents])) if agents else 0.0
-        mean_dissatisfaction = float(np.mean([float(a.dissatisfaction_value) for a in agents])) if agents else 0.0
-        return {
-            "collective_assets": collective_assets,
-            "gini_index": gini_index,
-            "turnout": turnout,
-            "mean_altruism": mean_altruism,
-            "mean_dissatisfaction": mean_dissatisfaction,
-        }
+    def _compute_step_metrics_snapshot(self) -> dict[str, object]:
+        """Build canonical per-step metrics for logging and visualization."""
+        return build_step_metrics_snapshot(self)
 
 
     def step(self):

@@ -1,19 +1,22 @@
 from __future__ import annotations
-from pathlib import Path
-from collections import defaultdict
+
 import json
+from collections import defaultdict
+from pathlib import Path
+
+import mesa
 import numpy as np
 import pandas as pd
-import mesa
-from typing import List, Dict, Any, Optional
+import yaml
 
 from src.config.schema import AppConfig
 from mesa.visualization.ModularVisualization import ModularServer
 from src.viz.factory import make_canvas, make_charts
 from src.agents.color_cell import ColorCell
+from src.utils.metrics import gini_index_0_100
 
 
-def _resolve_num_voters_per_area(static: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_num_voters_per_area(static: dict[str, object]) -> dict[str, object]:
     """Resolve canonical voter-count mapping from static metadata."""
     canonical = static.get("num_voters_per_area")
     if "voters_per_area" in static:
@@ -39,13 +42,14 @@ class _DataCollectorAdapter:
     """
 
     def __init__(self):
-        self.model_vars: Dict[str, List[Any]] = {}
-        self._model_step_count: int = 0
-        self._agent_rows: list[dict[str, Any]] = []
+        self.model_vars: dict[str, list[object]] = {}
+        self._model_step_count = 0
+        self._agent_rows: list[dict[str, object]] = []
+        self._model_df: pd.DataFrame | None = None
+        self._agent_df: pd.DataFrame | None = None
 
-    def add_model(self, row: Dict[str, Any]) -> None:
-        # Ensure all existing keys receive a value for this step
-        for key in list(self.model_vars.keys()):
+    def add_model(self, row: dict[str, object]) -> None:
+        for key in self.model_vars:
             if key not in row:
                 self.model_vars[key].append(None)
         # Add new keys found in this row; backfill with None for previous steps
@@ -54,41 +58,44 @@ class _DataCollectorAdapter:
                 self.model_vars[key] = [None] * self._model_step_count
             self.model_vars[key].append(value)
         self._model_step_count += 1
+        self._model_df = None
 
-    def add_area_rows(self, step: int, areas: Dict[int, Dict[str, Any]]) -> None:
+    def add_area_rows(self, step: int, areas: dict[int, dict[str, object]]) -> None:
         """Append per-area rows for a specific step.
 
         `areas` is keyed by area_id (int).
         Values are expected to use snake_case keys.
         """
-        for area_id, rec in (areas or {}).items():
+        for area_id, rec in areas.items():
             self._agent_rows.append(
                 {
-                    "step": int(step),
-                    "agent_id": int(area_id),
-                    "turnout": rec.get("turnout"),
-                    "quality_distance": rec.get("quality_distance"),
-                    "dist_to_reality": rec.get("dist_to_reality"),
-                    "puzzle_distance": rec.get("puzzle_distance"),
-                    # expanded vector columns are stored separately in parquet, but
-                    # the adapter stores pre-packed vectors for viz.
-                    "area_color_distribution": rec.get("area_color_distribution"),
-                    "elected_color": rec.get("elected_color"),
-                    "gini_index": rec.get("gini_index"),
+                    "step": step,
+                    "agent_id": area_id,
+                    "turnout": rec["turnout"],
+                    "quality_distance": rec["quality_distance"],
+                    "dist_to_reality": rec["dist_to_reality"],
+                    "puzzle_distance": rec["puzzle_distance"],
+                    "area_color_distribution": rec["area_color_distribution"],
+                    "puzzle_color_distribution": rec["puzzle_color_distribution"],
+                    "elected_color": rec["elected_color"],
+                    "gini_index": rec["gini_index"],
                 }
             )
+        self._agent_df = None
 
     def get_model_vars_dataframe(self) -> pd.DataFrame:
-        # Build DataFrame from model_vars
-        return pd.DataFrame(self.model_vars)
+        if self._model_df is None:
+            self._model_df = pd.DataFrame(self.model_vars)
+        return self._model_df
 
     def get_agent_vars_dataframe(self) -> pd.DataFrame:
+        if self._agent_df is not None:
+            return self._agent_df
         if not self._agent_rows:
             return pd.DataFrame()
         df = pd.DataFrame(self._agent_rows)
-        # match mesa.DataCollector agent vars format: MultiIndex (Step, AgentID)
-        df = df.set_index(["step", "agent_id"]).sort_index()
-        return df
+        self._agent_df = df.set_index(["step", "agent_id"]).sort_index()
+        return self._agent_df
 
 
 class _SchedulerStub:
@@ -101,65 +108,81 @@ class _SchedulerStub:
 class ReplayData:
     def __init__(self, run_dir: Path):
         self.run_dir = Path(run_dir)
-        self.steps_dir = self.run_dir / "steps"
         self.grids_dir = self.run_dir / "grids"
+        self._meta = self._load_meta()
+        self._detect_schema(self._meta)
+        self._static = self._read_static()
+        run_cfg = self._meta.get("run") or {}
+        if not isinstance(run_cfg, dict):
+            raise ValueError(f"meta.yaml has invalid run section. run_dir={self.run_dir}")
+        self._quality_target_mode = run_cfg.get("quality_target_mode", "reality").strip().lower()
+        self._grid_pattern = self._static["step_indexing"]["grid_file"]
+        self._artifacts = self._static["artifacts"]
 
-        # v2-only hard cut: require schema v2
-        self._schema = self._detect_schema()
-        if self._schema != "v2":
-            raise ValueError(f"Replay now requires schema v2 runs; run_dir={self.run_dir}")
-
-        # Load static early so we can honor filename patterns
-        self._static = self.load_static()
-        self._quality_target_mode = self._load_quality_target_mode()
-        self._grid_pattern = None
-        step_indexing = self._static.get("step_indexing") if isinstance(self._static.get("step_indexing"), dict) else {}
-        if isinstance(step_indexing.get("grid_file"), str):
-            self._grid_pattern = step_indexing.get("grid_file")
-        if not self._grid_pattern:
-            raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
-
-        self.step_files = []
-        self._steps_df: Optional[pd.DataFrame] = None
-        self._area_steps_df: Optional[pd.DataFrame] = None
+        self._steps_df: pd.DataFrame
+        self._area_steps_df: pd.DataFrame
+        self._gini_dissatisfaction_by_step: dict[int, float] = {}
+        self._quality_distance_by_step: dict[int, float] = {}
+        self._group_metrics_by_step: dict[int, dict[str, list[float]]] = {}
+        self._cell_areas_df: pd.DataFrame | None = None
+        self._cell_agents_df: pd.DataFrame | None = None
+        self._area_color_columns: list[str] = []
+        self._elected_color_columns: list[str] = []
+        self._puzzle_color_columns: list[str] = []
+        self._group_outcome_columns: list[str] = []
         self._load_parquet_tables()
 
-    def _load_quality_target_mode(self) -> str:
+    @property
+    def quality_target_mode(self) -> str:
+        return self._quality_target_mode
+
+    def _load_meta(self) -> dict[str, object]:
         meta_path = self.run_dir / "meta.yaml"
-        import yaml
-        meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
-        run_meta = meta.get("run", {}) if isinstance(meta, dict) else {}
-        return str(run_meta.get("quality_target_mode", "reality")).strip().lower()
+        if not meta_path.exists():
+            raise ValueError(f"Missing meta.yaml; replay requires schema v2/v3 run dirs. run_dir={self.run_dir}")
+        try:
+            meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError, TypeError) as e:
+            raise ValueError(f"Failed to read meta.yaml; replay requires schema v2/v3. run_dir={self.run_dir}") from e
+        if not isinstance(meta, dict):
+            raise ValueError(f"meta.yaml must be a mapping. run_dir={self.run_dir}")
+        return meta
+
+    def _read_static(self) -> dict[str, object]:
+        path = self.run_dir / "static.json"
+        if not path.exists():
+            raise FileNotFoundError(f"Missing static.json; replay requires schema v2/v3 run dirs. run_dir={self.run_dir}")
+        static = json.loads(path.read_text())
+        if not isinstance(static, dict):
+            raise ValueError(f"static.json must be a JSON object. run_dir={self.run_dir}")
+        step_indexing = static.get("step_indexing")
+        if not isinstance(step_indexing, dict) or not isinstance(step_indexing.get("grid_file"), str):
+            raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
+        artifacts = static.get("artifacts")
+        if not isinstance(artifacts, dict):
+            raise ValueError(f"static.json missing artifacts map; run_dir={self.run_dir}")
+        return static
 
     # -----------------
     # Schema detection
     # -----------------
-    def _detect_schema(self) -> str:
-        """Return 'v2' if meta.yaml indicates output_schema_v2, else raise.
-        Replay is v2-only.
-        """
-        meta_path = self.run_dir / "meta.yaml"
-        if not meta_path.exists():
-            raise ValueError(f"Missing meta.yaml; replay requires schema v2 run dirs. run_dir={self.run_dir}")
-        try:
-            import yaml
-            meta = yaml.safe_load(meta_path.read_text()) or {}
-        except (OSError, ValueError, TypeError) as e:
-            raise ValueError(f"Failed to read meta.yaml; replay requires schema v2. run_dir={self.run_dir}") from e
-
-        schema = meta.get("schema") if isinstance(meta.get("schema"), dict) else {}
+    def _detect_schema(self, meta: dict[str, object]) -> None:
+        schema = meta.get("schema", {})
+        if not isinstance(schema, dict):
+            raise ValueError(f"meta.yaml has invalid schema section. run_dir={self.run_dir}")
         name = schema.get("name")
         version = schema.get("version")
-        if name == "output_schema_v2" and int(version or 0) == 2:
-            return "v2"
+        if (name, version) in {("output_schema_v2", 2), ("output_schema_v3", 3)}:
+            return
         raise ValueError(
-            f"meta.yaml does not describe schema v2 (name={name!r}, version={version!r}); run_dir={self.run_dir}"
+            f"meta.yaml does not describe supported schema v2/v3 (name={name!r}, version={version!r}); run_dir={self.run_dir}"
         )
 
     def _load_parquet_tables(self) -> None:
-        """Load Parquet tables required for replay (v2-only)."""
+        """Load Parquet tables required for replay."""
         steps_path = self.run_dir / "steps.parquet"
         area_steps_path = self.run_dir / "area_steps.parquet"
+        agents_path = self.run_dir / "agents.parquet"
 
         if not steps_path.exists():
             raise FileNotFoundError(f"Missing steps.parquet; run_dir={self.run_dir}")
@@ -167,24 +190,144 @@ class ReplayData:
             raise FileNotFoundError(f"Missing area_steps.parquet; run_dir={self.run_dir}")
         self._steps_df = pd.read_parquet(steps_path)
         self._area_steps_df = pd.read_parquet(area_steps_path)
+        self._area_color_columns = _expanded_columns(self._area_steps_df.columns, prefix="area_color")
+        self._elected_color_columns = _expanded_columns(self._area_steps_df.columns, prefix="elected_color")
+        self._puzzle_color_columns = _expanded_columns(self._area_steps_df.columns, prefix="puzzle_color")
+        self._group_outcome_columns = _expanded_columns(self._area_steps_df.columns, prefix="group_outcome_distance")
+
+        if "step" not in self._steps_df.columns:
+            raise KeyError("steps.parquet missing required column: step")
+        if "step" not in self._area_steps_df.columns:
+            raise KeyError("area_steps.parquet missing required column: step")
+        if "area_id" not in self._area_steps_df.columns:
+            raise KeyError("area_steps.parquet missing required column: area_id")
+        if not self._area_color_columns:
+            raise KeyError("area_steps.parquet missing area_color_* columns")
+        if not self._elected_color_columns:
+            raise KeyError("area_steps.parquet missing elected_color_* columns")
+
+        self._build_derived_model_metric_overrides(agents_path=agents_path)
+
+    def _build_derived_model_metric_overrides(self, *, agents_path: Path) -> None:
+        area_steps_df = self._area_steps_df
+        if not area_steps_df.empty:
+            value_col = "puzzle_distance" if self._quality_target_mode == "puzzle" else "dist_to_reality"
+            if value_col in area_steps_df.columns and "eligible_voters" in area_steps_df.columns:
+                for step, block in area_steps_df.groupby("step", sort=True):
+                    weights = block["eligible_voters"].to_numpy(dtype=float)
+                    values = block[value_col].to_numpy(dtype=float)
+                    finite = np.isfinite(values) & np.isfinite(weights) & (weights > 0.0)
+                    denom = np.sum(weights[finite])
+                    if denom > 0.0:
+                        self._quality_distance_by_step[step] = np.sum(values[finite] * weights[finite]) / denom
+
+        if not agents_path.exists():
+            return
+        agents_df = pd.read_parquet(
+            agents_path,
+            columns=[
+                "step",
+                "agent_id",
+                "assets",
+                "dissatisfaction_value",
+                "personality_group_idx",
+                "eligible_for_election",
+                "participating",
+            ],
+        )
+        if agents_df.empty or "step" not in agents_df.columns or "dissatisfaction_value" not in agents_df.columns:
+            return
+        grouped = agents_df.groupby("step", sort=True)["dissatisfaction_value"]
+        self._gini_dissatisfaction_by_step = {
+            step: gini_index_0_100(vals.to_numpy(dtype=float))
+            for step, vals in grouped
+        }
+        self._build_group_metric_vectors(agents_df=agents_df, area_steps_df=area_steps_df)
+
+    def _build_group_metric_vectors(self, *, agents_df: pd.DataFrame, area_steps_df: pd.DataFrame) -> None:
+        if agents_df.empty:
+            return
+
+        personality_info = self._static.get("personality_group_info") or {}
+        if not isinstance(personality_info, dict):
+            personality_info = {}
+        n_groups = len(personality_info.get("personality_groups") or [])
+        if n_groups <= 0 and "personality_group_idx" in agents_df.columns:
+            n_groups = agents_df["personality_group_idx"].max() + 1
+        if n_groups <= 0:
+            return
+
+        agent_area_df = self.load_cell_agents()[["agent_id", "area_id"]].drop_duplicates(subset=["agent_id"], keep="first")
+        agents_df = agents_df.merge(agent_area_df, on="agent_id", how="left")
+
+        static_area_group_counts: dict[int, list[float]] = {}
+        for aid, rec in (personality_info.get("areas") or {}).items():
+            area_id = int(aid)
+            num_agents = rec.get("num_agents", 0)
+            distribution = rec.get("personality_group_distribution") or []
+            static_area_group_counts[area_id] = [num_agents * value for value in distribution]
+
+        step_area_rows = {
+            step: list(block[["area_id", *self._group_outcome_columns]].itertuples(index=False, name=None))
+            for step, block in area_steps_df.groupby("step", sort=True)
+        }
+
+        for step, block in agents_df.groupby("step", sort=True):
+            metrics = {
+                "group_turnout": [float("nan")] * n_groups,
+                "group_mean_assets_share": [float("nan")] * n_groups,
+                "group_mean_dissatisfaction": [float("nan")] * n_groups,
+                "group_outcome_distance": [float("nan")] * n_groups,
+            }
+            group_blocks = {group_idx: group_block for group_idx, group_block in block.groupby("personality_group_idx", sort=False)}
+            group_mean_assets = [float("nan")] * n_groups
+            step_rows = step_area_rows.get(step)
+            for g in range(n_groups):
+                g_block = group_blocks.get(g)
+                if g_block is None:
+                    continue
+                elig = g_block[g_block["eligible_for_election"]]
+                if not elig.empty:
+                    metrics["group_turnout"][g] = 100.0 * elig["participating"].sum() / len(elig)
+                group_mean_assets[g] = g_block["assets"].mean()
+                metrics["group_mean_dissatisfaction"][g] = g_block["dissatisfaction_value"].mean()
+                if step_rows is not None and self._group_outcome_columns:
+                    weighted_sum = 0.0
+                    total_weight = 0.0
+                    for row in step_rows:
+                        area_id = row[0]
+                        area_counts = static_area_group_counts.get(area_id, [])
+                        if len(area_counts) <= g:
+                            continue
+                        weight = area_counts[g]
+                        if weight <= 0.0:
+                            continue
+                        value = row[g + 1]
+                        if not np.isfinite(value):
+                            continue
+                        weighted_sum += value * weight
+                        total_weight += weight
+                    if total_weight > 0.0:
+                        metrics["group_outcome_distance"][g] = weighted_sum / total_weight
+            total_group_mean_assets = np.nansum(group_mean_assets)
+            if total_group_mean_assets > 0.0:
+                metrics["group_mean_assets_share"] = [
+                    value / total_group_mean_assets if np.isfinite(value) else float("nan")
+                    for value in group_mean_assets
+                ]
+            self._group_metrics_by_step[step] = metrics
 
     # -----------------
     # Loading
     # -----------------
-    def load_step(self, index: int) -> Dict[str, Any]:
-        """Load one step record (v2-only)."""
-        return self._load_step_v2(index)
+    def load_step(self, index: int) -> dict[str, object]:
+        """Load one recorded step from parquet-backed replay data."""
+        return self._load_step_record(index)
 
-    def load_static(self) -> Dict[str, Any]:
-        p = self.run_dir / "static.json"
-        if not p.exists():
-            raise FileNotFoundError(f"Missing static.json; replay requires schema v2 run dirs. run_dir={self.run_dir}")
-        data = json.loads(p.read_text())
-        if not isinstance(data, dict):
-            raise ValueError(f"static.json must be a JSON object. run_dir={self.run_dir}")
-        return data
+    def load_static(self) -> dict[str, object]:
+        return self._static
 
-    def load_grid(self, step: int) -> Optional[np.ndarray]:
+    def load_grid(self, step: int) -> np.ndarray:
         grid, _grid_step = self.load_grid_with_source(step)
         return grid
 
@@ -193,145 +336,106 @@ class ReplayData:
         if not self._grid_pattern:
             raise ValueError(f"static.json missing step_indexing.grid_file; run_dir={self.run_dir}")
 
-        s = int(step)
+        s = step
         # Sparse grid logging support:
         # if grid_s is missing (e.g. grid_interval > 1), carry forward the most
         # recent available snapshot <= s.
         for t in range(s, -1, -1):
             gf = self.grids_dir / (self._grid_pattern % t)
             if gf.exists():
-                return np.load(str(gf)), int(t)
+                return np.load(gf), t
 
         # DOE runs with store_grid=false may only persist step-1/last grids.
         # For replay bootstrap at step 0, fall forward to grid_001 when grid_000 is absent.
         if s == 0:
             gf1 = self.grids_dir / (self._grid_pattern % 1)
             if gf1.exists():
-                return np.load(str(gf1)), 1
+                return np.load(gf1), 1
 
         raise FileNotFoundError(
             f"Missing grid snapshot for step {s} and no earlier fallback found in {self.grids_dir}"
         )
 
-    def _load_step_v2(self, index: int) -> Dict[str, Any]:
-        steps_df = self._steps_df if self._steps_df is not None else pd.DataFrame()
-        area_steps_df = self._area_steps_df if self._area_steps_df is not None else pd.DataFrame()
-        if steps_df.empty:
+    def _load_step_record(self, index: int) -> dict[str, object]:
+        if self._steps_df.empty:
             raise ValueError(f"steps.parquet is empty; run_dir={self.run_dir}")
-        if area_steps_df.empty:
+        if self._area_steps_df.empty:
             raise ValueError(f"area_steps.parquet is empty; run_dir={self.run_dir}")
-        if "step" not in steps_df.columns:
-            raise KeyError("steps.parquet missing required column: step")
-        if "step" not in area_steps_df.columns:
-            raise KeyError("area_steps.parquet missing required column: step")
-        if "area_id" not in area_steps_df.columns:
-            raise KeyError("area_steps.parquet missing required column: area_id")
 
-        if not any(isinstance(c, str) and c.startswith("area_color_") for c in area_steps_df.columns):
-            raise KeyError("area_steps.parquet missing area_color_* columns")
-        if not any(isinstance(c, str) and c.startswith("elected_color_") for c in area_steps_df.columns):
-            raise KeyError("area_steps.parquet missing elected_color_* columns")
-
-        # 'index' is the sequential position (0...len-1). The recorded 'step' value
-        # is taken from parquet (schema v2 is 1-based).
-        model_row_series = steps_df.iloc[int(index)]
-        step = int(model_row_series["step"])
-        model_row = model_row_series.to_dict()
+        step = self._steps_df["step"].iat[index]
+        model_row = {column: self._steps_df[column].iat[index] for column in self._steps_df.columns}
         model_row.pop("run_seed", None)
         model_row.pop("rule_idx", None)
+        model_row.setdefault("gini_dissatisfaction", self._gini_dissatisfaction_by_step.get(step, float("nan")))
+        model_row.setdefault("quality_distance", self._quality_distance_by_step.get(step, float("nan")))
+        for key, values in self._group_metrics_by_step.get(step, {}).items():
+            model_row.setdefault(key, values)
 
-        areas: Dict[int, Dict[str, Any]] = {}
-        if not area_steps_df.empty and "step" in area_steps_df.columns:
-            sdf = area_steps_df[area_steps_df["step"].astype(int) == step]
-            if sdf.empty:
-                raise ValueError(f"area_steps.parquet has no rows for step={step}")
-            for _, r in sdf.iterrows():
-                aid = int(r["area_id"])
-                # Pack expanded vectors into python lists for viz convenience
-                area_color = [
-                    float(r[f"area_color_{i}"])
-                    for i in _expanded_range(r, prefix="area_color")
-                ]
-                elected_color = [
-                    int(r[f"elected_color_{i}"])
-                    for i in _expanded_range(r, prefix="elected_color")
-                ]
-                if not area_color:
-                    raise KeyError("area_steps.parquet missing area_color_* values")
-                if not elected_color:
-                    raise KeyError("area_steps.parquet missing elected_color_* values")
-                if self._quality_target_mode == "puzzle":
-                    if "puzzle_distance" not in r.index:
-                        raise KeyError("area_steps.parquet missing puzzle_distance for puzzle-mode replay")
-                    if not np.isfinite(float(r["puzzle_distance"])):
-                        raise ValueError("Non-finite puzzle_distance in puzzle-mode replay step rows")
+        sdf = self._area_steps_df[self._area_steps_df["step"] == step]
+        if sdf.empty:
+            raise ValueError(f"area_steps.parquet has no rows for step={step}")
+        areas: dict[int, dict[str, object]] = {}
+        area_colors = sdf[self._area_color_columns].to_numpy(dtype=float).tolist()
+        elected_colors = sdf[self._elected_color_columns].to_numpy(dtype=int).tolist()
+        puzzle_colors = sdf[self._puzzle_color_columns].to_numpy(dtype=float).tolist() if self._puzzle_color_columns else []
+        for idx, row in enumerate(sdf.itertuples(index=False)):
+            if self._quality_target_mode == "puzzle" and not np.isfinite(row.puzzle_distance):
+                raise ValueError("Non-finite puzzle_distance in puzzle-mode replay step rows")
 
-                areas[aid] = {
-                    "turnout": float(r["turnout"]),
-                    "quality_distance": float(
-                        r["puzzle_distance"]
-                        if self._quality_target_mode == "puzzle"
-                        else r["dist_to_reality"]
-                    ),
-                    "dist_to_reality": float(r["dist_to_reality"]),
-                    "puzzle_distance": float(r["puzzle_distance"]) if "puzzle_distance" in r.index else float("nan"),
-                    "gini_index": int(r["gini_index"]),
-                    "area_color_distribution": area_color,
-                    "elected_color": elected_color,
-                }
+            areas[row.area_id] = {
+                "turnout": row.turnout,
+                "quality_distance": row.puzzle_distance if self._quality_target_mode == "puzzle" else row.dist_to_reality,
+                "dist_to_reality": row.dist_to_reality,
+                "puzzle_distance": row.puzzle_distance,
+                "gini_index": row.gini_index,
+                "area_color_distribution": area_colors[idx],
+                "puzzle_color_distribution": puzzle_colors[idx] if puzzle_colors else [],
+                "elected_color": elected_colors[idx],
+            }
 
         return {"step": step, "model": model_row, "areas": areas}
 
     def _artifact_path(self, key: str) -> Path:
-        static = self.load_static() or {}
-        artifacts = static.get("artifacts") if isinstance(static.get("artifacts"), dict) else {}
-        if key not in artifacts:
-            raise ValueError(f"static.json missing required artifacts.{key}; run_dir={self.run_dir}")
-        p = self.run_dir / str(artifacts[key])
-        if not p.exists():
-            raise FileNotFoundError(f"Missing {key} artifact: {p}")
-        return p
+        try:
+            rel_path = self._artifacts[key]
+        except KeyError as e:
+            raise ValueError(f"static.json missing required artifacts.{key}; run_dir={self.run_dir}") from e
+        path = self.run_dir / rel_path
+        if not path.exists():
+            raise FileNotFoundError(f"Missing {key} artifact: {path}")
+        return path
 
     def load_cell_areas(self) -> pd.DataFrame:
-        p = self._artifact_path("cell_areas")
-        df = pd.read_parquet(p)
-        need = {"x", "y", "area_id"}
-        missing = sorted(need - set(df.columns))
+        if self._cell_areas_df is not None:
+            return self._cell_areas_df
+
+        df = pd.read_parquet(self._artifact_path("cell_areas"))
+        required = {"x", "y", "area_id"}
+        missing = sorted(required - set(df.columns))
         if missing:
-            raise KeyError(f"{p.name} missing required columns: {missing}")
+            raise KeyError(f"static_cell_areas.parquet missing required columns: {missing}")
+        self._cell_areas_df = df
         return df
 
     def load_cell_agents(self) -> pd.DataFrame:
-        p = self._artifact_path("cell_agents")
-        df = pd.read_parquet(p)
-        need = {"x", "y", "area_id", "agent_id", "personality_group_idx"}
-        missing = sorted(need - set(df.columns))
+        if self._cell_agents_df is not None:
+            return self._cell_agents_df
+
+        df = pd.read_parquet(self._artifact_path("cell_agents"))
+        required = {"x", "y", "area_id", "agent_id", "personality_group_idx"}
+        missing = sorted(required - set(df.columns))
         if missing:
-            raise KeyError(f"{p.name} missing required columns: {missing}")
+            raise KeyError(f"static_cell_agents.parquet missing required columns: {missing}")
+        self._cell_agents_df = df
         return df
 
     def __len__(self) -> int:
-        if self._schema == "v2":
-            return 0 if self._steps_df is None else int(len(self._steps_df))
-        return len(self.step_files)
+        return len(self._steps_df)
 
 
-def _expanded_range(row: pd.Series, prefix: str) -> List[int]:
-    """Return contiguous indices i for which prefix_i exists in the row.
-
-    Example: prefix='area_color' matches columns ['area_color_0', 'area_color_1', ...].
-    """
-    cols = [c for c in row.index if isinstance(c, str) and c.startswith(prefix + "_")]
-    idxs: List[int] = []
-    for c in cols:
-        suf = c.rsplit("_", 1)[-1]
-        try:
-            idxs.append(int(suf))
-        except ValueError:
-            continue
-    if not idxs:
-        return []
-    return list(range(0, max(idxs) + 1))
+def _expanded_columns(columns, *, prefix: str) -> list[str]:
+    names = [name for name in columns if name.startswith(prefix + "_")]
+    return sorted(names, key=lambda name: int(name.rsplit("_", 1)[-1]))
 
 
 def _derive_borders_by_cell(
@@ -342,23 +446,19 @@ def _derive_borders_by_cell(
 ) -> dict[tuple[int, int], bool]:
     """Derive border flags from area occupancy (no static border artifact file)."""
     area_cells: dict[int, set[tuple[int, int]]] = defaultdict(set)
-    for r in cell_areas_df.itertuples(index=False):
-        x = int(r.x)
-        y = int(r.y)
-        if x < 0 or x >= int(width) or y < 0 or y >= int(height):
+    for row in cell_areas_df.itertuples(index=False):
+        x = row.x
+        y = row.y
+        if x < 0 or x >= width or y < 0 or y >= height:
             continue
-        area_cells[int(r.area_id)].add((x, y))
+        area_cells[row.area_id].add((x, y))
 
     borders: dict[tuple[int, int], bool] = {}
     neighbors = ((1, 0), (-1, 0), (0, 1), (0, -1))
     for cells in area_cells.values():
-        if not cells:
-            continue
         for x, y in cells:
-            for dx, dy in neighbors:
-                if (x + dx, y + dy) not in cells:
-                    borders[(x, y)] = True
-                    break
+            if any((x + dx, y + dy) not in cells for dx, dy in neighbors):
+                borders[(x, y)] = True
     return borders
 
 
@@ -374,28 +474,28 @@ class ReplayModel(mesa.Model):
         self.scheduler = _SchedulerStub()
         self.datacollector = _DataCollectorAdapter()
         self.data = ReplayData(self.run_dir)
+        self.quality_target_mode = self.data.quality_target_mode
         self._idx = -1
         self.finished = False
-        self._initialized_with_grid0: bool = False
 
         # Build grid and color cells from static info
         static = self.data.load_static()
-        self._height = int(static["height"])
-        self._width = int(static["width"])
-        self._num_colors = int(static["num_colors"])
+        self._height = static["height"]
+        self._width = static["width"]
+        self._num_colors = static["num_colors"]
 
-        # Populate static personality_group info expected by visualization elements
+        # Populate static personality_group info expected by viz elements
         # (must run before we build area stubs)
         self._load_static_personality_group_info()
-
         # Expose static voter counts for analysis/UI use
-        self.total_voters = int(static.get("total_voters", 0) or 0)
+        self.total_voters = static.get("total_voters", 0)
         self.num_voters_per_area = _resolve_num_voters_per_area(static)
 
-        self.grid = mesa.space.SingleGrid(height=self._height, width=self._width, torus=True)
+        self.grid = mesa.space.SingleGrid(height=self._height,
+                                          width=self._width,
+                                          torus=True)
         self.color_cells: list[ColorCell] = []
-
-        # Areas are not simulated in replay, but AreaPersonalityGroupDists expects area objects.
+        # Areas aren't simulated, but AreaPersonalityGroupDists expects area objects.
         self.areas = self._build_area_stubs_from_personality_groups()
         self.voting_agents = []
 
@@ -410,39 +510,39 @@ class ReplayModel(mesa.Model):
 
         areas_by_cell: dict[tuple[int, int], list[int]] = defaultdict(list)
         for r in cell_areas_df.itertuples(index=False):
-            x = int(r.x)
-            y = int(r.y)
+            x = r.x
+            y = r.y
             if x < 0 or x >= self._width or y < 0 or y >= self._height:
                 continue
-            area_id = int(r.area_id)
+            area_id = r.area_id
             if area_id not in areas_by_cell[(x, y)]:
                 areas_by_cell[(x, y)].append(area_id)
 
         agent_ids_by_cell: dict[tuple[int, int], list[int]] = defaultdict(list)
         pg_idx_by_agent_id: dict[int, int] = {}
         for r in cell_agents_df.itertuples(index=False):
-            x = int(r.x)
-            y = int(r.y)
+            x = r.x
+            y = r.y
             if x < 0 or x >= self._width or y < 0 or y >= self._height:
                 continue
-            agent_id = int(r.agent_id)
+            agent_id = r.agent_id
             if agent_id not in agent_ids_by_cell[(x, y)]:
                 agent_ids_by_cell[(x, y)].append(agent_id)
             if agent_id not in pg_idx_by_agent_id:
-                pg_idx_by_agent_id[agent_id] = int(r.personality_group_idx)
+                pg_idx_by_agent_id[agent_id] = r.personality_group_idx
 
         agent_stubs_by_id = self._build_agent_stubs(pg_idx_by_agent_id=pg_idx_by_agent_id)
         self.voting_agents = [agent_stubs_by_id[k] for k in sorted(agent_stubs_by_id)]
-        area_by_id = {int(a.unique_id): a for a in self.areas}
+        area_by_id = {a.unique_id: a for a in self.areas}
 
         for idx, (_, (col, row)) in enumerate(self.grid.coord_iter()):  # In Mesa, coord_iter() yields (contents, (x, y)), i.e. x is column and y is row
             # Create ColorCell with placeholder color 0; will be overridden by snapshots
             cell = ColorCell(unique_id=idx, model=self, pos=(col, row), initial_color=0)
 
-            cell.is_border_cell = bool(borders_by_cell.get((int(col), int(row)), False))
-            area_ids = areas_by_cell.get((int(col), int(row)), [])
+            cell.is_border_cell = borders_by_cell.get((col, row), False)
+            area_ids = areas_by_cell.get((col, row), [])
             cell.areas = [area_by_id[aid] for aid in area_ids if aid in area_by_id]
-            voter_ids = agent_ids_by_cell.get((int(col), int(row)), [])
+            voter_ids = agent_ids_by_cell.get((col, row), [])
             cell.agents = [agent_stubs_by_id[aid] for aid in voter_ids if aid in agent_stubs_by_id]
 
             self.color_cells.append(cell)
@@ -455,10 +555,8 @@ class ReplayModel(mesa.Model):
         # without advancing recorded step series. This keeps scheduler.steps==0 so
         # UI shows 'Current Step: 0' while the grid matches the true initial state.
         g0, g0_src = self.data.load_grid_with_source(0)
-        if g0 is not None:
-            self._apply_grid(g0)
-            self.replay_grid_source_step = int(g0_src)
-            self._initialized_with_grid0 = True
+        self._apply_grid(g0)
+        self.replay_grid_source_step = g0_src
         self.replay_recorded_step = 0
         self.scheduler.steps = 0
         self.scheduler.time = 0
@@ -471,43 +569,46 @@ class ReplayModel(mesa.Model):
         payload = self.data.load_static().get("personality_group_info") or {}
         self.personality_groups = np.array(payload.get("personality_groups") or [])
         self.personality_group_distribution = payload.get("global_distribution") or []
-        self._areas = payload.get("areas") or {}
+        self._areas = {
+            int(area_id): record
+            for area_id, record in (payload.get("areas") or {}).items()
+        }
 
     def _build_area_stubs_from_personality_groups(self):
         class _AreaStub:
             def __init__(self, unique_id: int, num_agents: int | None, personality_group_distribution):
                 self.unique_id = unique_id
-                self.num_agents = int(num_agents) if num_agents is not None else 0
+                self.num_agents = num_agents if num_agents is not None else 0
                 self.personality_group_distribution = personality_group_distribution or []
                 self.color_distribution = []  # For tooltip compatibility
+                self.diag_history: list[dict[str, object]] = []
 
         stubs = []
         for aid, rec in (self._areas or {}).items():
-            aid = int(aid)
-            stubs.append(_AreaStub(aid, rec.get("num_agents"),
-                                   rec.get("personality_group_distribution")))
+            stubs.append(_AreaStub(aid, rec.get("num_agents"), rec.get("personality_group_distribution")))
         stubs.sort(key=lambda a: a.unique_id)
         return stubs
 
     def _build_agent_stubs(self, *, pg_idx_by_agent_id: dict[int, int]):
         class _VoterStub:
-            def __init__(self, *, agent_id: int, personality_group_idx: int, personality_group: list[int]):
-                self.unique_id = int(agent_id)
-                self.personality_group_idx = int(personality_group_idx)
+            def __init__(self, *, agent_id: int, personality_group_idx: int,
+                         personality_group: list[int]):
+                self.unique_id = agent_id
+                self.personality_group_idx = personality_group_idx
                 self.personality_group = list(personality_group)
                 self.personality = list(personality_group)
                 self.assets = "-"
 
-        stubs: dict[int, Any] = {}
-        n_groups = int(self.personality_groups.shape[0]) if self.personality_groups.ndim == 2 else 0
+        stubs: dict[int, object] = {}
+        n_groups = self.personality_groups.shape[0] if self.personality_groups.ndim == 2 else 0
         for aid in sorted(pg_idx_by_agent_id):
-            pg_idx = int(pg_idx_by_agent_id[aid])
+            pg_idx = pg_idx_by_agent_id[aid]
             if 0 <= pg_idx < n_groups:
-                personality_group = [int(v) for v in self.personality_groups[pg_idx].tolist()]
+                personality_group = self.personality_groups[pg_idx].tolist()
             else:
                 personality_group = []
-            stubs[int(aid)] = _VoterStub(
-                agent_id=int(aid),
+            stubs[aid] = _VoterStub(
+                agent_id=aid,
                 personality_group_idx=pg_idx,
                 personality_group=personality_group,
             )
@@ -533,22 +634,16 @@ class ReplayModel(mesa.Model):
     # --- Replay application helpers ---
     def _apply_index(self, idx: int) -> None:
         rec = self.data.load_step(idx)
-        step = int(rec.get("step", idx))
+        step = rec["step"]
 
         grid, grid_src_step = self.data.load_grid_with_source(step)
-        if grid is not None:
-            self._apply_grid(grid)
-        self.replay_recorded_step = int(step)
-        self.replay_grid_source_step = int(grid_src_step)
+        self._apply_grid(grid)
+        self.replay_recorded_step = step
+        self.replay_grid_source_step = grid_src_step
 
-        # Model vars for charts (snake_case)
-        model_block = rec.get("model") if isinstance(rec.get("model"), dict) else {}
-        self.datacollector.add_model(model_block)
+        self.datacollector.add_model(rec["model"])
 
-        # Area rows for viz
-        areas_block = rec.get("areas")
-        if isinstance(areas_block, dict):
-            self.datacollector.add_area_rows(step=step, areas=areas_block)
+        self.datacollector.add_area_rows(step=step, areas=rec["areas"])
 
         self.scheduler.steps = step
 
@@ -565,9 +660,9 @@ class ReplayModel(mesa.Model):
         """
         grid = self.grid
 
-        h, w = int(arr.shape[0]), int(arr.shape[1])
+        h, w = arr.shape[0], arr.shape[1]
 
-        if int(grid.width) != w or int(grid.height) != h:
+        if grid.width != w or grid.height != h:
             raise ValueError(f"Grid snapshot shape {(h, w)} does not match grid {(grid.height, grid.width)}.")
 
         flat = arr.T.ravel()  # (h,w) -> (w,h) x-major flatten
@@ -575,7 +670,7 @@ class ReplayModel(mesa.Model):
         for i, (cell, _pos) in enumerate(grid.coord_iter()):
             if cell is None:
                 continue
-            cell.color = int(flat[i])
+            cell.color = flat[i]
 
     def _advance(self) -> None:
         if self.finished:

@@ -56,7 +56,17 @@ def test_live_datacollector_emits_snake_case_and_vectors():
     assert model_df is not None and len(model_df) > 0
 
     # --- model vars ---
-    required_model_cols = {"collective_assets", "turnout", "gini_index"}
+    required_model_cols = {
+        "collective_assets",
+        "turnout",
+        "gini_index",
+        "gini_dissatisfaction",
+        "quality_distance",
+        "group_turnout",
+        "group_mean_assets_share",
+        "group_mean_dissatisfaction",
+        "group_outcome_distance",
+    }
     missing = required_model_cols - set(model_df.columns)
     assert not missing, f"Missing model reporter columns: {sorted(missing)}"
 

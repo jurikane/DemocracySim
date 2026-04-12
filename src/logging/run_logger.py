@@ -1,8 +1,8 @@
-"""RunLoggerV2.
+"""RunLogger.
 
 Responsibilities:
-- Write schema-v2 metadata files: `meta.yaml`, `static.json`
-- Write schema-v2 parquet tables:
+- Write schema-v3 metadata files: `meta.yaml`, `static.json`
+- Write schema-v3 parquet tables:
   - `steps.parquet`
   - `area_steps.parquet`
   - `agents.parquet`
@@ -40,7 +40,7 @@ from src.models.participation_model import ParticipationModel as Model
 
 
 @dataclass(frozen=True)
-class RunContextV2:
+class RunContext:
     out_dir: Path
     run_seed: int
     rule_idx: int
@@ -53,7 +53,7 @@ class _ConfigDumpParseResult:
     error: str | None
 
 
-class RunLoggerV2:
+class RunLogger:
     def __init__(
         self,
         out_dir: Path,
@@ -63,7 +63,9 @@ class RunLoggerV2:
         store_grid: bool = True,
         compression: Optional[str] = "snappy",
     ) -> None:
-        self.ctx = RunContextV2(out_dir=Path(out_dir), run_seed=int(run_seed), rule_idx=int(rule_idx))
+        self.ctx = RunContext(out_dir=Path(out_dir),
+                              run_seed=run_seed,
+                              rule_idx=rule_idx)
         self.num_steps = int(num_steps)
         self.store_grid = bool(store_grid)
         self.compression = compression
@@ -80,7 +82,7 @@ class RunLoggerV2:
         self._area_snapshots_by_step_area: Dict[tuple[int, int], Dict[str, Any]] = {}
         # Logger-local RNG for unbiased tie-breaks in logged top-k ranks.
         # Must be isolated from simulation RNG streams.
-        seed = (int(run_seed) * 1_000_003 + int(rule_idx) * 9_173 + 17) % (2**63 - 1)
+        seed = (run_seed * 1_000_003 + rule_idx * 9_173 + 17) % (2**63 - 1)
         self._vote_log_rng = np.random.default_rng(seed)
 
     # -----------------
@@ -108,14 +110,14 @@ class RunLoggerV2:
             "run": {
                 "run_seed": int(self.ctx.run_seed),
                 "rule_idx": int(self.ctx.rule_idx),
-                "rule_name": getattr(model, "voting_rule_name", None) if model is not None else None,
-                "rule_impl_name": getattr(model, "voting_rule_implementation_name", None) if model is not None else None,
-                "distance_idx": getattr(model, "distance_idx", None) if model is not None else None,
-                "distance_name": getattr(model, "distance_func_name", None) if model is not None else None,
-                "distance_impl_name": getattr(model, "distance_func_implementation_name", None) if model is not None else None,
-                "quality_target_mode": getattr(model, "quality_target_mode", None) if model is not None else None,
-                "puzzle_local_kappa": getattr(model, "puzzle_local_kappa", None) if model is not None else None,
-                "puzzle_shock_prob": getattr(model, "puzzle_shock_prob", None) if model is not None else None,
+                "rule_name": model.voting_rule_name if model is not None else None,
+                "rule_impl_name": model.voting_rule_implementation_name if model is not None else None,
+                "distance_idx": model.distance_idx if model is not None else None,
+                "distance_name": model.distance_func_name if model is not None else None,
+                "distance_impl_name": model.distance_func_implementation_name if model is not None else None,
+                "quality_target_mode": model.quality_target_mode if model is not None else None,
+                "puzzle_local_kappa": model.puzzle_local_kappa if model is not None else None,
+                "puzzle_shock_prob": model.puzzle_shock_prob if model is not None else None,
             },
             "config_ref": str(config_ref) if config_ref is not None else None,
             "config_hash": config_hash,
@@ -124,7 +126,7 @@ class RunLoggerV2:
             yaml.safe_dump(meta, f)
 
     def write_static(self, model: Model) -> None:
-        """Write static.json (schema v2 metadata) and static overlay artifacts."""
+        """Write static.json (schema v3 metadata) and static overlay artifacts."""
 
         height = int(model.height)
         width = int(model.width)
@@ -149,18 +151,18 @@ class RunLoggerV2:
                 "grid_file": _grid_pattern(self.num_steps),
             },
             "voting_rules": {
-                "names": list(getattr(model, "voting_rule_names", []) or []),
-                "impl_names": list(getattr(model, "voting_rule_implementation_names", []) or []),
+                "names": list(model.voting_rule_names),
+                "impl_names": list(model.voting_rule_implementation_names),
                 "selected_idx": int(self.ctx.rule_idx),
-                "selected_name": getattr(model, "voting_rule_name", None),
-                "selected_impl_name": getattr(model, "voting_rule_implementation_name", None),
+                "selected_name": model.voting_rule_name,
+                "selected_impl_name": model.voting_rule_implementation_name,
             },
             "distance_functions": {
-                "names": list(getattr(model, "distance_func_names", []) or []),
-                "impl_names": list(getattr(model, "distance_func_implementation_names", []) or []),
-                "selected_idx": int(getattr(model, "distance_idx", 0)),
-                "selected_name": getattr(model, "distance_func_name", None),
-                "selected_impl_name": getattr(model, "distance_func_implementation_name", None),
+                "names": list(model.distance_func_names),
+                "impl_names": list(model.distance_func_implementation_names),
+                "selected_idx": int(model.distance_idx),
+                "selected_name": model.distance_func_name,
+                "selected_impl_name": model.distance_func_implementation_name,
             },
             "artifacts": {
                 "steps": "steps.parquet",
@@ -191,7 +193,7 @@ class RunLoggerV2:
             "global_distribution": _to_python(global_pers_dist),
             "areas": area_distributions,
         }
-        # v2 replay expects this key.
+        # Replay expects this key.
         static["personality_group_info"] = payload
 
         # Optional: per-agent static personal_opt_dist
@@ -219,15 +221,11 @@ class RunLoggerV2:
 
         area_ids_by_agent: dict[int, set[int]] = {}
         for area in model.areas:
-            if area is None:
-                continue
-            area_id = int(getattr(area, "unique_id", -1))
+            area_id = int(area.unique_id)
             if area_id < 0:
                 continue
-            for agent in (getattr(area, "agents", None) or []):
-                if agent is None:
-                    continue
-                agent_id = int(getattr(agent, "unique_id", -1))
+            for agent in area.agents:
+                agent_id = int(agent.unique_id)
                 if agent_id < 0:
                     continue
                 if agent_id not in area_ids_by_agent:
@@ -240,10 +238,8 @@ class RunLoggerV2:
             xi = int(x)
             yi = int(y)
 
-            for area in (getattr(cell, "areas", None) or []):
-                if area is None:
-                    continue
-                area_id = int(getattr(area, "unique_id", -1))
+            for area in cell.areas:
+                area_id = int(area.unique_id)
                 if area_id < 0:
                     continue
                 cell_area_rows.append(
@@ -254,13 +250,11 @@ class RunLoggerV2:
                     }
                 )
 
-            for agent in (getattr(cell, "agents", None) or []):
-                if agent is None:
-                    continue
-                agent_id = int(getattr(agent, "unique_id", -1))
+            for agent in cell.agents:
+                agent_id = int(agent.unique_id)
                 if agent_id < 0:
                     continue
-                pg_idx = int(getattr(agent, "personality_group_idx", -1))
+                pg_idx = int(agent.personality_group_idx)
                 area_ids = sorted(int(v) for v in area_ids_by_agent.get(agent_id, set()))
                 if not area_ids:
                     # Some geometries intentionally leave cells outside all areas.
@@ -296,27 +290,27 @@ class RunLoggerV2:
     # Logging
     # -----------------
     def attach_to_model(self, model: Model) -> None:
-        """Attach schema-v2 sinks to the model.
+        """Attach output sinks to the model.
 
         - vote sink: used by `Area._tally_votes()` to emit participant vote rows
         - area snapshot sink: used by `Area._capture_area_snapshot_for_logger()`
         """
         if self._num_colors is None:
             self._num_colors = int(model.num_colors)
-        model.register_schema_v2_sinks(
+        model.register_output_sinks(
             vote_sink=self._on_vote,
             area_snapshot_sink=self._on_area_snapshot,
         )
 
     def detach_from_model(self, model: Model) -> None:
-        """Detach schema-v2 sinks from the model."""
-        model.clear_schema_v2_sinks()
+        """Detach output sinks from the model."""
+        model.clear_output_sinks()
 
     def log_step(self, step: int, model: Model, grid_snapshot: Optional[np.ndarray] = None) -> None:
-        """Append schema-v2 rows for this step.
+        """Append schema-v3 rows for this step.
 
         Args:
-            step: Recorded step number (schema v2 is 1-based).
+            step: Recorded step number (schema v3 is 1-based).
             model: The ParticipationModel (pre-mutation state).
             grid_snapshot: Optional HxW array to write to grids/ (1-based, pre-mutation).
         Notes:
@@ -408,7 +402,7 @@ class RunLoggerV2:
     # Extraction helpers
     # -----------------
     def _extract_steps_row(self, step: int, model: Model) -> Dict[str, Any]:
-        snap = getattr(model, "step_metrics_snapshot", None)
+        snap = model.step_metrics_snapshot
         if not isinstance(snap, dict):
             raise RuntimeError(f"Missing step_metrics_snapshot for step {step}.")
         required = (
@@ -426,18 +420,18 @@ class RunLoggerV2:
             "run_seed": np.int32(self.ctx.run_seed),
             "rule_idx": np.int16(self.ctx.rule_idx),
             "step": np.int32(step),
-            "collective_assets": np.float32(float(snap["collective_assets"])),
+            "collective_assets": float(snap["collective_assets"]),
             "gini_index": np.int16(int(snap["gini_index"])),
-            "turnout": np.float32(float(snap["turnout"])),
-            "mean_altruism": np.float32(float(snap["mean_altruism"])),
-            "mean_dissatisfaction": np.float32(float(snap["mean_dissatisfaction"])),
+            "turnout": float(snap["turnout"]),
+            "mean_altruism": float(snap["mean_altruism"]),
+            "mean_dissatisfaction": float(snap["mean_dissatisfaction"]),
         }
 
         pre_colors = self._get_pre_mutation_global_colors(step=step, model=model)
 
         if pre_colors is not None:
             for i, v in enumerate(pre_colors):
-                row[f"color_{i}"] = np.float32(v)
+                row[f"color_{i}"] = float(v)
 
         return row
 
@@ -468,7 +462,14 @@ class RunLoggerV2:
         areas = model.areas
         num_colors = int(model.num_colors)
 
-        def _apply_election_vectors(*, r_dict, elected_color_vec, area_color_vec, puzzle_color_vec=None) -> None:
+        def _apply_election_vectors(
+            *,
+            r_dict,
+            elected_color_vec,
+            area_color_vec,
+            puzzle_color_vec=None,
+            group_outcome_distance_vec=None,
+        ) -> None:
             """Fill expanded vector columns + winning_option_id into r dictionary.
 
             `elected_color_vec` is a length-C ordering (ints).
@@ -493,9 +494,13 @@ class RunLoggerV2:
                 pdv = np.asarray(puzzle_color_vec, dtype=np.float32)
                 for i in range(num_colors):
                     r_dict[f"puzzle_color_{i}"] = np.float32(pdv[i])
+            if group_outcome_distance_vec is not None:
+                godv = np.asarray(group_outcome_distance_vec, dtype=np.float32)
+                for i in range(godv.size):
+                    r_dict[f"group_outcome_distance_{i}"] = np.float32(godv[i])
 
         for area in areas:
-            area_id = int(area.unique_id)
+            area_id = area.unique_id
 
             # Base row
             r: Dict[str, Any] = {
@@ -506,17 +511,13 @@ class RunLoggerV2:
                 "eligible_voters": np.int32(area.num_eligible_voters_last),
                 # participants is overwritten from the pre-mutation area snapshot below.
                 "participants": np.int32(0),
-                "turnout": np.float32(float(area.voter_turnout)),  # In percent
-                "fee_pool": np.float32(float(area.election_fee_pool)),
+                "turnout": np.float32(area.voter_turnout),  # In percent
+                "fee_pool": np.float32(area.election_fee_pool),
                 "winning_option_id": np.int32(-1),
                 "grid_ordering_id": np.int32(-1),
                 "puzzle_ordering_id": np.int32(-1),
-                "dist_to_reality": np.float32(
-                    float(area.dist_to_reality) if area.dist_to_reality is not None else 0.0
-                ),
-                "puzzle_distance": np.float32(
-                    float(area.puzzle_distance) if area.puzzle_distance is not None else np.nan
-                ),
+                "dist_to_reality": np.float32(area.dist_to_reality),
+                "puzzle_distance": np.float32(area.puzzle_distance),
                 "gini_index": np.int16(0),
             }
 
@@ -557,6 +558,12 @@ class RunLoggerV2:
             voted_ordering = snapshot.get("elected_color", None)
             cd = snapshot.get("area_color", None)
             puzzle_cd = snapshot.get("puzzle_color", None)
+            group_outcome_distance = snapshot.get("group_outcome_distance", None)
+            if group_outcome_distance is None:
+                group_outcome_distance = (
+                    area.group_outcome_distance
+                    or [float("nan")] * int(model.num_personality_groups)
+                )
             if cd is None:
                 raise RuntimeError(
                     f"Missing pre-mutation area_color for step {step}, area {area_id}."
@@ -567,6 +574,7 @@ class RunLoggerV2:
                 elected_color_vec=voted_ordering,
                 area_color_vec=cd,
                 puzzle_color_vec=puzzle_cd,
+                group_outcome_distance_vec=group_outcome_distance,
             )
 
             rows.append(r)
@@ -616,7 +624,7 @@ class RunLoggerV2:
         confidence: float,
         voted_altruistically: bool | None = None,
     ) -> None:
-        """Receive one participant vote and append a schema v2 vote row."""
+        """Receive one participant vote and append a schema v3 vote row."""
         if self._current_step is None:
             return
         step = int(self._current_step)
@@ -683,6 +691,11 @@ class RunLoggerV2:
         grids_dir = self.ctx.out_dir / "grids"
         grids_dir.mkdir(parents=True, exist_ok=True)
         np.save(str(self._grid_filename(step)), grid_snapshot)
+
+
+# Backward-compatible aliases for existing imports during migration.
+RunContextV2 = RunContext
+RunLoggerV2 = RunLogger
 
 
 def _grid_pattern(num_steps: int) -> str:

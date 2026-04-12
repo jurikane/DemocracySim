@@ -56,7 +56,7 @@ During vote casting, a Bernoulli draw is made using `altruism_factor`:
 Ballot construction:
 
 - altruistic mode: use estimated distribution from limited knowledge (`known_cells`), convert to ordering, then score options against that ordering
-- self-regarding mode: use static precomputed oppose-scores from personality-group preference ordering
+- self-regarding mode: use static precomputed oppose-scores from preference-group ordering
 
 This keeps vote-mode heterogeneity while avoiding strategic game-policy complexity.
 

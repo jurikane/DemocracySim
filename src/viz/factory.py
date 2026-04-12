@@ -57,7 +57,7 @@ def make_canvas(cfg: AppConfig) -> CanvasGrid:
         # Add agent info (tooltips)
         for voter in agent.agents:
             p[f"Agent {voter.unique_id}"] = \
-                (f"pers_group_idx: {voter.personality_group_idx}, "
+                (f"pref-group-idx: {voter.personality_group_idx}, "
                  f"personality: {voter.personality}, assets: {voter.assets}")
 
         return p
@@ -70,12 +70,12 @@ def make_charts(cfg: AppConfig) -> list:
     Build the list of chart/extra visualization elements.
     """
     model_cfg = cfg.model.model_dump()
-    num_colors = int(model_cfg["num_colors"])
+    num_colors = model_cfg["num_colors"]
     vis_cfg = cfg.visualization
-    calibration_mode = bool(getattr(vis_cfg, "calibration_mode", False))
-    show_area_stats = bool(getattr(vis_cfg, "show_area_stats", False))
-    show_agent_debug_panel = bool(getattr(vis_cfg, "show_agent_debug_panel", False))
-    show_static_infos = bool(getattr(vis_cfg, "show_static_infos", False))
+    calibration_mode = vis_cfg.calibration_mode
+    show_area_stats = vis_cfg.show_area_stats
+    show_agent_debug_panel = vis_cfg.show_agent_debug_panel
+    show_static_infos = vis_cfg.show_static_infos
 
     color_distribution_chart = ChartModule(
         [{"Label": f"color_{i}",
@@ -116,9 +116,9 @@ def make_charts(cfg: AppConfig) -> list:
         ReplayGridStepStatusElement,
         PersonalityGroupDistribution,
         AreaDiagnosticsPanel,
-        VoterTurnoutElement,
-        AreaGiniElement,
+        MainMetricsElement,
         AreaPersonalityGroupDists,
+        AreaPuzzleColorDistributionElement,
         CohortElectionLearningDiagnostics,
     )
     from src.viz.debug_viz import AreaAgentDebugPanel
@@ -136,11 +136,28 @@ def make_charts(cfg: AppConfig) -> list:
             )
         )
     if show_static_infos:
-        extras.append(PersonalityGroupDistribution())
-        extras.append(AreaPersonalityGroupDists())
-        extras.append(VoterTurnoutElement())
-        extras.append(AreaGiniElement())
+        extras.append(MainMetricsElement())
+        extras.append(
+            AreaPuzzleColorDistributionElement(
+                collapsible=True,
+                default_open=True,
+            )
+        )
+        extras.append(
+            PersonalityGroupDistribution(
+                collapsible=True,
+                default_open=False,
+            )
+        )
+        extras.append(
+            AreaPersonalityGroupDists(
+                collapsible=True,
+                default_open=True,
+            )
+        )
     if calibration_mode:
         extras.append(CohortElectionLearningDiagnostics())
 
-    return [*extras, color_distribution_chart, wealth_chart, voter_turnout, learning_means_chart, dissatisfaction_chart]
+    return [*extras, color_distribution_chart]
+    # return [*extras, color_distribution_chart, wealth_chart, voter_turnout,
+    #        learning_means_chart, dissatisfaction_chart]

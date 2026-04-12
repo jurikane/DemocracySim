@@ -10,7 +10,7 @@ def test_infer_primary_rule_from_doe_spec_prefers_spec_value(tmp_path: Path) -> 
     root = tmp_path / "doe_20990101_000003"
     root.mkdir(parents=True, exist_ok=True)
     (root / "doe_spec.json").write_text(
-        json.dumps({"primary_rule_name": "approval", "robust_rule_name": "majority"}),
+        json.dumps({"primary_rule_name": "approval", "robust_rule_name": "plurality"}),
         encoding="utf-8",
     )
 

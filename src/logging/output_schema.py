@@ -1,4 +1,4 @@
-"""Locked output schema v2 (contract).
+"""Locked output schema v3 (contract).
 
 This module is the *single source of truth* for the on-disk output format
 produced by headless batch runs.
@@ -29,8 +29,8 @@ import numpy as np
 import pandas as pd
 
 
-SCHEMA_NAME: Final[str] = "output_schema_v2"
-SCHEMA_VERSION: Final[int] = 2
+SCHEMA_NAME: Final[str] = "output_schema_v3"
+SCHEMA_VERSION: Final[int] = 3
 
 # Indexing meaning for all step-based tables in this schema.
 # (Election has run, rewards distributed; mutation of step t is applied at start of t+1.)
@@ -124,6 +124,7 @@ AREA_STEPS_BASE_COLUMNS: Final[tuple[str, ...]] = (
     # - elected_color_0.. elected_color_{C-1} (int16)
     # - area_color_0.. area_color_{C-1} (float32)
     # - puzzle_color_0.. puzzle_color_{C-1} (float32, optional; present in puzzle-mode runs)
+    # - group_outcome_distance_0.. group_outcome_distance_{G-1} (float32)
     # Metrics
     "dist_to_reality",
     "puzzle_distance",
@@ -485,7 +486,7 @@ def validate_area_steps_df(df: pd.DataFrame) -> None:
         df,
         table_name=table.name,
         exact_allowed=set(table.columns),
-        allowed_prefixes=("elected_color_", "area_color_", "puzzle_color_"),
+        allowed_prefixes=("elected_color_", "area_color_", "puzzle_color_", "group_outcome_distance_"),
     )
     _validate_dtypes(df, table.dtypes, table.name)
     _validate_expanded_prefix(df, prefix="elected_color", dtype="int16", table_name=table.name)
@@ -493,6 +494,7 @@ def validate_area_steps_df(df: pd.DataFrame) -> None:
     puzzle_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("puzzle_color_")]
     if puzzle_cols:
         _validate_expanded_prefix(df, prefix="puzzle_color", dtype="float32", table_name=table.name)
+    _validate_expanded_prefix(df, prefix="group_outcome_distance", dtype="float32", table_name=table.name)
 
 
 def validate_agents_df(df: pd.DataFrame) -> None:

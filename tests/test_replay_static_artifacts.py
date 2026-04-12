@@ -10,10 +10,10 @@ from src.replay.replay_server import ReplayModel
 
 
 def test_replay_static_includes_borders_and_voter_counts(tmp_path):
-    """Schema v2 completeness regression.
+    """Replay static-artifact completeness regression.
 
     New runs must write static artifacts needed for replay + analysis:
-    - static.json exists and declares schema v2
+    - static.json exists and declares schema v3
     - static_cell_areas.parquet maps every grid cell to at least one area
     - static_cell_agents.parquet includes area_id per agent for area membership recovery
 
@@ -36,8 +36,8 @@ def test_replay_static_includes_borders_and_voter_counts(tmp_path):
 
     static = json.loads((run_dir / 'static.json').read_text())
     schema = static.get('schema', {})
-    assert schema.get('name') == 'output_schema_v2'
-    assert int(schema.get('version', 0) or 0) == 2
+    assert schema.get('name') == 'output_schema_v3'
+    assert int(schema.get('version', 0) or 0) == 3
 
     cell_areas_path = run_dir / "static_cell_areas.parquet"
     assert cell_areas_path.exists()

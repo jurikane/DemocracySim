@@ -27,6 +27,7 @@ nav:
         - Metric Glossary: research/metric_glossary.md
     - Technical:
         - Overview: technical/technical_overview.md
+        - Demo: technical/demo.md
         - Semantics, Representations & RNG: technical/semantics_representation_rng.md
         - Voting Rules: technical/voting_rules.md
         - Core Mechanics (Fees/Rewards/Distance): technical/core_mechanics.md

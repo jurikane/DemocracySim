@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from tests.factory import create_test_model
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 
 
 pytestmark = pytest.mark.phase1
@@ -147,7 +147,7 @@ def test_area_steps_logs_fee_pool(tmp_path: Path) -> None:
     assets0 = {int(a.unique_id): float(a.assets) for a in area.agents}
     expected_fee_pool = float(sum(v * rate for v in assets0.values()))
 
-    logger = RunLoggerV2(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
+    logger = RunLogger(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
     logger.attach_to_model(model)
     logger.begin_step(1)
     model.step()

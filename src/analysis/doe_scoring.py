@@ -16,7 +16,7 @@ from src.utils.distance_functions import kendall_tau_order, spearman_fr_order
 from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
-    majority_rule,
+    plurality_rule,
     schulze_rule,
     random_rule,
     utilitarian_rule,
@@ -387,7 +387,7 @@ def _current_rule_power_ordering_for_run(
     if not pref_rows:
         return None
     pref_table = np.vstack(pref_rows)
-    rule_fns = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
+    rule_fns = [plurality_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule, random_rule]
     fn = rule_fns[rule_idx]
     seed = int(run_meta.get("run_seed", 0))
     rng = np.random.default_rng((seed * 1_000_003 + 97 * (rule_idx + 1)) % (2**63 - 1))

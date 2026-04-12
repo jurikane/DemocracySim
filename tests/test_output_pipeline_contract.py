@@ -105,9 +105,9 @@ def test_votes_logger_does_not_mask_missing_estimate_with_zeros(tmp_path: Path) 
         a.voting_strategy = NoEstimateStrategy()
         a.ask_for_participation = lambda area: True  # type: ignore[assignment]
 
-    from src.logging.run_logger import RunLoggerV2
+    from src.logging.run_logger import RunLogger
 
-    logger = RunLoggerV2(out_dir=tmp_path / "run", run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
+    logger = RunLogger(out_dir=tmp_path / "run", run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
     logger.attach_to_model(model)
     logger.write_static(model)
     logger.begin_step(1)
@@ -141,7 +141,7 @@ def test_area_snapshot_missing_required_fields_fails_loudly(tmp_path: Path) -> N
     area = model.areas[0]
 
     def _broken_capture() -> None:
-        sink = getattr(model, "_schema_v2_area_snapshot_sink", None)
+        sink = getattr(model, "_output_area_snapshot_sink", None)
         if sink is None:
             return
         sink(
@@ -160,9 +160,9 @@ def test_area_snapshot_missing_required_fields_fails_loudly(tmp_path: Path) -> N
 
     area._capture_area_snapshot_for_logger = _broken_capture  # type: ignore[method-assign]
 
-    from src.logging.run_logger import RunLoggerV2
+    from src.logging.run_logger import RunLogger
 
-    logger = RunLoggerV2(out_dir=tmp_path / "run_broken", run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
+    logger = RunLogger(out_dir=tmp_path / "run_broken", run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
     logger.attach_to_model(model)
     logger.write_static(model)
     logger.begin_step(1)

@@ -34,7 +34,7 @@ def test_summary_power_direction_excludes_random_and_keeps_schulze() -> None:
     )
     assert [int(x["rule_idx"]) for x in power_dirs] == [0, 1, 2, 3, 4]
     assert [str(x["rule_name"]) for x in power_dirs] == [
-        "Majority",
+        "Plurality",
         "Approval",
         "Utilitarian",
         "Borda",

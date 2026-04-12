@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -13,7 +13,7 @@ def _initial_assets(model) -> np.ndarray:
 
 
 def _run_one_logged_step(model, out_dir):
-    logger = RunLoggerV2(
+    logger = RunLogger(
         out_dir=out_dir,
         run_seed=1,
         rule_idx=int(model.rule_idx),

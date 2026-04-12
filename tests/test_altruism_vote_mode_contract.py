@@ -5,7 +5,7 @@ import types
 import numpy as np
 import pandas as pd
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -93,7 +93,7 @@ def test_votes_parquet_logs_voted_altruistically(tmp_path) -> None:
         area_size_variance=0.0,
         max_steps=1,
     )
-    logger = RunLoggerV2(
+    logger = RunLogger(
         out_dir=tmp_path,
         run_seed=1,
         rule_idx=int(model.rule_idx),

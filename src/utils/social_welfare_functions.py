@@ -9,7 +9,7 @@ Representation contract:
 This design allows non-discrete and non-equidistant preferences.
 
 Implemented rules (schema B1):
-- majority_rule (first-choice plurality after tie-prep)
+- plurality_rule (first-choice plurality after tie-prep)
 - approval_voting (canonical fixed-threshold approval mapping)
 - approval_voting_custom (legacy adaptive approval mapping; non-canonical)
 - utilitarian_rule (minimize total disagreement)
@@ -53,14 +53,14 @@ def complete_ranking(
     rng.shuffle(non_included_options)
     return np.concatenate((ordering, non_included_options))
 
-def run_tie_breaking_preparation_for_majority(
+def run_tie_breaking_preparation_for_plurality(
     pref_table: np.ndarray,
     eps: float = 1e-9,
     *,
     rng: np.random.Generator,
 ) -> np.ndarray:
     """
-    Prepare ballots for majority rule by breaking *only first-choice ties*.
+    Prepare ballots for plurality rule by breaking *only first-choice ties*.
 
     Args:
         pref_table (np.ndarray): Preferences per agent (rows) per option (cols).
@@ -87,9 +87,9 @@ def run_tie_breaking_preparation_for_majority(
             prepared[i] = row + jitter
     return prepared
 
-def majority_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
+def plurality_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.ndarray:
     """
-    This function implements the majority rule social welfare function.
+    This function implements the plurality-rule social welfare function.
 
     Args:
         pref_table (np.ndarray): ScoreVector table (disagreement values)
@@ -106,9 +106,9 @@ def majority_rule(pref_table: np.ndarray, *, rng: np.random.Generator) -> np.nda
     if n <= 0:
         return np.arange(m, dtype=np.int64)
 
-    prepared = run_tie_breaking_preparation_for_majority(pref_table, rng=rng)
+    prepared = run_tie_breaking_preparation_for_plurality(pref_table, rng=rng)
     first_choices = np.argmin(prepared, axis=1).astype(np.int64)
-    # Preserve legacy majority tie resolution pattern:
+    # Preserve legacy plurality tie resolution pattern:
     # randomize ballot order, then stable-sort by plurality counts.
     rng.shuffle(first_choices)
     first_choice_counts: dict[int, int] = {}

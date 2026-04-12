@@ -9,12 +9,13 @@ from src.logging.output_schema import (
     validate_steps_df,
     validate_area_steps_df,
 )
+from src.utils.metrics import gini_index_0_100
 from scripts.run_headless import run_once
 
 
 @pytest.fixture()
-def v2_run_dir(tmp_path):
-    """Create a tiny schema v2 run directory under tmp_path."""
+def replay_run_dir(tmp_path):
+    """Create a tiny replay-compatible run directory under tmp_path."""
     out_dir = tmp_path / "v2_run"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -31,12 +32,12 @@ def v2_run_dir(tmp_path):
     run_once(run_id=0, cfg=cfg_for_run, out_dir=out_dir)
 
     meta = out_dir / "meta.yaml"
-    assert meta.exists(), "No meta.yaml produced by headless run (schema v2)."
+    assert meta.exists(), "No meta.yaml produced by headless run."
     return out_dir
 
 
 def _steps_from_replay(run_dir):
-    """Load v2 run via ReplayModel and materialize all recorded steps into DataFrames."""
+    """Load run via ReplayModel and materialize all recorded steps into DataFrames."""
     appcfg = load_config("configs/toy.yaml")
     model = ReplayModel(appcfg=appcfg, run_dir=run_dir)
 
@@ -53,17 +54,20 @@ def _steps_from_replay(run_dir):
     return model_df, area_df
 
 
-def test_replay_v2_adapter_matches_parquet(v2_run_dir):
-    run_dir = v2_run_dir
+def test_replay_adapter_matches_parquet(replay_run_dir):
+    run_dir = replay_run_dir
 
     # Source of truth
     steps_path = run_dir / "steps.parquet"
     area_steps_path = run_dir / "area_steps.parquet"
+    agents_path = run_dir / "agents.parquet"
     assert steps_path.exists(), "steps.parquet missing in v2 run dir."
     assert area_steps_path.exists(), "area_steps.parquet missing in v2 run dir."
+    assert agents_path.exists(), "agents.parquet missing in v2 run dir."
 
     steps = pd.read_parquet(steps_path)
     area_steps = pd.read_parquet(area_steps_path)
+    agents = pd.read_parquet(agents_path)
     validate_steps_df(steps)
     validate_area_steps_df(area_steps)
 
@@ -73,6 +77,10 @@ def test_replay_v2_adapter_matches_parquet(v2_run_dir):
     # ---- model-level scalars ----
     for col in ["collective_assets", "turnout", "gini_index"]:
         assert col in steps.columns, f"{col} missing in steps.parquet"
+        assert col in model_df.columns, f"{col} missing in replay model dataframe"
+    for col in ["gini_dissatisfaction", "quality_distance"]:
+        assert col in model_df.columns, f"{col} missing in replay model dataframe"
+    for col in ["group_turnout", "group_mean_assets_share", "group_mean_dissatisfaction", "group_outcome_distance"]:
         assert col in model_df.columns, f"{col} missing in replay model dataframe"
 
     steps_sorted = steps.sort_values("step").reset_index(drop=True)
@@ -91,6 +99,19 @@ def test_replay_v2_adapter_matches_parquet(v2_run_dir):
     np.testing.assert_array_equal(
         model_sorted["gini_index"].to_numpy(),
         steps_sorted["gini_index"].to_numpy(),
+    )
+    expected_gini_diss = (
+        agents.groupby("step", sort=True)["dissatisfaction_value"]
+        .apply(lambda s: float(gini_index_0_100(s.to_numpy(dtype=float))))
+        .reindex(steps_sorted["step"].to_numpy(dtype=int), fill_value=np.nan)
+        .to_numpy(dtype=float)
+    )
+    np.testing.assert_allclose(
+        model_sorted["gini_dissatisfaction"].to_numpy(dtype=float),
+        expected_gini_diss,
+        rtol=0,
+        atol=1e-6,
+        equal_nan=True,
     )
 
     # Optional model color columns
@@ -148,6 +169,28 @@ def test_replay_v2_adapter_matches_parquet(v2_run_dir):
     meta = yaml.safe_load((run_dir / "meta.yaml").read_text(encoding="utf-8")) or {}
     quality_mode = str((meta.get("run") or {}).get("quality_target_mode", "reality"))
     quality_src = "puzzle_distance" if quality_mode == "puzzle" else "dist_to_reality"
+    weighted_quality_by_step = (
+        area_steps.assign(
+            _weighted=area_steps[quality_src].to_numpy(dtype=float)
+            * area_steps["eligible_voters"].to_numpy(dtype=float)
+        )
+        .groupby("step", sort=True)[["_weighted", "eligible_voters"]]
+        .sum()
+    )
+    weighted_quality = (
+        weighted_quality_by_step["_weighted"]
+        / weighted_quality_by_step["eligible_voters"]
+    ).reindex(
+        steps_sorted["step"].to_numpy(dtype=int),
+        fill_value=np.nan,
+    ).to_numpy(dtype=float)
+    np.testing.assert_allclose(
+        model_sorted["quality_distance"].to_numpy(dtype=float),
+        weighted_quality,
+        rtol=0,
+        atol=1e-6,
+        equal_nan=True,
+    )
     np.testing.assert_allclose(
         a_rep["quality_distance"].to_numpy(dtype=float),
         a_parq[quality_src].to_numpy(dtype=float),

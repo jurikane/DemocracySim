@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -96,7 +96,7 @@ def test_overlap_semantics_integration_steps_color_matches_grid_for_partition(tm
     )
     assert model.no_overlap is True
 
-    logger = RunLoggerV2(
+    logger = RunLogger(
         out_dir=tmp_path,
         run_seed=1,
         rule_idx=int(model.rule_idx),

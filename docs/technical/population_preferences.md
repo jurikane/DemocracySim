@@ -15,11 +15,11 @@ This page describes how agents and preference structures are initialized.
 - `num_agents` (`>= 1`): number of voting agents.
 - `initial_agent_assets` (`>= 0`): identical starting assets for all agents.
 - `known_cells` (`>= 0`): number of cells sampled per step for local estimation.
-- `num_personality_groups` (`>= 1`): number of group orderings (bounded by `factorial(num_colors)`).
+- `num_personality_groups` (`>= 1`): number of preference-group orderings (bounded by `factorial(num_colors)`).
 - `personal_preference_peakedness` (`> 0`): concentration of `personal_opt_dist`.
 
 ## Semantics
 
-- Personality groups are permutations over color IDs.
-- `personal_opt_dist` is generated to follow each agent’s personality ordering.
+- Preference groups are permutations over color IDs.
+- `personal_opt_dist` is generated to follow each agent’s preference-group ordering.
 - Knowledge sampling (`known_cells`) determines estimate confidence used in voting.

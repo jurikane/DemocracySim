@@ -7,7 +7,7 @@ from src.models.participation_model import social_welfare_functions
 from src.utils.social_welfare_functions import (
     approval_voting,
     borda_rule,
-    majority_rule,
+    plurality_rule,
     schulze_rule,
     random_rule,
     utilitarian_rule,
@@ -54,7 +54,7 @@ def test_random_rule_winner_distribution_is_approximately_uniform() -> None:
 def test_random_rule_index_shift_keeps_canonical_order_and_inserts_schulze() -> None:
     names = [fn.__name__ for fn in social_welfare_functions]
     assert names[:5] == [
-        "majority_rule",
+        "plurality_rule",
         "approval_voting",
         "utilitarian_rule",
         "borda_rule",
@@ -73,6 +73,6 @@ def test_random_rule_index_shift_keeps_canonical_order_and_inserts_schulze() -> 
         dtype=np.float64,
     )
 
-    canonical = [majority_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
+    canonical = [plurality_rule, approval_voting, utilitarian_rule, borda_rule, schulze_rule]
     winners = [int(np.asarray(fn(pref.copy(), rng=np.random.default_rng(77)), dtype=np.int64)[0]) for fn in canonical]
     assert winners == [1, 0, 0, 0, 1]

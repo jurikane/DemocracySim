@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -69,8 +69,8 @@ def test_personal_preference_peakedness_integration_static_json_reflects_change(
     m_flat, _ = create_test_model(**base, personal_preference_peakedness=0.5)
     m_peak, _ = create_test_model(**base, personal_preference_peakedness=2.0)
 
-    l1 = RunLoggerV2(out_dir=tmp_path / "flat", run_seed=1, rule_idx=int(m_flat.rule_idx), num_steps=1, store_grid=False)
-    l2 = RunLoggerV2(out_dir=tmp_path / "peak", run_seed=1, rule_idx=int(m_peak.rule_idx), num_steps=1, store_grid=False)
+    l1 = RunLogger(out_dir=tmp_path / "flat", run_seed=1, rule_idx=int(m_flat.rule_idx), num_steps=1, store_grid=False)
+    l2 = RunLogger(out_dir=tmp_path / "peak", run_seed=1, rule_idx=int(m_peak.rule_idx), num_steps=1, store_grid=False)
     l1.write_static(m_flat)
     l2.write_static(m_peak)
 

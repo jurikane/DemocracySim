@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -73,11 +73,11 @@ def test_altruism_static_metamorphic_two_runs_change_in_mean_altruism() -> None:
 
 
 def test_altruism_static_integration_logged_in_agents_and_steps(tmp_path: Path) -> None:
-    """Integration: schema v2 outputs must reflect altruism_static when learning is off."""
+    """Integration: logged outputs must reflect altruism_static when learning is off."""
     s = 0.42
     model = _model_one_area(seed=82, altruism_learning=False, altruism_static=s, max_steps=1)
 
-    logger = RunLoggerV2(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
+    logger = RunLogger(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=1, store_grid=False)
     logger.attach_to_model(model)
     logger.write_static(model)
     logger.begin_step(1)

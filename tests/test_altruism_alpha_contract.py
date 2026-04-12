@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.logging.run_logger import RunLoggerV2
+from src.logging.run_logger import RunLogger
 from tests.factory import create_test_model
 
 
@@ -93,7 +93,7 @@ def test_altruism_alpha_zero_means_no_update() -> None:
 
 def test_altruism_alpha_integration_logged_mean_altruism_changes_after_step(tmp_path: Path) -> None:
     """Integration: with learning on and a forced positive dissatisfaction_signal on step 2,
-    schema v2 logging should show decreased altruism.
+    logged outputs should show decreased altruism.
 
     We patch compute_dissatisfaction_value so:
     - step 1: sv=0.0 => baseline initializes, signal=0.0 (no altruism update)
@@ -137,7 +137,7 @@ def test_altruism_alpha_integration_logged_mean_altruism_changes_after_step(tmp_
             continue
         a.compute_dissatisfaction_value = _sv.__get__(a, type(a))  # bind method
 
-    logger = RunLoggerV2(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=2, store_grid=False)
+    logger = RunLogger(out_dir=tmp_path, run_seed=1, rule_idx=int(model.rule_idx), num_steps=2, store_grid=False)
     logger.attach_to_model(model)
     logger.write_static(model)
 

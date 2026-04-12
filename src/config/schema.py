@@ -62,7 +62,7 @@ class ModelConfig(StrictBaseModel):
     patch_power: float     # Power/radius of color patching
     heterogeneity: float   # Heterogeneity factor for color distribution
     known_cells: int       # Number of cells each agent knows
-    num_personality_groups: int # Number of unique agent personality_groups
+    num_personality_groups: int # Number of unique preference-group orderings
     height: int            # Grid height
     width: int             # Grid width
     num_areas: int         # Number of areas (territories)
@@ -81,7 +81,7 @@ class VisualizationConfig(StrictBaseModel):
     draw_borders: bool                 # Whether to draw area borders
     show_area_stats: Optional[bool] = True  # Show area statistics overlay
     calibration_mode: bool = False     # Reorder UI for calibration-focused layout
-    show_static_infos: bool = True  # Show static info (e.g. personality group) in agent tooltips
+    show_static_infos: bool = True  # Show static info (e.g. preference group) in agent tooltips
     show_agent_debug_panel: bool = False  # Show per-agent debug panel
     agent_debug_area_id: Optional[int] = None  # Area ID to show (None = first area)
     agent_debug_max_steps: int = 1  # How many steps to retain/show in debug panel

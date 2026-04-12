@@ -41,6 +41,7 @@ class Area(Agent):
         self._set_dimensions(width, height, size_variance)
         self.agents: List["VoteAgent"] = []
         self._personality_group_distribution = None
+        self._personality_group_counts: list[int] = []
         self.cells: List["ColorCell"] = []
         self._idx_field = None  # An indexing position of the area in the grid
         self._color_distribution = np.zeros(model.num_colors) # Initialize to 0
@@ -53,6 +54,7 @@ class Area(Agent):
         self._puzzle_distribution = None  # Optional puzzle distribution for this step
         self._grid_ordering_for_quality = None
         self._puzzle_ordering_for_quality = None
+        self._group_outcome_distance: list[float] = []
         self._election_fee_pool: float = 0
         self._num_agents_participated_last = None  # For statistics
         self._num_eligible_voters_last = 0  # Eligible population count for diagnostics/logging
@@ -77,6 +79,10 @@ class Area(Agent):
     @property
     def personality_group_distribution(self):
         return self._personality_group_distribution
+
+    @property
+    def personality_group_counts(self) -> list[int]:
+        return self._personality_group_counts
 
     @property
     def color_distribution(self):
@@ -110,6 +116,10 @@ class Area(Agent):
     @property
     def puzzle_mode(self) -> bool:
         return self.model.is_puzzle_mode
+
+    @property
+    def group_outcome_distance(self) -> list[float]:
+        return list(self._group_outcome_distance)
 
     @property
     def election_fee_pool(self) -> float:
@@ -237,17 +247,17 @@ class Area(Agent):
         """
         This method calculates the areas current distribution of personality groups.
         """
-        personality_groups = list(self.model.personality_groups)
-        p_counts = {str(i): 0 for i in personality_groups}
-        # Count the occurrence of each personality_group (color ordering)
+        counts = [0] * self.model.num_personality_groups
         for agent in self.agents:
-            p_counts[str(agent.personality_group)] += 1
-        # Normalize the counts
+            counts[agent.personality_group_idx] += 1
+        self._personality_group_counts = counts
         if self.num_agents == 0:
-            self._personality_group_distribution = [0 for _ in personality_groups]
+            self._personality_group_distribution = [0.0] * self.model.num_personality_groups
         else:
-            self._personality_group_distribution = [p_counts[str(p)] / self.num_agents
-                                              for p in personality_groups]
+            self._personality_group_distribution = [
+                count / self.num_agents
+                for count in counts
+            ]
 
     def add_agent(self, agent: VoteAgent) -> None:
         """
@@ -305,6 +315,7 @@ class Area(Agent):
                 self._voted_ordering = real_color_ord
             # Update quality distances for monitoring even when no one participated.
             self._update_quality_distances()
+            self._update_group_outcome_distance()
             # Thought: agents could be punished here for all abstaining.
             self.num_agents_participated_last = 0
             self._voter_turnout = 0
@@ -337,7 +348,7 @@ class Area(Agent):
             a.participation_signal = signal
             a.apply_participation_q_push(q_push)
         # Surprise-learning altruism update (participant-only, optional).
-        if str(getattr(self.model, "altruism_mode", "static")) == "surprise_learning":
+        if self.model.altruism_mode == "surprise_learning":
             for a in self.agents:
                 if a.participating:
                     a.apply_altruism_update(a.dissatisfaction_signal)
@@ -379,7 +390,7 @@ class Area(Agent):
           plus explicit participant fee penalty. This mode updates q directly with the
           same group-relative direction for participants and abstainers.
         """
-        mode = str(getattr(model, "participation_signal_mode", "raw_delta_rel"))
+        mode = model.participation_signal_mode
         signals = [0.0] * len(agents)
         q_pushes = [0.0] * len(agents)
 
@@ -538,8 +549,8 @@ class Area(Agent):
         self._election_fee_pool = 0
         el_cost_rate = self.model.election_cost_rate
 
-        # Optional schema-v2 vote sink (Batch 2): logger attaches a callable here.
-        vote_sink = getattr(self.model, "_schema_v2_vote_sink", None)
+        # Optional output vote sink: logger attaches a callable here.
+        vote_sink = self.model._output_vote_sink
 
         for agent in self.agents:
             # Reset per-election asset delta signal for learning.
@@ -576,7 +587,7 @@ class Area(Agent):
                         oppose_scores=scores,
                         est_dist=agent.est_real_dist,
                         confidence=agent.confidence,
-                        voted_altruistically=getattr(agent, "voted_altruistically", None),
+                        voted_altruistically=agent.voted_altruistically,
                     )
                 if debug_enabled:
                     scores = np.asarray(scores, dtype=np.float64)
@@ -615,9 +626,8 @@ class Area(Agent):
             if bad:  reward = -(group_dst_to_outcome)     * reward_rate * assets_pre
         - Election fee remains separate and participant-only in _tally_votes()/reward_agent().
         """
-        dist_func = self.model.distance_func
-        search_pairs = self.model.color_search_pairs
         self._update_quality_distances()
+        self._update_group_outcome_distance()
         quality_distance = self._quality_distance()
 
         quality_threshold = self.model.break_even_distance_common
@@ -627,8 +637,13 @@ class Area(Agent):
 
         for a in self.agents:
             # group_dst_to_outcome: canonical personality-group distance to elected ordering
-            group_dst_to_outcome = dist_func(a.personality_group, self.voted_ordering, search_pairs)
-            group_dst_to_outcome = np.clip(group_dst_to_outcome, 0.0, 1.0)
+            g = int(a.personality_group_idx)
+            if 0 <= g < len(self._group_outcome_distance):
+                group_dst_to_outcome = self._group_outcome_distance[g]
+            else:
+                group_dst_to_outcome = float("nan")
+            if not np.isfinite(group_dst_to_outcome):
+                group_dst_to_outcome = 1.0
             if decision_good:
                 reward_factor = 1.0 - group_dst_to_outcome
             else:
@@ -637,6 +652,23 @@ class Area(Agent):
 
             a.add_personal_reward(reward_amount)
             a.reward_agent()  # Apply accumulated rewards/penalties to assets (and store delta signals)
+
+    def _compute_group_outcome_distance(self) -> list[float]:
+        dist_func = self.model.distance_func
+        search_pairs = self.model.color_search_pairs
+        voted_ordering = self.voted_ordering
+        num_groups = int(len(self.model.personality_groups))
+        if voted_ordering is None or num_groups <= 0:
+            return [float("nan")] * max(0, num_groups)
+        out = [float("nan")] * num_groups
+        for g in range(num_groups):
+            group_ordering = np.asarray(self.model.personality_groups[g], dtype=np.int64)
+            d = dist_func(group_ordering, voted_ordering, search_pairs)
+            out[g] = float(np.clip(d, 0.0, 1.0))
+        return out
+
+    def _update_group_outcome_distance(self) -> None:
+        self._group_outcome_distance = self._compute_group_outcome_distance()
 
     @staticmethod
     def _ordering_from_distribution_tie_aware(
@@ -736,16 +768,11 @@ class Area(Agent):
             self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
             return
 
-        prev_arr = np.asarray(prev, dtype=np.float64)
-        if prev_arr.shape != (self.model.num_colors,) or not np.all(np.isfinite(prev_arr)):
-            self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
-            return
-
         shock_prob = self.model.puzzle_shock_prob
         if shock_prob >= 1.0 or (shock_prob > 0.0 and self.model.rng_puzzle.random() < shock_prob):
             self._puzzle_distribution = self._sample_fresh_puzzle_distribution()
             return
-        self._puzzle_distribution = self._sample_local_puzzle_distribution(prev_arr)
+        self._puzzle_distribution = self._sample_local_puzzle_distribution(prev)
 
     def _clear_puzzle_state(self) -> None:
         """Drop per-step puzzle state when running in reality mode."""
@@ -849,7 +876,7 @@ class Area(Agent):
                 g_abstainers = [a for a in g_eligible if not a.participating]
 
                 if g_eligible:
-                    group_turnout[g] = float(len(g_participants) / len(g_eligible) * 100.0)
+                    group_turnout[g] = len(g_participants) / len(g_eligible) * 100.0
                     group_mean_delta_rel[g] = _mean_attr(g_eligible, "election_delta_rel")
                     group_mean_delta_rel_participants[g] = _mean_attr(g_participants, "election_delta_rel")
                     group_mean_delta_rel_abstainers[g] = _mean_attr(g_abstainers, "election_delta_rel")
@@ -864,9 +891,10 @@ class Area(Agent):
 
         self._diag_history.append(
             {
-                "turnout": float(self.voter_turnout),
-                "dist_to_reality": float(self.dist_to_reality) if self.dist_to_reality is not None else float("nan"),
-                "puzzle_distance": float(self.puzzle_distance) if self.puzzle_distance is not None else float("nan"),
+                "turnout": self.voter_turnout,
+                "dist_to_reality": self.dist_to_reality,
+                "puzzle_distance": self.puzzle_distance,
+                "group_outcome_distance": list(self.group_outcome_distance),
                 "mean_delta_rel_participants": mean_delta_rel_participants,
                 "mean_delta_rel_abstainers": mean_delta_rel_abstainers,
                 "mean_personal_reward": mean_personal_reward,
@@ -928,9 +956,9 @@ class Area(Agent):
             "num_abstainers": len(abstainers),
             "election_held": bool(aggregated is not None),
             "winning_option_id": winning_option_id,
-            "dist_to_reality": float(self._dist_to_reality) if self._dist_to_reality is not None else float("nan"),
-            "puzzle_distance": float(self._puzzle_distance) if self._puzzle_distance is not None else float("nan"),
-            "quality_target_mode": str(getattr(self.model, "quality_target_mode", "reality")),
+            "dist_to_reality": self._dist_to_reality,
+            "puzzle_distance": self._puzzle_distance,
+            "quality_target_mode": self.model.quality_target_mode,
             "quality_distance_source": "puzzle_distance" if self.puzzle_mode else "dist_to_reality",
             "quality_distance": self._quality_distance(),
             "voted_ordering": (
@@ -970,8 +998,8 @@ class Area(Agent):
             self._debug_history = self._debug_history[-max_steps:]
 
     def _capture_area_snapshot_for_logger(self) -> None:
-        # --- optional schema v2 hook: snapshot right before mutation (pre-mutation)
-        snapshot_sink = getattr(self.model, "_schema_v2_area_snapshot_sink", None)
+        # --- optional output hook: snapshot right before mutation (pre-mutation)
+        snapshot_sink = self.model._output_area_snapshot_sink
         if snapshot_sink is not None:
             from src.utils.metrics import gini_index_0_100
 
@@ -1003,6 +1031,7 @@ class Area(Agent):
                     "gini_index": gini_index,
                     "area_color": area_color,
                     "elected_color": elected_color,
+                    "group_outcome_distance": list(self.group_outcome_distance),
                     "grid_ordering_id": int(grid_ordering_id),
                     "puzzle_ordering_id": int(puzzle_ordering_id),
                     "puzzle_color": (
@@ -1064,7 +1093,7 @@ class Area(Agent):
                 agent.dissatisfaction_signal = sv - baseline
                 alpha = self.model.satisfaction_baseline_alpha
                 agent.dissatisfaction_baseline = (1.0 - alpha) * baseline + alpha * sv
-        if str(getattr(self.model, "altruism_mode", "static")) == "satisfaction":
+        if self.model.altruism_mode == "satisfaction":
             for agent in self.agents:
                 agent.apply_altruism_satisfaction_mode(agent.dissatisfaction_value)
         self.conduct_election()

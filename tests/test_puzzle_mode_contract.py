@@ -264,10 +264,10 @@ def test_puzzle_time_series_reproducible_across_rule_idx_for_same_seed(tmp_path:
     cfg_a = cfg.model_copy(deep=True)
     cfg_b = cfg.model_copy(deep=True)
     cfg_a.model.rule_idx = 1  # approval
-    cfg_b.model.rule_idx = 0  # majority
+    cfg_b.model.rule_idx = 0  # plurality
 
     out_a = tmp_path / "approval"
-    out_b = tmp_path / "majority"
+    out_b = tmp_path / "plurality"
     run_once(0, cfg_a, out_dir=out_a)
     run_once(0, cfg_b, out_dir=out_b)
 

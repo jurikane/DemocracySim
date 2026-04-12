@@ -117,6 +117,7 @@ def test_participation_learning_interaction_baseline_alpha_controls_persistence(
         participation_init_q=init_q,
         participation_q_max=1_000.0,
         participation_baseline_alpha=1.0,
+        participation_signal_mode="raw_delta_rel",
     )
     m_slow, _ = create_test_model(
         seed=701,
@@ -137,6 +138,7 @@ def test_participation_learning_interaction_baseline_alpha_controls_persistence(
         participation_init_q=init_q,
         participation_q_max=1_000.0,
         participation_baseline_alpha=0.0,
+        participation_signal_mode="raw_delta_rel",
     )
     _force_fixed_voting_rule(m_fast)
     _force_fixed_voting_rule(m_slow)

@@ -10,7 +10,7 @@ This page summarizes the fee/reward pipeline used in elections.
   - `puzzle_distance` if `quality_target_mode="puzzle"`
 - `good_decision = (quality_distance <= break_even_distance_common)`
 - `sign = +1` when good, `-1` when bad
-- `group_dst_to_outcome = dist(personality_group, voted_ordering)`
+- `group_dst_to_outcome = dist(preference_group, voted_ordering)`
 
 Reward magnitude:
 
