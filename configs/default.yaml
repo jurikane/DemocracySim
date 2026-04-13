@@ -19,7 +19,7 @@ model:
   patch_power: 1.0
   heterogeneity: 0.3
   known_cells: 10
-  # seed: 42 (optional)
+  seed: 10  # (optional)
 
   # Voting Agents
   num_personality_groups: 4
@@ -82,7 +82,7 @@ visualization:
 
 simulation:  # Config for headless runs
   runs: 3
-  num_steps: 200
+  num_steps: 250
   store_grid: true
   grid_interval: 1
   base_seed: 42  # Determines model seeds per run

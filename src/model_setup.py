@@ -86,16 +86,33 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
     params = {}
     if model_cfg.seed is not None:
         params["seed"] = mesa.visualization.Slider(
-            name="Seed (None = random)",
+            name="Seed",
             value=model_cfg.seed,
             min_value=0,
             max_value=200,
             step=1,
         )
+    # Knobs hidden from UI
+    params["height"] = model_cfg.height
+    params["width"] = model_cfg.width
+    params["distance_idx"] = model_cfg.distance_idx
+    params["quality_target_mode"] = 1 if model_cfg.quality_target_mode == "puzzle" else 0
+    params["participation_q_max"] = model_cfg.participation_q_max
+    params["participation_baseline_alpha"] = model_cfg.participation_baseline_alpha
+    params["altruism_learning"] = int(bool(model_cfg.altruism_learning))
+    params["altruism_static"] = 0.5
+    params["altruism_response_gamma"] = model_cfg.altruism_response_gamma
+    params["altruism_alpha"] = model_cfg.altruism_alpha
+    params["altruism_init"] = model_cfg.altruism_init
+    params["satisfaction_baseline_alpha"] = model_cfg.satisfaction_baseline_alpha
+    params["personal_preference_peakedness"] = model_cfg.personal_preference_peakedness
+    params["patch_power"] = model_cfg.patch_power
+    params["color_patches_steps"] = model_cfg.color_patches_steps
+    params["heterogeneity"] = model_cfg.heterogeneity
+    params["area_size_variance"] = model_cfg.area_size_variance
+
     # Add the rest of the params (except seed, which is optional) as sliders
     params.update({
-        "height": model_cfg.height,
-        "width": model_cfg.width,
         "rule_idx": mesa.visualization.Slider(
             name=f"Rule [{', '.join(social_welfare_function_short_names)}]",
             value=model_cfg.rule_idx,
@@ -103,13 +120,13 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=len(social_welfare_functions) - 1,
             step=1,
         ),
-        "distance_idx": mesa.visualization.Slider(
-            name=f"Dist [{', '.join(distance_function_short_names)}]",
-            value=model_cfg.distance_idx,
-            min_value=0,
-            max_value=len(distance_functions) - 1,
-            step=1,
-        ),
+        # "distance_idx": mesa.visualization.Slider(
+        #     name=f"Dist [{', '.join(distance_function_short_names)}]",
+        #     value=model_cfg.distance_idx,
+        #     min_value=0,
+        #     max_value=len(distance_functions) - 1,
+        #     step=1,
+        # ),
         "election_cost_rate": mesa.visualization.Slider(
             name="Vote-Cost/Effort rate (wealth-scaled)",
             value=model_cfg.election_cost_rate,
@@ -124,151 +141,29 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=1.0,
             step=0.01,
         ),
-        "break_even_distance_common": mesa.visualization.Slider(
-            name="Quality threshold (quality_distance)",
-            value=model_cfg.break_even_distance_common,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "quality_target_mode": mesa.visualization.Slider(
-            name="Quality target mode (0=reality, 1=puzzle)",
-            value=1 if model_cfg.quality_target_mode == "puzzle" else 0,
-            min_value=0,
-            max_value=1,
-            step=1,
-        ),
-        "puzzle_local_kappa": mesa.visualization.Slider(
-            name="Puzzle local kappa (higher=smaller jumps)",
-            value=model_cfg.puzzle_local_kappa,
-            min_value=0.1,
-            max_value=200.0,
-            step=0.1,
-        ),
-        "puzzle_shock_prob": mesa.visualization.Slider(
-            name="Puzzle shock probability",
-            value=model_cfg.puzzle_shock_prob,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "participation_alpha": mesa.visualization.Slider(
-            name="Participation learning alpha",
-            value=model_cfg.participation_alpha,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "participation_beta": mesa.visualization.Slider(
-            name="Participation sigmoid beta",
-            value=model_cfg.participation_beta,
-            min_value=0.0,
-            max_value=10.0,
-            step=0.1,
-        ),
-        "participation_init_q": mesa.visualization.Slider(
-            name="Participation init q",
-            value=model_cfg.participation_init_q,
-            min_value=-5.0,
-            max_value=5.0,
-            step=0.1,
-        ),
-        "participation_q_max": mesa.visualization.Slider(
-            name="Participation q clip max",
-            value=model_cfg.participation_q_max,
-            min_value=0.0,
-            max_value=5.0,
-            step=0.1,
-        ),
-        "participation_baseline_alpha": mesa.visualization.Slider(
-            name="Participation baseline alpha (EMA)",
-            value=model_cfg.participation_baseline_alpha,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "altruism_learning": mesa.visualization.Slider(
-            name="Altruism learning (0/1)",
-            value=int(bool(model_cfg.altruism_learning)),
-            min_value=0,
-            max_value=1,
-            step=1,
-        ),
-        "altruism_static": mesa.visualization.Slider(
-            name="Altruism static (used when learning=0)",
-            value=model_cfg.altruism_static,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "altruism_response_gamma": mesa.visualization.Slider(
-            name="Altruism response gamma (satisfaction mode)",
-            value=model_cfg.altruism_response_gamma,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "altruism_satisfaction_theta": mesa.visualization.Slider(
-            name="Altruism satisfaction theta (threshold)",
-            value=model_cfg.altruism_satisfaction_theta,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "altruism_satisfaction_slope": mesa.visualization.Slider(
-            name="Altruism satisfaction slope",
-            value=model_cfg.altruism_satisfaction_slope,
-            min_value=0.1,
-            max_value=20.0,
-            step=0.1,
-        ),
-        "altruism_mode": mesa.visualization.Slider(
-            name="Altruism mode (0=static, 1=surprise, 2=satisfaction)",
-            value={"static": 0, "surprise_learning": 1, "satisfaction": 2}.get(
-                model_cfg.altruism_mode,
-                2,
-            ),
-            min_value=0,
-            max_value=2,
-            step=1,
-        ),
-        "altruism_alpha": mesa.visualization.Slider(
-            name="Altruism learning alpha",
-            value=model_cfg.altruism_alpha,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "altruism_init": mesa.visualization.Slider(
-            name="Altruism init factor",
-            value=model_cfg.altruism_init,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
-        "satisfaction_baseline_alpha": mesa.visualization.Slider(
-            name="Satisfaction baseline alpha (EMA)",
-            value=model_cfg.satisfaction_baseline_alpha,
-            min_value=0.0,
-            max_value=1.0,
-            step=0.01,
-        ),
+        # "quality_target_mode": mesa.visualization.Slider(
+        #     name="Quality target mode (0=reality, 1=puzzle)",
+        #     value=1 if model_cfg.quality_target_mode == "puzzle" else 0,
+        #     min_value=0,
+        #     max_value=1,
+        #     step=1,
+        # ),
         "num_agents": mesa.visualization.Slider(
-            name="# Agents",
+            name="Number of agents",
             value=model_cfg.num_agents,
             min_value=10,
             max_value=1500,
             step=10,
         ),
         "num_colors": mesa.visualization.Slider(
-            name="# Colors",
+            name="Number of colors",
             value=model_cfg.num_colors,
             min_value=2,
             max_value=8,
             step=1,
         ),
         "num_personality_groups": mesa.visualization.Slider(
-            name="# preference groups",
+            name="Number of preference groups",
             value=model_cfg.num_personality_groups,
             min_value=1,
             max_value=max(1, factorial(model_cfg.num_colors)),
@@ -303,36 +198,15 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=5.0,
             step=0.1,
         ),
-        "personal_preference_peakedness": mesa.visualization.Slider(
-            name="Personal preference peakedness",
-            value=model_cfg.personal_preference_peakedness,
-            min_value=0.1,
-            max_value=5.0,
-            step=0.1,
-        ),
-        "color_patches_steps": mesa.visualization.Slider(
-            name="Patches size (# steps)",
-            value=model_cfg.color_patches_steps,
-            min_value=0,
-            max_value=9,
-            step=1,
-        ),
-        "patch_power": mesa.visualization.Slider(
-            name="Patches power",
-            value=model_cfg.patch_power,
+        "break_even_distance_common": mesa.visualization.Slider(
+            name="Quality threshold (quality_distance)",
+            value=model_cfg.break_even_distance_common,
             min_value=0.0,
-            max_value=3.0,
-            step=0.2,
-        ),
-        "heterogeneity": mesa.visualization.Slider(
-            name="Global color distribution heterogeneity",
-            value=model_cfg.heterogeneity,
-            min_value=0.0,
-            max_value=0.9,
+            max_value=1.0,
             step=0.1,
         ),
         "num_areas": mesa.visualization.Slider(
-            name=f"# Areas within the {model_cfg.height}x{model_cfg.width} world",
+            name=f"Number of areas within the {model_cfg.height}x{model_cfg.width} grid",
             value=model_cfg.num_areas,
             min_value=1,
             max_value=max(1, min(model_cfg.width, model_cfg.height) // 2),
@@ -352,13 +226,142 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
             max_value=max(2, model_cfg.width // 2),
             step=1,
         ),
-        "area_size_variance": mesa.visualization.Slider(
-            name="Area size variance",
-            value=model_cfg.area_size_variance,
+        # "area_size_variance": mesa.visualization.Slider(
+        #     name="Area size variance",
+        #     value=model_cfg.area_size_variance,
+        #     min_value=0.0,
+        #     max_value=0.99,
+        #     step=0.1,
+        # ),
+        "puzzle_shock_prob": mesa.visualization.Slider(
+            name="Puzzle shock probability",
+            value=model_cfg.puzzle_shock_prob,
             min_value=0.0,
-            max_value=0.99,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "puzzle_local_kappa": mesa.visualization.Slider(
+            name="Puzzle local kappa (higher=smaller shock jumps)",
+            value=model_cfg.puzzle_local_kappa,
+            min_value=0.1,
+            max_value=200.0,
             step=0.1,
         ),
+        "participation_alpha": mesa.visualization.Slider(
+            name="Participation learning alpha",
+            value=model_cfg.participation_alpha,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "participation_beta": mesa.visualization.Slider(
+            name="Participation sigmoid beta",
+            value=model_cfg.participation_beta,
+            min_value=0.0,
+            max_value=10.0,
+            step=0.1,
+        ),
+        "participation_init_q": mesa.visualization.Slider(
+            name="Participation init q",
+            value=model_cfg.participation_init_q,
+            min_value=-5.0,
+            max_value=5.0,
+            step=0.1,
+        ),
+        # "altruism_learning": mesa.visualization.Slider(
+        #     name="Altruism learning (0/1)",
+        #     value=int(bool(model_cfg.altruism_learning)),
+        #     min_value=0,
+        #     max_value=1,
+        #     step=1,
+        # ),
+        # "altruism_static": mesa.visualization.Slider(
+        #     name="Altruism static (used when learning=0)",
+        #     value=model_cfg.altruism_static,
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     step=0.01,
+        # ),
+        # "altruism_response_gamma": mesa.visualization.Slider(
+        #     name="Altruism response gamma (satisfaction mode)",
+        #     value=model_cfg.altruism_response_gamma,
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     step=0.01,
+        # ),
+        "altruism_satisfaction_theta": mesa.visualization.Slider(
+            name="Altruism satisfaction theta (threshold)",
+            value=model_cfg.altruism_satisfaction_theta,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+        ),
+        "altruism_satisfaction_slope": mesa.visualization.Slider(
+            name="Altruism satisfaction slope",
+            value=model_cfg.altruism_satisfaction_slope,
+            min_value=0.1,
+            max_value=20.0,
+            step=0.1,
+        ),
+        # "altruism_mode": mesa.visualization.Slider(
+        #     name="Altruism mode (0=static, 1=surprise, 2=satisfaction)",
+        #     value={"static": 0, "surprise_learning": 1, "satisfaction": 2}.get(
+        #         model_cfg.altruism_mode,
+        #         2,
+        #     ),
+        #     min_value=0,
+        #     max_value=2,
+        #     step=1,
+        # ),
+        # "altruism_alpha": mesa.visualization.Slider(
+        #     name="Altruism learning alpha",
+        #     value=model_cfg.altruism_alpha,
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     step=0.01,
+        # ),
+        # "altruism_init": mesa.visualization.Slider(
+        #     name="Altruism init factor",
+        #     value=model_cfg.altruism_init,
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     step=0.01,
+        # ),
+        # "satisfaction_baseline_alpha": mesa.visualization.Slider(
+        #     name="Satisfaction baseline alpha (EMA)",
+        #     value=model_cfg.satisfaction_baseline_alpha,
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     step=0.01,
+        # ),
+        # "personal_preference_peakedness": mesa.visualization.Slider(
+        #     name="Personal preference peakedness",
+        #     value=model_cfg.personal_preference_peakedness,
+        #     min_value=0.1,
+        #     max_value=5.0,
+        #     step=0.1,
+        # ),
+        # "color_patches_steps": mesa.visualization.Slider(
+        #     name="Patches size (# steps)",
+        #     value=model_cfg.color_patches_steps,
+        #     min_value=0,
+        #     max_value=9,
+        #     step=1,
+        # ),
+        # "patch_power": mesa.visualization.Slider(
+        #     name="Patches power",
+        #     value=model_cfg.patch_power,
+        #     min_value=0.0,
+        #     max_value=3.0,
+        #     step=0.2,
+        # ),
+        # "heterogeneity": mesa.visualization.Slider(
+        #     name="Global color distribution heterogeneity",
+        #     value=model_cfg.heterogeneity,
+        #     min_value=0.0,
+        #     max_value=0.9,
+        #     step=0.1,
+        # ),
     })
     return params
 

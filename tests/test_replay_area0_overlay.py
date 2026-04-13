@@ -3,7 +3,7 @@ from __future__ import annotations
 from scripts.run_headless import run_once
 from src.config.loader import load_config
 from src.replay.replay_server import ReplayModel
-from src.viz.visualization_elements import AreaDiagnosticsPanel
+from src.viz.debug_viz import AreaDiagnosticsPanel
 from tests.utils_meta import load_appcfg_from_meta
 
 

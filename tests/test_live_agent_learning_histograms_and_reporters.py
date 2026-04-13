@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from tests.factory import create_test_model
-from src.viz.visualization_elements import AgentLearningHistograms
+from src.viz.debug_viz import AgentLearningHistograms
 
 
 def test_live_agent_learning_reporters_exist_and_finite_after_steps() -> None:

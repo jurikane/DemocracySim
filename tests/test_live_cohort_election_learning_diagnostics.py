@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from tests.factory import create_test_model
-from src.viz.visualization_elements import CohortElectionLearningDiagnostics
+from src.viz.debug_viz import CohortElectionLearningDiagnostics
 
 
 def test_live_cohort_election_learning_diagnostics_renders_and_is_finite() -> None:

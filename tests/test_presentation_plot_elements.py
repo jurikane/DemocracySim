@@ -14,7 +14,7 @@ def test_global_personality_group_plot_can_render_collapsible_panel() -> None:
     html = PersonalityGroupDistribution(collapsible=True, default_open=False).render(model)
 
     assert "<details" in html
-    assert "Global preference-group distribution" in html
+    assert "Global distribution of preference groups among agents" in html
     assert "<img" in html
 
 
@@ -35,7 +35,11 @@ def test_main_metrics_panel_renders_after_model_steps() -> None:
 
     html = MainMetricsElement().render(model)
 
-    assert "<img" in html
+    assert html.count("<details open") == 3
+    assert "Turnout" in html
+    assert "Inequality" in html
+    assert "Outcome quality" in html
+    assert html.count("<img") == 3
 
 
 def test_puzzle_color_distribution_panel_is_collapsible() -> None:

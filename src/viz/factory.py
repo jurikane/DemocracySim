@@ -84,49 +84,51 @@ def make_charts(cfg: AppConfig) -> list:
         data_collector_name="datacollector",
     )
 
-    wealth_chart = ChartModule(
-        [{"Label": "collective_assets", "Color": "Black"}],
-        data_collector_name="datacollector",
-    )
+    # wealth_chart = ChartModule(
+    #     [{"Label": "collective_assets", "Color": "Black"}],
+    #     data_collector_name="datacollector",
+    # )
 
-    voter_turnout = ChartModule(
-        [
-            {"Label": "turnout", "Color": "Black"},
-            {"Label": "gini_index", "Color": "Red"},
-        ],
-        data_collector_name="datacollector",
-    )
+    # voter_turnout = ChartModule(
+    #     [
+    #         {"Label": "turnout", "Color": "Black"},
+    #         {"Label": "gini_index", "Color": "Red"},
+    #     ],
+    #     data_collector_name="datacollector",
+    # )
 
-    learning_means_chart = ChartModule(
-        [
-            {"Label": "mean_p_participation", "Color": "Black"},
-            {"Label": "mean_altruism", "Color": "Blue"},
-        ],
-        data_collector_name="datacollector",
-    )
-    dissatisfaction_chart = ChartModule(
-        [
-            {"Label": "mean_dissatisfaction", "Color": "Green"},
-        ],
-        data_collector_name="datacollector",
-    )
+    # learning_means_chart = ChartModule(
+    #     [
+    #         {"Label": "mean_p_participation", "Color": "Black"},
+    #         {"Label": "mean_altruism", "Color": "Blue"},
+    #     ],
+    #     data_collector_name="datacollector",
+    # )
+    # dissatisfaction_chart = ChartModule(
+    #     [
+    #         {"Label": "mean_dissatisfaction", "Color": "Green"},
+    #     ],
+    #     data_collector_name="datacollector",
+    # )
 
     # Advanced matplotlib-based elements
     from src.viz.visualization_elements import (
         ReplayGridStepStatusElement,
         PersonalityGroupDistribution,
-        AreaDiagnosticsPanel,
         MainMetricsElement,
         AreaPersonalityGroupDists,
         AreaPuzzleColorDistributionElement,
+    )
+    from src.viz.debug_viz import (
+        AreaAgentDebugPanel,
+        AreaDiagnosticsPanel,
         CohortElectionLearningDiagnostics,
     )
-    from src.viz.debug_viz import AreaAgentDebugPanel
-    extras = [ReplayGridStepStatusElement()]
+    custom = [ReplayGridStepStatusElement()]
     if show_area_stats:
-        extras.append(AreaDiagnosticsPanel())
+        custom.append(AreaDiagnosticsPanel())
     if show_agent_debug_panel:
-        extras.append(
+        custom.append(
             AreaAgentDebugPanel(
                 max_steps=int(getattr(vis_cfg, "agent_debug_max_steps", 1)),
                 area_id=getattr(vis_cfg, "agent_debug_area_id", None),
@@ -136,28 +138,12 @@ def make_charts(cfg: AppConfig) -> list:
             )
         )
     if show_static_infos:
-        extras.append(MainMetricsElement())
-        extras.append(
-            AreaPuzzleColorDistributionElement(
-                collapsible=True,
-                default_open=True,
-            )
-        )
-        extras.append(
-            PersonalityGroupDistribution(
-                collapsible=True,
-                default_open=False,
-            )
-        )
-        extras.append(
-            AreaPersonalityGroupDists(
-                collapsible=True,
-                default_open=True,
-            )
-        )
+        custom.append(MainMetricsElement())
+        custom.append(AreaPuzzleColorDistributionElement())
+        custom.append(PersonalityGroupDistribution())
+        custom.append(AreaPersonalityGroupDists())
     if calibration_mode:
-        extras.append(CohortElectionLearningDiagnostics())
+        custom.append(CohortElectionLearningDiagnostics())
 
-    return [*extras, color_distribution_chart]
-    # return [*extras, color_distribution_chart, wealth_chart, voter_turnout,
-    #        learning_means_chart, dissatisfaction_chart]
+    # return [color_distribution_chart, *custom]
+    return [*custom]
