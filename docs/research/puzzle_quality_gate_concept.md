@@ -1,7 +1,7 @@
 # Puzzle Quality Gate Concept
 
-This defines the conceptual and technical role of the puzzle process used for decision-quality evaluation.
-The shorthand is **puzzle**.
+The puzzle process is the moving quality target against which elected orderings
+are judged. The shorthand used in the project is **puzzle**.
 
 ## 1. Why the Puzzle Quality Gate Exists
 
@@ -12,11 +12,9 @@ Originally, this quality reference was coupled to current grid state.
 However, this created lock-in states by favoring alignment with start conditions and current majorities, which are not very interesting to study.
 Now it is separated into its own stochastic process.
 
-Key reason for the split:
-
-- avoid fixed directional lock-in in quality pressure
-- keep quality pressure symmetric over the simplex in expectation
-- allow the realized grid state and the quality-pressure mechanism to diverge
+The split is meant to avoid fixed directional lock-in in quality pressure, keep
+quality pressure symmetric over the simplex in expectation, and allow the
+realized grid state and the quality-pressure mechanism to diverge.
 
 ## 2. Implemented Process
 
@@ -53,8 +51,8 @@ So the puzzle controls the sign regime, not just a descriptive metric.
 
 Puzzle Quality Gate represents changing external viability pressure that collective decisions need to track to avoid systemic penalties.
 
-This does not mean the process is ontologically "true reality".
-It is a modeled quality constraint process with controlled stochastic dynamics.
+This does not make the process an ontological "true reality". It is a modeled
+quality constraint with controlled stochastic dynamics.
 
 ## 5. Why It Is Useful for This Thesis
 
@@ -64,7 +62,8 @@ The split enables analysis of three distinct forces:
 - external quality pressure (Puzzle Quality Gate)
 - aggregation structure (voting rule)
 
-This makes it possible to study whether some voting rules better balance self-regarding pressure and quality alignment.
+That makes it possible to study whether some voting rules better balance
+self-regarding pressure and quality alignment.
 
 ## 6. Limits and Non-Claims
 

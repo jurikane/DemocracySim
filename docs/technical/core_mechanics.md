@@ -1,9 +1,7 @@
 # Core Mechanics: Election Loop, Quality, Fees, Rewards
 
-This page describes what happens around an election step once agents have
-entered the model. It focuses on the shared mechanics that surround the voting
-rule: participation, quality evaluation, fees, rewards, and the no-participation
-case.
+This page focuses on the shared mechanics that surround the voting rule: 
+participation, quality evaluation, fees, rewards, and the no-participation case.
 
 For how ballots are aggregated into a collective ordering, see
 [voting_rules.md](voting_rules.md). For the default outcome quality target, 
@@ -96,10 +94,9 @@ The main parameters for this part of the model are:
 - `puzzle_local_kappa`
 - `puzzle_shock_prob`
 
-## Runtime Locations
+## Implementation Reference
 
-- vote tally and no-participation handling: `src/agents/area.py::Area.conduct_election`
-- vote collection: `src/agents/area.py::Area._tally_votes`
-- reward distribution: `src/agents/area.py::Area._distribute_rewards`
-- per-agent asset update: `src/agents/vote_agent.py::VoteAgent.reward_agent`
-- quality distances: `src/agents/area.py::Area._update_quality_distances`
+The election pipeline around tallying, rewards, and quality tracking is
+implemented primarily in [Area](api/Area.md) and
+[VoteAgent](api/VoteAgent.md). Supporting distance and aggregation helpers are
+documented in [Utility Functions](api/utility_functions.md).

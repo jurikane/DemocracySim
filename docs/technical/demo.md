@@ -45,22 +45,41 @@ Or start an un-seeded live demo:
 python -m scripts.run --config configs/demo.yaml
 ```
 
-## What To Look At
-
-The grid is the current election-time world state. It is not static: collective
-decisions influence later mutation, so the grid stores part of the system's
-history.
-
-The main plots to watch are:
-
-- turnout
-- asset inequality and dissatisfaction inequality
-- outcome quality and group distance to the elected outcome
-
-For the quality measure used here, see
-[Puzzle Quality Gate](../research/puzzle_quality_gate_concept.md).
+## What To Look At In The UI
 
 ![DemocracySim demo preview](../images/demo/demo_view_step_215.webp)
+
+The screenshot above shows the live server at a later step of the demo run. The
+main things worth reading are:
+
+- The grid at the top shows the current election-time world state. It is the
+  realized color distribution after earlier mutation and before the next round
+  of decisions. For the background, see
+  [environment_dynamics.md](environment_dynamics.md) and
+  [grid_state_concept.md](../research/grid_state_concept.md).
+- The `Turnout` section shows both the overall participation trajectory and the
+  grouped turnout series. This is the clearest entry point for the thesis
+  question about participation dynamics. For the update logic behind it, see
+  [participation_learning.md](participation_learning.md).
+- The `Inequality` section combines two views: asset inequality and relative
+  mean assets by group on the left, and dissatisfaction inequality plus group
+  means on the right. These are the two main inequality families used in the
+  thesis. For the underlying mechanics, see
+  [core_mechanics.md](core_mechanics.md) and
+  [thesis_measurement_spec.md](../research/thesis_measurement_spec.md).
+- The `Outcome quality` section shows the quality trajectory together with group
+  distance to the elected outcome. This is where the model's quality target and
+  group alignment become visible over time. See
+  [puzzle_quality_gate_concept.md](../research/puzzle_quality_gate_concept.md)
+  and [voting_rules.md](voting_rules.md).
+- `Puzzle color distribution by area` shows the moving puzzle target in each
+  area. In puzzle mode, this is the quality reference against which elected
+  orderings are judged. See
+  [puzzle_quality_gate_concept.md](../research/puzzle_quality_gate_concept.md).
+- The preference-group panels at the bottom show how agents are distributed
+  across groups globally and by area. They help interpret the grouped turnout,
+  inequality, and outcome-distance series above. See
+  [population_preferences.md](population_preferences.md).
 
 ## Replay Your Own Run
 

@@ -1,20 +1,21 @@
 # Altruism / Vote-Mode Adaptation
 
-This page documents how `altruism_factor` is set and updated.
+In the current model, `altruism_factor` does not represent a separate strategic planner. 
+It controls how likely an agent is to cast a puzzle-aligned rather than a
+self-regarding ballot.
 
 ## Meaning
 
-`altruism_factor` in `[0,1]` controls vote mode selection:
+`altruism_factor` lies in `[0,1]` and controls vote-mode selection:
 
 - with probability `altruism_factor`: altruistic (puzzle-aligned)
 - with probability `1 - altruism_factor`: self-regarding (preference-ordering)
 
-## Runtime Locations
+## Implementation Reference
 
-- Vote scoring: `src/agents/strategies.py::DefaultVotingStrategy.score_options`
-- Satisfaction-mode mapping: `src/agents/vote_agent.py::VoteAgent.apply_altruism_satisfaction_mode`
-- Surprise-learning update: `src/agents/vote_agent.py::VoteAgent.apply_altruism_update`
-- Orchestration: `src/agents/area.py::Area.step`, `src/agents/area.py::Area.conduct_election`
+Vote-mode selection is exposed in [Strategies](api/Strategies.md). Agent-level
+altruism updates are documented in [VoteAgent](api/VoteAgent.md), and the
+surrounding election orchestration is documented in [Area](api/Area.md).
 
 ## Modes
 

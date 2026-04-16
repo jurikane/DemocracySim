@@ -1,6 +1,8 @@
 # Satisfaction to Altruistic Voting Concept
 
-This is to explain how dissatisfaction, satisfaction, and altruistic ballot probability are linked in the current model.
+In the current model, dissatisfaction does not only describe how well agents
+fit the environment. It also shifts how likely they are to cast altruistic
+rather than self-regarding ballots.
 
 ## 1. Behavioral Design Choice
 
@@ -41,10 +43,8 @@ If `altruism_mode=satisfaction`, the mapping is:
 
 Then `altruism_factor` is clipped into configured bounds.
 
-Interpretation:
-
-- higher satisfaction tends to raise altruism probability
-- lower satisfaction tends to lower altruism probability
+Higher satisfaction tends to raise altruism probability, while lower
+satisfaction tends to lower it.
 
 ## 4. Vote-Time Mode Selection
 
@@ -58,12 +58,13 @@ Ballot construction:
 - altruistic mode: use estimated distribution from limited knowledge (`known_cells`), convert to ordering, then score options against that ordering
 - self-regarding mode: use static precomputed oppose-scores from preference-group ordering
 
-This keeps vote-mode heterogeneity while avoiding strategic game-policy complexity.
+This keeps vote-mode heterogeneity without turning the model into a strategic
+policy game.
 
 ## 5. Why This Concept Exists
 
-The thesis needs a mechanism linking environment fit to collective-choice quality capacity.
-This mapping provides that channel:
+The thesis needs a mechanism linking environment fit to collective-choice
+quality capacity. This mapping provides that channel:
 
 - state fit (satisfaction) influences ballot orientation
 - ballot orientation influences quality-gate success probability
@@ -72,5 +73,6 @@ This mapping provides that channel:
 
 ## 6. Limits
 
-This is not a model of explicit moral reasoning.
-"Altruistic" here means voting according to estimated common-quality signal rather than self-regarding preference.
+This is not a model of explicit moral reasoning. "Altruistic" here means voting
+according to an estimated common-quality signal rather than self-regarding
+preference.

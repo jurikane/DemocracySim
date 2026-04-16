@@ -1,6 +1,7 @@
 # Participation Dilemma and Group-Relative Learning Concept
 
-This is to explain why participation learning is group-relative in the thesis baseline.
+The thesis baseline uses a group-relative participation signal because the
+model's incentive structure is not purely individual.
 
 ## 1. Participation Dilemma Built Into the Model
 
@@ -11,17 +12,13 @@ The model intentionally combines:
 - reward magnitude tied to preference alignment
 - both fees and rewards are relative to agents assets
 
-Consequence:
-
-- participation cost is individually concentrated
-- quality sign is socially shared
-- within preference groups, reward components are identical, while fee remains an individual participation signal
-
-This creates a structured free-rider tension.
+Participation cost is individually concentrated, quality sign is socially
+shared, and within preference groups the reward component is largely shared
+while the fee remains individual. That creates a structured free-rider tension.
 
 ## 2. Why Fees and Rewards Are Not Absolute but Relative to Assets
 
-This was a conscious choice to account for the relative nature of effort and reward.
+This choice reflects the relative nature of effort and reward in the model.
 The model does not attempt to represent direct real-world wealth-power effects.
 Instead, it models motivational resources and reward pressure in relative terms.
 Absolute differences still remain analytically visible and comparable.
@@ -34,7 +31,7 @@ For this thesis trajectory, learning is therefore framed around relative group p
 
 ## 4. Group-Relative Party Mode (Baseline)
 
-Mode: `participation_signal_mode=group_relative_delta_rel_party`
+The thesis baseline uses `participation_signal_mode=group_relative_delta_rel_party`.
 
 Definitions for each step:
 
@@ -58,10 +55,8 @@ In this baseline mode, for every eligible agent `i` (participant or abstainer):
 So both participants and abstainers receive the same group-relative directional component `r_g`.
 Only participants receive the additional negative fee component.
 
-Implication:
-
-- group-level direction can move both subpopulations similarly
-- participant updates are damped (or locally reversed) when fee salience dominates
+So the group-level direction can move both subpopulations similarly, while
+participant updates are damped or locally reversed when fee salience dominates.
 
 ## 6. Why This Fits the Thesis Question
 
@@ -70,5 +65,5 @@ This learning design increases sensitivity of participation updates to collectiv
 
 ## 7. Scope Boundary
 
-This is a stylized party-relative learning rule.
-It is not a claim that real voters update behavior exactly this way.
+This is a stylized party-relative learning rule, not a claim about how real
+voters literally update behavior.

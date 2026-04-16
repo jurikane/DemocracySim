@@ -7,6 +7,7 @@ environmental change.
 
 This page is the technical entry point for the project. It gives a compact
 picture of what the model does and where to continue reading.
+For a more visual impression of the model, see the [demo guide](demo.md).
 
 ## Core Simulation Loop
 

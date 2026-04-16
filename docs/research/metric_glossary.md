@@ -1,7 +1,6 @@
 # Metric Glossary
 
-This glossary is the field-to-meaning dictionary for the analysis.
-It complements:
+A reference table for analysis fields and endpoint names. Use it together with:
 
 - [docs/research/thesis_measurement_spec.md](thesis_measurement_spec.md)
 

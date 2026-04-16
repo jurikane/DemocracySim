@@ -1,12 +1,17 @@
 # Semantics, Representations & RNG
 
-This page defines step semantics and reproducibility conventions.
+Several parts of DemocracySim only make sense if the underlying conventions are
+kept fixed: what a recorded step means, how orderings and score vectors are
+represented, and how seeded randomness is split across the simulation. The
+points below are the compact description for those conventions.
 
 ## Step Semantics
 
-Recorded step `t` is the election-time state.
+Recorded step `t` is the election-time state. In other words, the system logs
+the state on which the election at step `t` is evaluated, not a later
+post-mutation state.
 
-Execution order:
+The execution order is:
 
 1. Scheduler advances to `t`.
 2. Mutation from election `t-1` is applied (for `t > 1`).
@@ -15,10 +20,14 @@ Execution order:
 
 ## Units
 
+The main plotted summary series use these units:
+
 - Turnout is stored in percent (`0..100`).
 - Gini-based inequality metrics are stored on a percent-like scale (`0..100`).
 
 ## Representation Conventions
+
+The main internal object types are:
 
 - `Ordering`: permutation of option IDs (`0..n-1`).
 - `Distribution`: non-negative vector summing to 1.
@@ -26,8 +35,8 @@ Execution order:
 
 ## Tie Handling
 
-- Decision-critical tie breaks use seeded RNG.
-- Same seed reproduces the same tie outcomes.
+Decision-critical tie breaks use seeded RNG. For a fixed seed, the same tie
+cases reproduce the same outcomes.
 
 ## RNG Policy
 

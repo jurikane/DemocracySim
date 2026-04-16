@@ -80,11 +80,12 @@ The main parameters for participation learning are:
 - `participation_signal_clip`
 - `participation_baseline_alpha`
 
-## Runtime Locations
+## Implementation Reference
 
-- signal construction: `src/agents/area.py::Area._compute_participation_learning_signals_and_q_pushes`
-- q-state update: `src/agents/vote_agent.py::VoteAgent.apply_participation_q_push`
-- participation decision: `src/agents/strategies.py::DefaultParticipationStrategy.decide_participation`
+The group-level signal construction lives with the election logic in
+[Area](api/Area.md). Per-agent q-state updates live in
+[VoteAgent](api/VoteAgent.md), and the participation decision policy is exposed
+in [Strategies](api/Strategies.md).
 
 ## Compatibility Notes
 

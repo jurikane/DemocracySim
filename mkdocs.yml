@@ -44,6 +44,7 @@ nav:
             - Area (Territory): technical/api/Area.md
             - Grid Cell: technical/api/ColorCell.md
             - Voting Agent: technical/api/VoteAgent.md
+            - Strategies: technical/api/Strategies.md
             - Inherited Classes: technical/api/inherited.md
             - Utility Functions: technical/api/utility_functions.md
             - Output Schema V3: technical/api/output_schema_v3.md

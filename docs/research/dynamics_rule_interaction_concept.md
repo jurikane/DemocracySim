@@ -1,6 +1,8 @@
 # Dynamics and Voting-Rule Interaction Concept
 
-This file documents the system-level dynamic intuition behind the thesis without overstating confirmatory claims.
+The thesis rests on a closed feedback loop: rule choice changes election
+outcomes, outcomes change incentives and learning, and those changes reshape
+later elections.
 
 ## 1. Closed-Loop Dynamic
 
@@ -25,16 +27,11 @@ Rule aggregation behavior determines how these pressures are combined each step.
 
 ## 3. Satisfying-Region Attractor Intuition (Design-Level)
 
-Design intuition:
-
-- if the system reaches a region where many agents are relatively satisfied,
-  altruistic-vote probability tends to increase,
-  which can improve quality-gate alignment,
-  which in turn can reduce destabilizing punishment regimes.
+If the system reaches a region where many agents are relatively satisfied,
+altruistic-vote probability tends to increase, which can improve quality-gate
+alignment and reduce destabilizing punishment regimes.
 
 At the same time, self-regarding pressure can prevent convergence or create lock-in/polarized movement.
 
-Thesis framing:
-
-- this attractor logic is treated as theoretical design intuition and exploratory expectation
-- it is not a primary confirmatory hypothesis
+In the thesis, this attractor logic is treated as design intuition and
+exploratory expectation rather than as a primary confirmatory hypothesis.

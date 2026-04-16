@@ -1,7 +1,7 @@
 # Thesis Measurement Spec
 
-This document defines how thesis metrics are computed and interpreted.
-It is coupled with:
+This page specifies how the thesis metrics are computed from logged artifacts
+and how they are interpreted. Use it together with:
 
 - [docs/research/thesis_contract.md](thesis_contract.md)
 - [docs/research/metric_glossary.md](metric_glossary.md)

@@ -1,19 +1,20 @@
 # Structural Topology
 
-This page describes how areas are placed on the grid.
+This page describes how areas are placed on the grid and what the main topology
+settings mean. These choices affect how elections are localized and how much
+territorial structure the model has.
 
-## Runtime Locations
+## Implementation Reference
 
-- `src/models/participation_model.py::ParticipationModel.__init__`
-- `src/models/participation_model.py::ParticipationModel.initialize_all_areas`
-- `src/models/participation_model.py::ParticipationModel._analyze_area_coverage`
-- `src/agents/area.py::Area.idx_field`
+Area placement and coverage analysis are documented in
+[ParticipationModel](api/Model.md). Area-local indexing and territory behavior
+are documented in [Area](api/Area.md).
 
 ## Key Semantics
 
 ### `no_overlap`
 
-`no_overlap=True` means areas are disjoint (no cell belongs to more than one area).
+`no_overlap=True` means areas are disjoint: no cell belongs to more than one area.
 It does not imply full grid coverage.
 
 ### Partition vs Disjoint

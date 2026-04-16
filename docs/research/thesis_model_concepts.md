@@ -1,8 +1,5 @@
 # Thesis Model Concepts
 
-This document explains the conceptual logic behind the simulation as currently implemented.
-It is intentionally narrative and causal (not only metric/schema focused).
-
 Related technical references:
 
 - [docs/research/thesis_contract.md](thesis_contract.md)
@@ -51,7 +48,7 @@ The current model separates two environmental roles that were previously conflat
     - This process is color-symmetric (no fixed directional bias by color label).
     - Decision quality is evaluated against Puzzle Quality Gate alignment (not directly against current grid ordering).
 
-Conceptual role of the split:
+Conceptually, the split means:
 
 - Grid = what society has currently become.
 - Puzzle Quality Gate = the current puzzle that determines whether collective decisions are rewarded or penalized.
@@ -79,9 +76,9 @@ For each area and step, the implemented order is:
 11. Participation learning updates `q_participation` from group-relative signal and fee salience.
 12. Mutation from election outcome is applied at the start of the next scheduler step.
 
-Important timing consequence:
+The timing consequence is simple:
 
-- Elections/rewards happen on the current election-time state.
+- Elections and rewards happen on the current election-time state.
 - Grid mutation is lagged to the next step.
 
 ## 5. Satisfaction-Driven Altruistic Voting Concept
@@ -94,10 +91,8 @@ Instead:
 - `altruism_factor` is updated by sigmoid mapping with threshold/slope and optional smoothing. This enables it to free simulations from too many majority deadlocks.
 - During vote casting, `altruism_factor` is used as the probability of voting altruistically.
 
-Interpretation:
-
-- Higher satisfaction tends to increase altruistic-vote probability.
-- Lower satisfaction tends to increase self-regarding (power-struggle) voting.
+Higher satisfaction tends to increase altruistic-vote probability; lower
+satisfaction tends to increase self-regarding, power-struggle voting.
 
 ## 6. Participation Learning Concept (Why Group-Relative Party Signal)
 
@@ -132,7 +127,7 @@ The Puzzle Quality Gate formalizes a changing viability pressure:
 - If not, negative mode applies.
 
 At the same time, self-regarding voting can pull outcomes away from this reference.
-This creates tension between:
+The model therefore sets up a tension between:
 
 - puzzle-solving / collective alignment behavior
 - power-struggle / preference-dominance behavior
@@ -144,11 +139,11 @@ Attractor Design Intuition (Hypothetical):
 The puzzle’s "rewardable direction" drifts randomly overall.
 If the grid state yields high satisfaction, agents vote more puzzle-aligned (via altruism), so outcomes tend to track that random drift rather than being pulled toward fixed group extremes.
 
-This feedback could, in principle, create a weak attractor:
+In principle, this feedback could create a weak attractor:
 
-- broadly satisfying grid states become self-stabilizing (more altruism => better puzzle alignment => fewer negative shocks).
-- dissatisfaction increases power-struggle voting, which can disrupt stability and induce lock-ins/oscillations.
-- voting rules may change how strongly such disruptions prevent convergence toward broadly satisfying regions.
+- broadly satisfying grid states become self-stabilizing (more altruism => better puzzle alignment => fewer negative shocks)
+- dissatisfaction increases power-struggle voting, which can disrupt stability and induce lock-ins or oscillations
+- voting rules may change how strongly such disruptions prevent convergence toward broadly satisfying regions
 
 ## 8. Why This Supports the Thesis Question
 
@@ -159,7 +154,8 @@ The model design ties voting-rule differences to participation dynamics through 
 - Reward and fee signals affect participation-learning updates.
 - Participation composition affects future elections.
 
-This makes participation and inequality trajectories endogenous to rule choice under fixed non-rule mechanics.
+Participation and inequality trajectories therefore become endogenous to rule
+choice under fixed non-rule mechanics.
 
 ## 9. Explicit Non-Goals
 
