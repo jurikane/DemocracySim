@@ -3,6 +3,7 @@ mesa-replay @ git+https://github.com/Logende/mesa-replay.git@main
 numpy==1.26.4
 pandas==2.2.2
 matplotlib==3.9.0
+pyparsing==3.2.3
 seaborn==0.13.2
 solara==1.44.1
 ipyvuetify==1.9.4
