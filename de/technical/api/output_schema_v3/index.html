@@ -1,0 +1,2086 @@
+<!--
+Copyright (c) 2016-2024 Martin Donath <martin.donath@squidfunk.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+-->
+
+<!doctype html>
+<html lang="de" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="<b>Mesa-based simulation platform for voting rules, participation, and inequality dynamics.</b>">
+      
+      
+        <meta name="author" content="Paul Kühnel">
+      
+      
+        <link rel="canonical" href="https://jurikane.github.io/DemocracySim/de/technical/api/output_schema_v3/">
+      
+      
+        <link rel="prev" href="../utility_functions/">
+      
+      
+        <link rel="next" href="../../../mesa_docs/">
+      
+      
+      <link rel="icon" href="../../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.25">
+    
+    
+      
+        <title>Output Schema V3 - DemocracySim</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.6543a935.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  <link rel="stylesheet" href="../../../../assets/stylesheets/custom.7c86dd97.min.css">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#output-schema-v3" class="md-skip">
+          Zum Inhalt
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  For updates follow <strong>@democracysim</strong> on
+  <a rel="me" href="https://defcon.social/@democracysim">
+    <span class="twemoji mastodon">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M433 179.11c0-97.2-63.71-125.7-63.71-125.7-62.52-28.7-228.56-28.4-290.48 0 0 0-63.72 28.5-63.72 125.7 0 115.7-6.6 259.4 105.63 289.1 40.51 10.7 75.32 13 103.33 11.4 50.81-2.8 79.32-18.1 79.32-18.1l-1.7-36.9s-36.31 11.4-77.12 10.1c-40.41-1.4-83-4.4-89.63-54a102.54 102.54 0 0 1-.9-13.9c85.63 20.9 158.65 9.1 178.75 6.7 56.12-6.7 105-41.3 111.23-72.9 9.8-49.8 9-121.5 9-121.5zm-75.12 125.2h-46.63v-114.2c0-49.7-64-51.6-64 6.9v62.5h-46.33V197c0-58.5-64-56.6-64-6.9v114.2H90.19c0-122.1-5.2-147.9 18.41-175 25.9-28.9 79.82-30.8 103.83 6.1l11.6 19.5 11.6-19.5c24.11-37.1 78.12-34.8 103.83-6.1 23.71 27.3 18.4 53 18.4 175z"/></svg>
+    </span>
+    <strong>DemocracySim</strong>
+  </a>
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Kopfzeile">
+    <a href="../../../" title="DemocracySim" class="md-header__button md-logo" aria-label="DemocracySim" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            DemocracySim
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Output Schema V3
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m14.3 16-.7-2h-3.2l-.7 2H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69m-9.15 3.96h2.3L12 9l-1.15 3.65Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 2c-1.05 0-2.05.16-3 .46 4.06 1.27 7 5.04 7 9.54 0 4.5-2.94 8.27-7 9.54.95.3 1.95.46 3 .46a10 10 0 0 0 10-10A10 10 0 0 0 9 2Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Sprache wechseln">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04M18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12m-2.62 7 1.62-4.33L19.12 17h-3.24Z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="../../../../technical/api/output_schema_v3/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="de" class="md-select__link">
+              Deutsch
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Suche" placeholder="Suche" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Suche">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Teilen" aria-label="Teilen" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Zurücksetzen" aria-label="Zurücksetzen" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Suche wird initialisiert
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jurikane/DemocracySim" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Hauptnavigation" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../" class="md-tabs__link">
+        
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../teaser/" class="md-tabs__link">
+        
+  
+    
+  
+  Teaser
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../research/thesis_contract/" class="md-tabs__link">
+          
+  
+    
+  
+  Research
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../technical_overview/" class="md-tabs__link">
+          
+  
+    
+  
+  Technical
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../mesa_docs/" class="md-tabs__link">
+        
+  
+    
+  
+  Mesa
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../../" title="DemocracySim" class="md-nav__button md-logo" aria-label="DemocracySim" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    DemocracySim
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jurikane/DemocracySim" title="Zum Repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../teaser/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Teaser
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Research
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Research
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/thesis_contract/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Thesis Contract
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/thesis_model_concepts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Thesis Model Concepts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Concept Deep Dives
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Concept Deep Dives
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/grid_state_concept/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grid State Concept
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/puzzle_quality_gate_concept/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Puzzle Quality Gate Concept
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/satisfaction_altruistic_voting_concept/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Satisfaction to Altruistic Voting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/participation_dilemma_and_group_learning_concept/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Participation Dilemma and Group Learning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/dynamics_rule_interaction_concept/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dynamics and Rule Interaction
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/thesis_measurement_spec/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Thesis Measurement Spec
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/metric_glossary/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Metric Glossary
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Technical
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Technical
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../technical_overview/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Demo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../semantics_representation_rng/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Semantics, Representations & RNG
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voting_rules/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Voting Rules
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../core_mechanics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Core Mechanics (Fees/Rewards/Distance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../environment_dynamics/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Environment Dynamics
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../structural_topology/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Structural Topology
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../population_preferences/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Population & Preferences
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../run_control_output/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run Control & Output
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_10" id="__nav_4_10_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Learning
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_10">
+            <span class="md-nav__icon md-icon"></span>
+            Learning
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../participation_learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Participation Learning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../altruism_learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Altruism Voting Behavior
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4_11" id="__nav_4_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4_11">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Model (Environment)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Area/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Area (Territory)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ColorCell/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grid Cell
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VoteAgent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Voting Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Strategies/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Strategies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inherited/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Inherited Classes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utility_functions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Utility Functions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Output Schema V3
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Output Schema V3
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Inhaltsverzeichnis">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Inhaltsverzeichnis
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Specification
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Specification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#run-directory-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      Run directory layout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#voting-rule-identification-reproducibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Voting rule identification (reproducibility)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timing-semantics-important" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timing semantics (important)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#replay-step-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replay step 0
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-identifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shared identifiers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stepsparquet" class="md-nav__link">
+    <span class="md-ellipsis">
+      steps.parquet
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#area_stepsparquet" class="md-nav__link">
+    <span class="md-ellipsis">
+      area_steps.parquet
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agentsparquet" class="md-nav__link">
+    <span class="md-ellipsis">
+      agents.parquet
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#votesparquet" class="md-nav__link">
+    <span class="md-ellipsis">
+      votes.parquet
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../mesa_docs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Mesa
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+    <a href="https://github.com/jurikane/DemocracySim/edit/main/docs/technical/api/output_schema_v3.md" title="Seite editieren" class="md-content__button md-icon">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="output-schema-v3">Output schema v3</h1>
+<p><strong>Schema name:</strong> <code>output_schema_v3</code><br />
+<strong>Step indexing meaning:</strong> <code>post_election_pre_mutation</code></p>
+<p>The output schema defines the on-disk outputs produced by headless batch runs.
+Replay remains backward-compatible with both schema <code>v2</code> and schema <code>v3</code>, but
+the active writer contract is <code>v3</code>.</p>
+<h2 id="specification">Specification</h2>
+<h3 id="run-directory-layout">Run directory layout</h3>
+<p>Per run directory (e.g. <code>.../data/simulation_output/&lt;ts&gt;/run_&lt;i&gt;/</code>):</p>
+<ul>
+<li><code>meta.yaml</code> – schema + run metadata, plus config reference</li>
+<li><code>config_used.yaml</code> – canonical batch config (stored at batch root; <code>meta.yaml</code> points to it via <code>config_ref</code>)</li>
+<li><code>static.json</code> – static model info (grid size, preference-group metadata via <code>personality_groups</code>, file patterns)</li>
+<li><code>steps.parquet</code></li>
+<li><code>area_steps.parquet</code></li>
+<li><code>agents.parquet</code></li>
+<li><code>votes.parquet</code></li>
+<li><code>static_cell_areas.parquet</code> – typed cell-to-area overlay</li>
+<li><code>static_cell_agents.parquet</code> – typed cell/area/agent overlay</li>
+<li><code>grids/grid_&lt;k&gt;.npy</code> snapshots (index <code>k</code> zero-padded to <code>len(str(num_steps))</code>)</li>
+<li><code>grid_001</code> and <code>grid_{S}</code> election-time snapshots are always present</li>
+<li><code>grid_000</code> (pre-election convenience snapshot) is written only when <code>store_grid=true</code></li>
+<li>additional sparse snapshots follow <code>store_grid</code> + <code>grid_interval</code></li>
+</ul>
+<p>Legacy replay-side <code>.npy</code> overlays (<code>area_borders.npy</code>, <code>agents_per_cell.npy</code>, <code>area_strings_per_cell.npy</code>, <code>agent_strings_per_cell.npy</code>) are not required artifacts for current schema-v3 headless runs.</p>
+<h3 id="voting-rule-identification-reproducibility">Voting rule identification (reproducibility)</h3>
+<p>For rule-comparison runs, <code>rule_idx</code> is the canonical voting-rule selector.
+To make <code>rule_idx</code> unambiguous across code changes, schema v3 stores:</p>
+<ul>
+<li><code>meta.yaml</code>: <code>run.rule_idx</code>, <code>run.rule_name</code>, <code>run.rule_impl_name</code></li>
+<li><code>static.json</code>: <code>voting_rules.names</code>, <code>voting_rules.impl_names</code>, plus the selected index/name</li>
+</ul>
+<p>The distance function (<code>distance_idx</code>) is also recorded for auditability:</p>
+<ul>
+<li><code>meta.yaml</code>: <code>run.distance_idx</code>, <code>run.distance_name</code>, <code>run.distance_impl_name</code></li>
+<li><code>static.json</code>: <code>distance_functions.names</code>, <code>distance_functions.impl_names</code>, plus the selected index/name</li>
+</ul>
+<h3 id="timing-semantics-important">Timing semantics (important)</h3>
+<p>Recorded step <code>t</code> (where <strong>t starts at 1</strong>) corresponds to the election-time state:</p>
+<ul>
+<li>The grid shown/used is the state after applying mutation from step <code>t-1</code> (for <code>t&gt;1</code>).</li>
+<li>Elections and rewards/learning happen on this state during step <code>t</code>.</li>
+<li>No mutation occurs during step <code>t</code>; mutation from step <code>t</code> is applied at the start of step <code>t+1</code>.</li>
+<li><code>area_color_*</code> in <code>area_steps.parquet</code> reflects the election-time distribution for step <code>t</code>.</li>
+<li><code>color_*</code> in <code>steps.parquet</code> reflects the global election-time distribution for step <code>t</code>,
+  computed from exact grid counts (not from averaging area distributions).</li>
+<li>Grid snapshots (<code>grids/grid_*.npy</code>) are the election-time state for step <code>t</code> and match the distributions.</li>
+<li>First/last election-time snapshots are always present at <code>t=1</code> and <code>t=S</code>.</li>
+<li>When snapshots are stored sparsely (<code>grid_interval &gt; 1</code>), replay uses carry-forward semantics:
+  for step <code>t</code> it shows the latest available <code>grid_k</code> with <code>k &lt;= t</code>.</li>
+</ul>
+<p><code>post_election_pre_mutation</code> means: post-election/reward for step <code>t</code>, pre-mutation of step <code>t</code> (applied at step <code>t+1</code>).</p>
+<h3 id="replay-step-0">Replay step 0</h3>
+<p>Replay starts in a <strong>grid-only step 0</strong> state:</p>
+<ul>
+<li>It loads <code>grids/grid_000.npy</code> (pad-aware filename; if present) and shows it as the initial grid.</li>
+<li>It does <strong>not</strong> populate model/area time series until the first replay <code>step()</code> call.</li>
+</ul>
+<h3 id="shared-identifiers">Shared identifiers</h3>
+<p>All Parquet tables include:</p>
+<ul>
+<li><code>run_seed</code> (int32): concrete RNG seed used for the run</li>
+<li><code>rule_idx</code> (int16): voting rule index used for the run</li>
+</ul>
+<h3 id="tables">Tables</h3>
+<h3 id="stepsparquet"><code>steps.parquet</code></h3>
+<p><strong>Primary key:</strong> <code>(run_seed, rule_idx, step)</code></p>
+<table>
+<thead>
+<tr>
+<th>column</th>
+<th style="text-align: right;">dtype</th>
+<th>notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run_seed</td>
+<td style="text-align: right;">int32</td>
+<td>run identifier (seed)</td>
+</tr>
+<tr>
+<td>rule_idx</td>
+<td style="text-align: right;">int16</td>
+<td>voting rule index</td>
+</tr>
+<tr>
+<td>step</td>
+<td style="text-align: right;">int32</td>
+<td><strong>1..S</strong></td>
+</tr>
+<tr>
+<td>collective_assets</td>
+<td style="text-align: right;">float32</td>
+<td>model sum of assets</td>
+</tr>
+<tr>
+<td>gini_index</td>
+<td style="text-align: right;">int16</td>
+<td>0–100</td>
+</tr>
+<tr>
+<td>turnout</td>
+<td style="text-align: right;">float32</td>
+<td>global population-based turnout (%)</td>
+</tr>
+<tr>
+<td>mean_altruism</td>
+<td style="text-align: right;">float32</td>
+<td>mean altruism_factor</td>
+</tr>
+<tr>
+<td>mean_dissatisfaction</td>
+<td style="text-align: right;">float32</td>
+<td>mean dissatisfaction_value</td>
+</tr>
+<tr>
+<td>color_0..color_{C-1}</td>
+<td style="text-align: right;">float32</td>
+<td>optional, pre-mutation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="area_stepsparquet"><code>area_steps.parquet</code></h3>
+<p>Merged area-state + election table.</p>
+<p><strong>Primary key:</strong> <code>(run_seed, rule_idx, step, area_id)</code></p>
+<table>
+<thead>
+<tr>
+<th>column</th>
+<th style="text-align: right;">dtype</th>
+<th>notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run_seed</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>rule_idx</td>
+<td style="text-align: right;">int16</td>
+<td></td>
+</tr>
+<tr>
+<td>step</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>area_id</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>eligible_voters</td>
+<td style="text-align: right;">int32</td>
+<td>agents eligible for election in this area/step</td>
+</tr>
+<tr>
+<td>participants</td>
+<td style="text-align: right;">int32</td>
+<td>number who voted</td>
+</tr>
+<tr>
+<td>turnout</td>
+<td style="text-align: right;">float32</td>
+<td>participants/area_num_agents * 100</td>
+</tr>
+<tr>
+<td>fee_pool</td>
+<td style="text-align: right;">float32</td>
+<td>matches simulation internal type</td>
+</tr>
+<tr>
+<td>winning_option_id</td>
+<td style="text-align: right;">int32</td>
+<td>option row index into <code>model.options</code></td>
+</tr>
+<tr>
+<td>elected_color_0..elected_color_{C-1}</td>
+<td style="text-align: right;">int16</td>
+<td><code>Area.voted_ordering</code></td>
+</tr>
+<tr>
+<td>dist_to_reality</td>
+<td style="text-align: right;">float32</td>
+<td>distance(real_order, voted_order)</td>
+</tr>
+<tr>
+<td>puzzle_distance</td>
+<td style="text-align: right;">float32</td>
+<td>distance(puzzle_order, voted_order); NaN when puzzle mode is off</td>
+</tr>
+<tr>
+<td>gini_index</td>
+<td style="text-align: right;">int16</td>
+<td>area gini 0–100</td>
+</tr>
+<tr>
+<td>area_color_0..area_color_{C-1}</td>
+<td style="text-align: right;">float32</td>
+<td><strong>pre-mutation distribution</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Quality-gate interpretation:</p>
+<ul>
+<li>Canonical gate metric in analysis is <code>quality_distance</code> (derived, mode-aware).</li>
+<li>Source is <code>puzzle_distance</code> when <code>quality_target_mode=puzzle</code>, else <code>dist_to_reality</code>.</li>
+<li>Both raw columns are retained for diagnostics and replay context.</li>
+</ul>
+<h3 id="agentsparquet"><code>agents.parquet</code></h3>
+<p>Agent snapshot table (<strong>agent state only</strong>).</p>
+<p><strong>Primary key:</strong> <code>(run_seed, rule_idx, step, agent_id)</code></p>
+<table>
+<thead>
+<tr>
+<th>column</th>
+<th style="text-align: right;">dtype</th>
+<th>notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run_seed</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>rule_idx</td>
+<td style="text-align: right;">int16</td>
+<td></td>
+</tr>
+<tr>
+<td>step</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>agent_id</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>assets</td>
+<td style="text-align: right;">float32</td>
+<td>matches simulation internal type</td>
+</tr>
+<tr>
+<td>num_elections_participated</td>
+<td style="text-align: right;">int32</td>
+<td>cumulative counter across all areas/steps</td>
+</tr>
+<tr>
+<td>personality_group_idx</td>
+<td style="text-align: right;">int16</td>
+<td>stored preference-group index</td>
+</tr>
+<tr>
+<td>eligible_for_election</td>
+<td style="text-align: right;">boolean</td>
+<td>eligibility flag in this area/step election</td>
+</tr>
+<tr>
+<td>participating</td>
+<td style="text-align: right;">boolean</td>
+<td>participation decision in this area/step</td>
+</tr>
+<tr>
+<td>election_fee</td>
+<td style="text-align: right;">float32</td>
+<td>charged fee in this area/step</td>
+</tr>
+<tr>
+<td>reward_personal</td>
+<td style="text-align: right;">float32</td>
+<td>reward/penalty amount</td>
+</tr>
+<tr>
+<td>election_delta_abs</td>
+<td style="text-align: right;">float32</td>
+<td>realized absolute asset delta</td>
+</tr>
+<tr>
+<td>election_delta_rel</td>
+<td style="text-align: right;">float32</td>
+<td>realized relative asset delta</td>
+</tr>
+<tr>
+<td>participation_baseline</td>
+<td style="text-align: right;">float32</td>
+<td>EMA baseline for participation learning</td>
+</tr>
+<tr>
+<td>participation_signal</td>
+<td style="text-align: right;">float32</td>
+<td>participation learning signal (mode-dependent)</td>
+</tr>
+<tr>
+<td>participation_signal_group_component</td>
+<td style="text-align: right;">float32</td>
+<td>centered/group component participation signal</td>
+</tr>
+<tr>
+<td>participation_signal_fee_component</td>
+<td style="text-align: right;">float32</td>
+<td>explicit fee component of participation signal</td>
+</tr>
+<tr>
+<td>q_participation</td>
+<td style="text-align: right;">float32</td>
+<td>learned participation propensity (<code>q</code>)</td>
+</tr>
+<tr>
+<td>participation_probability</td>
+<td style="text-align: right;">float32</td>
+<td>current participation probability from <code>q</code></td>
+</tr>
+<tr>
+<td>altruism_factor</td>
+<td style="text-align: right;">float32</td>
+<td>agent altruism_factor</td>
+</tr>
+<tr>
+<td>dissatisfaction_value</td>
+<td style="text-align: right;">float32</td>
+<td>dissatisfaction (distance)</td>
+</tr>
+<tr>
+<td>dissatisfaction_baseline</td>
+<td style="text-align: right;">float32</td>
+<td>EMA baseline for dissatisfaction</td>
+</tr>
+<tr>
+<td>dissatisfaction_signal</td>
+<td style="text-align: right;">float32</td>
+<td>baseline-corrected dissatisfaction signal</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Semantics:</strong> the row for step <code>t</code> represents the agent’s final state after it
+participated in all elections it was eligible for during step <code>t</code>.</p>
+<h3 id="votesparquet"><code>votes.parquet</code></h3>
+<p>Vote signal table (participants only). This is the single source of
+<strong>election-contextual</strong> agent values (belief/confidence).</p>
+<p><strong>Primary key:</strong> <code>(run_seed, rule_idx, step, area_id, agent_id)</code></p>
+<table>
+<thead>
+<tr>
+<th>column</th>
+<th style="text-align: right;">dtype</th>
+<th>notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run_seed</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>rule_idx</td>
+<td style="text-align: right;">int16</td>
+<td></td>
+</tr>
+<tr>
+<td>step</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>area_id</td>
+<td style="text-align: right;">int32</td>
+<td>disambiguates overlapping areas</td>
+</tr>
+<tr>
+<td>agent_id</td>
+<td style="text-align: right;">int32</td>
+<td></td>
+</tr>
+<tr>
+<td>participating</td>
+<td style="text-align: right;">boolean</td>
+<td>always true (rows only for participants)</td>
+</tr>
+<tr>
+<td>confidence</td>
+<td style="text-align: right;">float32</td>
+<td>agent confidence at vote time <strong>in this area</strong></td>
+</tr>
+<tr>
+<td>voted_altruistically</td>
+<td style="text-align: right;">boolean</td>
+<td><code>True</code>/<code>False</code>/<code>null</code> at vote time</td>
+</tr>
+<tr>
+<td>estim_dst_color_0..estim_dst_color_{C-1}</td>
+<td style="text-align: right;">float32</td>
+<td>estimated area color distribution at vote time</td>
+</tr>
+<tr>
+<td>rank_1_option_id</td>
+<td style="text-align: right;">Int32</td>
+<td>option row index into <code>model.options</code></td>
+</tr>
+<tr>
+<td>rank_1_oppose_score</td>
+<td style="text-align: right;">float32</td>
+<td>lower = better</td>
+</tr>
+<tr>
+<td>rank_2_option_id</td>
+<td style="text-align: right;">Int32</td>
+<td></td>
+</tr>
+<tr>
+<td>rank_2_oppose_score</td>
+<td style="text-align: right;">float32</td>
+<td></td>
+</tr>
+<tr>
+<td>rank_3_option_id</td>
+<td style="text-align: right;">Int32</td>
+<td></td>
+</tr>
+<tr>
+<td>rank_3_oppose_score</td>
+<td style="text-align: right;">float32</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes:</strong></p>
+<ul>
+<li><code>votes.parquet</code> uses a fixed 3-rank wide layout to reduce row counts.</li>
+<li>If fewer than 3 options exist, remaining rank_* fields should be null.</li>
+<li>If estimate distributions are missing/invalid at vote time, <code>estim_dst_color_*</code> is written as <code>NaN</code> (fail-visible), not zeros.</li>
+<li>If no agent participates in a run/step, <code>votes.parquet</code> may be empty (<code>0</code> rows) but remains schema-valid with typed columns.</li>
+<li>For tied oppose scores, top-k rank extraction uses seeded RNG tie-breaking (unbiased); id-based tie fallback is not used.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.expand", "navigation.indexes", "navigation.sections", "navigation.tabs", "toc.follow", "toc.integrate", "search.share", "search.highlight", "search.suggest", "content.action.edit"], "search": "../../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "In Zwischenablage kopiert", "clipboard.copy": "In Zwischenablage kopieren", "search.result.more.one": "1 weiteres Suchergebnis auf dieser Seite", "search.result.more.other": "# weitere Suchergebnisse auf dieser Seite", "search.result.none": "Keine Suchergebnisse", "search.result.one": "1 Suchergebnis", "search.result.other": "# Suchergebnisse", "search.result.placeholder": "Suchbegriff eingeben", "search.result.term.missing": "Es fehlt", "select.version": "Version ausw\u00e4hlen"}}</script>
+    
+    
+  
+      <script src="../../../../assets/javascripts/bundle.081f42fc.min.js"></script>
+      
+    
+  <script src="../../../../assets/javascripts/custom.058c863c.min.js"></script>
+
+  </body>
+</html>
