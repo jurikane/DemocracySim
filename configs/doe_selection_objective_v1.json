@@ -1,0 +1,35 @@
+{
+  "version": "v1",
+  "strict_completeness": true,
+  "thresholds": {
+    "min_winner_changes_post_burnin": 3.0,
+    "min_winner_change_rate_post_burnin": 0.01,
+    "max_winner_change_rate_post_burnin": 0.80,
+    "min_winner_entropy_norm": 0.25,
+    "min_competitive_step_share": 0.05,
+    "puzzle_conflict_min_dist": 0.33,
+    "min_puzzle_conflict_step_share_for_gate": 0.2,
+    "max_puzzle_dominance_share_conflict": 0.95,
+    "min_power_recovery_share_conflict": 0.02,
+    "puzzle_dominance_share_score_low": 0.65,
+    "puzzle_dominance_share_score_high": 0.9,
+    "turnout_start_score_low": 30.0,
+    "turnout_start_score_high": 70.0,
+    "turnout_end_score_low": 20.0,
+    "turnout_end_score_high": 80.0,
+    "turnout_drop_score_good_max": 15.0,
+    "turnout_drop_score_zero_at": 60.0,
+    "turnout_decline_score_good_max": 0.08,
+    "turnout_decline_score_zero_at": 0.5,
+    "turnout_outside_band_share_good_max": 0.2,
+    "turnout_outside_band_share_zero_at": 0.8
+  },
+  "weights": {
+    "quality_mean": 0.70,
+    "seed_robustness": 0.3
+  },
+  "stage_weights": {
+    "viability": 0.6,
+    "quality_bundle": 0.4
+  }
+}
