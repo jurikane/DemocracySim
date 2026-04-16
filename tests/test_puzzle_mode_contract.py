@@ -152,7 +152,7 @@ def test_puzzle_quality_gate_switch_changes_reward_sign_path() -> None:
     a_reality._distribute_rewards()
     a_puzzle._distribute_rewards()
 
-    # Same personality group as elected ordering:
+    # Same personality (preference) group as elected ordering:
     # reality "bad" => reward factor 0 => no reward
     assert float(tracked_reality.reward_personal) == pytest.approx(0.0, abs=1e-10)
     # puzzle "good" => full positive reward

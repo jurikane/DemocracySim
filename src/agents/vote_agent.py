@@ -79,7 +79,7 @@ class VoteAgent(Agent):
             model: The simulation model of which the agent is part of.
             pos (int, int): The position of the agent in the grid (col, row).
             personality_group: Represents the agent's preferences among colors.
-            personality_group_idx: Index of personality group in model's personality_groups list.
+            personality_group_idx: Index of personality (preference) group in model's personality_groups list.
             assets: The wealth/assets/motivation of the agent.
             add: Whether to add the agent to the model's agent list and cell.
         """
@@ -438,11 +438,7 @@ class VoteAgent(Agent):
         self.q_participation = q
 
     def apply_participation_update(self, participation_signal: float) -> None:
-        """Legacy action-reinforcement wrapper for direct signal updates.
-
-        This wrapper preserves test and compatibility behavior for callers
-        that still pass a raw participation signal.
-        """
+        """Apply a direct signed participation signal."""
         sign = 1.0 if self._participating else -1.0
         self.apply_participation_q_push(sign * participation_signal)
 

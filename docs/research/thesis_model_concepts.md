@@ -5,16 +5,16 @@ It is intentionally narrative and causal (not only metric/schema focused).
 
 Related technical references:
 
-- `docs/research/thesis_contract.md`
-- `docs/research/thesis_measurement_spec.md`
+- [docs/research/thesis_contract.md](thesis_contract.md)
+- [docs/research/thesis_measurement_spec.md](thesis_measurement_spec.md)
 
 Detailed concept notes:
 
-- `docs/research/grid_state_concept.md`
-- `docs/research/puzzle_quality_gate_concept.md`
-- `docs/research/satisfaction_altruistic_voting_concept.md`
-- `docs/research/participation_dilemma_and_group_learning_concept.md`
-- `docs/research/dynamics_rule_interaction_concept.md`
+- [docs/research/grid_state_concept.md](grid_state_concept.md)
+- [docs/research/puzzle_quality_gate_concept.md](puzzle_quality_gate_concept.md)
+- [docs/research/satisfaction_altruistic_voting_concept.md](satisfaction_altruistic_voting_concept.md)
+- [docs/research/participation_dilemma_and_group_learning_concept.md](participation_dilemma_and_group_learning_concept.md)
+- [docs/research/dynamics_rule_interaction_concept.md](dynamics_rule_interaction_concept.md)
 
 ## 1. Core Purpose
 

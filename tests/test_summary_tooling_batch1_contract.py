@@ -10,8 +10,8 @@ import pytest
 import yaml
 
 from scripts.run_headless import run_once
-from src.analysis.thesis_endpoints import step_volatility_l1_normalized
 from src.analysis.summary_tooling import generate_run_summary_batch1
+from src.analysis.summary_stats import step_volatility_l1_normalized
 from src.config.loader import load_config
 from src.utils.metrics import gini_index_0_100
 

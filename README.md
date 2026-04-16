@@ -9,7 +9,7 @@ DemocracySim is a Mesa-based research platform for studying how voting rules sha
 participation, inequality, and collective outcomes in a dynamic multi-agent
 environment.
 
-The project started as a master's thesis and continues as the public branch for
+The project started as a master's thesis and is kept and maintained for
 further experiments and development. The thesis freeze is kept separately on
 branch `thesis`.
 
@@ -27,7 +27,7 @@ group at [Leipzig University](https://www.uni-leipzig.de/en).
 
 Documentation:
 
-- [Project docs on GitHub Pages](https://jurikane.github.io/DemocracySim/)
+- [Project docs](https://jurikane.github.io/DemocracySim/)
 - [Technical overview](docs/technical/technical_overview.md)
 - [Voting rules](docs/technical/voting_rules.md)
 
@@ -44,20 +44,46 @@ pip install -r requirements.txt
 Run the interactive Mesa server:
 
 ```bash
-python -m scripts.run --config configs/default.yaml
+python -m scripts.run
 ```
 
 Run a headless batch from the default config:
 
 ```bash
-python -m scripts.run_headless --config configs/default.yaml
+python -m scripts.run_headless
 ```
 
-Replay an existing stored run:
+Find and replay existing runs:
 
 ```bash
-python -m scripts.run_replay <run_dir>
+python -m scripts.run_replay
 ```
+
+
+## Try the Demo
+
+![DemocracySim demo teaser](docs/images/demo/demo_teaser.gif)
+
+Generate a tiny deterministic demo run:
+
+```bash
+python -m scripts.run_headless --config configs/demo.yaml --out-root tmp/demo_gif_run
+```
+
+Replay it locally:
+
+```bash
+python -m scripts.run_replay tmp/demo_gif_run/run_0
+```
+
+Or run a live demo without seed:
+
+```bash
+python -m scripts.run --config configs/demo.yaml
+```
+
+For a more general walkthrough and UI explanation, see
+[the demo guide](docs/technical/demo.md).
 
 ## What This Repository Contains
 
@@ -90,18 +116,5 @@ Core ingredients:
 
 The thesis focuses on a controlled subset of this broader framework. It compares
 how different voting rules affect turnout and inequality under fixed model
-assumptions.
+assumptions. Details can be found in the thesis branch and the associated documentation.
 
-The public `main` branch keeps that context visible, but it is not the archival
-freeze or the university hand-in branch. It should remain useful for further
-experiments, cleanup, and public exploration of the project.
-
-## Out of Scope for the Thesis
-
-- strategic voting equilibria
-- empirical calibration to real election data
-- policy recommendations
-- claims about globally optimal democratic design
-
-These remain possible directions for future work rather than claims made by the
-thesis itself.

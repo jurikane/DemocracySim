@@ -9,7 +9,7 @@ from src.viz.debug_viz import CohortElectionLearningDiagnostics
 def test_live_cohort_election_learning_diagnostics_renders_and_is_finite() -> None:
     """Minimal gate:
 
-    - create model with >1 personality group
+    - create model with >1 personality (preference) group
     - step twice
     - element renders a base64 image
     - computed cohort arrays are non-empty and finite (NaNs allowed for empty buckets,

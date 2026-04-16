@@ -9,7 +9,6 @@ from src.analysis.doe_scoring import analyze_doe_root
 from src.analysis.summary_tooling import (
     SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
     SUMMARY_PROFILE_FULL,
-    SUMMARY_PROFILE_THESIS_CORE,
 )
 
 
@@ -50,7 +49,7 @@ def main() -> None:
     parser.add_argument(
         "--objective-config",
         type=Path,
-        default=Path("configs") / "doe_selection_objective_thesis_v1.json",
+        default=Path("configs") / "doe_selection_objective_v1.json",
         help="Selection objective JSON (thresholds/weights/stage-weights/strict-completeness).",
     )
     parser.add_argument(
@@ -83,7 +82,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--bundle-summary-profile",
-        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT, SUMMARY_PROFILE_THESIS_CORE),
+        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT),
         default=SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
         help="Summary profile used for per-run PDFs in review bundle.",
     )

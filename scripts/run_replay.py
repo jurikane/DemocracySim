@@ -13,7 +13,6 @@ from typing import Optional, Sequence
 from pydantic import ValidationError
 import yaml
 
-from src.config.loader import get_project_root
 from src.config.schema import AppConfig
 from src.replay.replay_server import make_replay_server
 from src.utils.run_path_picker import (
@@ -22,17 +21,10 @@ from src.utils.run_path_picker import (
     resolve_run_dir,
 )
 
-DEMO_RUN_DIR = get_project_root() / "examples" / "demo_runs" / "approval_sparse_v1" / "run_0"
-
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Replay a stored DemocracySim run")
     parser.add_argument("run_dir", nargs="?", help="Path to a run directory")
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Replay the bundled public demo run",
-    )
     parser.add_argument(
         "--no-browser",
         action="store_true",
@@ -41,9 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_requested_run_dir(run_dir_arg: Optional[str], *, use_demo: bool) -> Optional[Path]:
-    if use_demo:
-        return DEMO_RUN_DIR
+def _resolve_requested_run_dir(run_dir_arg: Optional[str]) -> Optional[Path]:
     if run_dir_arg is None:
         run_dir = pick_run_dir_interactive(action_label="replay")
         return run_dir
@@ -53,10 +43,7 @@ def _resolve_requested_run_dir(run_dir_arg: Optional[str], *, use_demo: bool) ->
 def replay_main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
-    if args.demo and args.run_dir is not None:
-        parser.error("argument --demo: not allowed with a run_dir")
-
-    run_dir = _resolve_requested_run_dir(args.run_dir, use_demo=bool(args.demo))
+    run_dir = _resolve_requested_run_dir(args.run_dir)
     if run_dir is None:
         parser.print_usage()
         return 1

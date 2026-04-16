@@ -5,9 +5,9 @@ How do different voting rules influence the temporal evolution of participation 
 
 Related documents:
 
-- `docs/research/thesis_measurement_spec.md`
-- `docs/research/metric_glossary.md`
-- `docs/research/thesis_model_concepts.md`
+- [docs/research/thesis_measurement_spec.md](thesis_measurement_spec.md)
+- [docs/research/metric_glossary.md](metric_glossary.md)
+- [docs/research/thesis_model_concepts.md](thesis_model_concepts.md)
 
 ## 1. Scientific Scope
 
@@ -22,10 +22,12 @@ Baseline family:
 - `quality_target_mode = puzzle`
 - `participation_signal_mode = group_relative_delta_rel_party`
 - `altruism_mode = satisfaction`
+
 - satisfaction-response parameters:
-  - `altruism_satisfaction_theta`
-  - `altruism_satisfaction_slope`
-  - `altruism_response_gamma`
+
+     - `altruism_satisfaction_theta`
+     - `altruism_satisfaction_slope`
+     - `altruism_response_gamma`
 
 Implemented voting-rule mapping (`rule_idx`):
 
@@ -55,7 +57,7 @@ Primary outcome families are evaluated as time-series and run-level summaries:
 
 Interpretation note:
 
-- `assets` denotes simulation resource/capacity state, not literal income.
+- `assets` denotes simulation resource/capacity state, not necessarily currency.
 
 ## 5. Secondary Descriptive Analyses
 

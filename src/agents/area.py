@@ -245,7 +245,7 @@ class Area(Agent):
 
     def _update_personality_group_distribution(self) -> None:
         """
-        This method calculates the areas current distribution of personality groups.
+        This method calculates the areas current distribution of personality (preference) groups.
         """
         counts = [0] * self.model.num_personality_groups
         for agent in self.agents:

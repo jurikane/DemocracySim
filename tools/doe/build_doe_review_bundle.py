@@ -7,7 +7,6 @@ from src.analysis.doe_review_bundle import build_doe_review_bundle
 from src.analysis.summary_tooling import (
     SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
     SUMMARY_PROFILE_FULL,
-    SUMMARY_PROFILE_THESIS_CORE,
 )
 
 
@@ -27,7 +26,7 @@ def main() -> None:
     parser.add_argument("--rule-name", type=str, default="approval", help="Rule used to select representative runs.")
     parser.add_argument(
         "--summary-profile",
-        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT, SUMMARY_PROFILE_THESIS_CORE),
+        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT),
         default=SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
         help="Summary profile used for run PDFs in the bundle.",
     )

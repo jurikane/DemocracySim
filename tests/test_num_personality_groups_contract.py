@@ -37,7 +37,7 @@ def test_num_personality_groups_oracle_shape_and_uniqueness():
     assert groups.shape == (n, int(model.num_colors))
     assert len(set(map(tuple, groups.tolist()))) == n
 
-    # Each personality group must be a valid permutation of color ids.
+    # Each personality (preference) group must be a valid permutation of color ids.
     expected = list(range(int(model.num_colors)))
     for row in groups:
         assert sorted(row.tolist()) == expected

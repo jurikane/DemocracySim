@@ -5,6 +5,7 @@ import pytest
 from src.config.loader import load_config
 from scripts.run_headless import run_once
 from src.replay.replay_server import ReplayModel
+from src.viz.visualization_elements import MainMetricsElement
 
 
 @pytest.fixture()
@@ -24,7 +25,7 @@ def v2_run_dir(tmp_path):
 
 
 def test_replay_has_personality_group_info_for_plots(v2_run_dir):
-    """Guardrail: replay v2 must expose personality group metadata for plots.
+    """Guardrail: replay v2 must expose personality (preference) group metadata for plots.
 
     This catches static.json key mismatches (e.g. writing personality_info instead
     of personality_group_info).
@@ -33,18 +34,29 @@ def test_replay_has_personality_group_info_for_plots(v2_run_dir):
     model = ReplayModel(appcfg=appcfg, run_dir=v2_run_dir)
 
     # Create-once plots are rendered at scheduler.steps == 0.
-    assert getattr(model.scheduler, "steps", 0) == 0
+    assert model.scheduler.steps == 0
 
-    # Global personality group distribution plot needs these.
-    assert getattr(model, "personality_groups", None) is not None
-    assert getattr(model, "personality_groups").size > 0, "ReplayModel.personality_groups empty"
+    # Global personality (preference) group distribution plot needs these.
+    assert model.personality_groups.size > 0, "ReplayModel.personality_groups empty"
 
-    pgd = getattr(model, "personality_group_distribution", None)
+    pgd = model.personality_group_distribution
     assert pgd is not None, "ReplayModel.personality_group_distribution missing"
-    assert len(pgd) == getattr(model, "personality_groups").shape[0]
+    assert len(pgd) == model.personality_groups.shape[0]
 
     # Area stubs should exist and carry per-area distributions (even if zeros).
-    assert getattr(model, "areas", None)
+    assert model.areas
     for area in model.areas:
-        dist = getattr(area, "personality_group_distribution", None)
-        assert dist is not None, f"Area {getattr(area, 'unique_id', '?')} missing personality_group_distribution"
+        dist = area.personality_group_distribution
+        assert dist is not None, f"Area {area.unique_id} missing personality_group_distribution"
+
+
+def test_replay_main_metrics_panel_renders_after_first_recorded_step(v2_run_dir) -> None:
+    appcfg = load_config("configs/toy.yaml")
+    model = ReplayModel(appcfg=appcfg, run_dir=v2_run_dir)
+
+    model.step()
+    html = MainMetricsElement().render(model)
+
+    assert "Turnout" in html
+    assert "Inequality" in html
+    assert "Outcome quality" in html

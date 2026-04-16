@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,8 +18,11 @@ from src.analysis.summary_render_area import (
     _sim_color,
 )
 from src.analysis.summary_render_common import _adjacent_abs_change_series, _rolling_mean_nan, _set_percent_ylim_visible, _set_unit_ylim_visible
-from src.analysis.thesis_endpoints import step_volatility_l1_normalized
+from src.analysis.summary_stats import step_volatility_l1_normalized
 from src.viz.color_palette import get_group_color
+
+if TYPE_CHECKING:
+    from src.analysis.summary_tooling import _SummaryRenderProfile
 
 _SMOOTH_WINDOW_STEPS = 9
 
@@ -158,7 +161,7 @@ def _append_static_overview_pages(*, pdf: PdfPages, static: dict[str, Any], meta
             )
     else:
         ax_global.text(0.5, 0.5, "No global group metadata", ha="center", va="center")
-    ax_global.set_title("Personality Groups with their Global Shares")
+    ax_global.set_title("Preference Groups with their Global Shares")
     ax_global.set_yticks([])
     ax_global.set_ylabel("")
     ax_global.grid(True, axis="y", alpha=0.25)
@@ -357,7 +360,7 @@ def _append_per_area_group_distribution_pages(*, pdf: PdfPages, static: dict[str
             ax.grid(True, axis="y", alpha=0.25)
 
         fig.suptitle(
-            f"Per-Area Personality Group Distributions | run_seed={run_seed} | rule={rule_name} | page {p + 1}/{n_pages}",
+            f"Per-Area Preference Group Distributions | run_seed={run_seed} | rule={rule_name} | page {p + 1}/{n_pages}",
             fontsize=11,
         )
         fig.tight_layout()

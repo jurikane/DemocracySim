@@ -15,11 +15,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from src.analysis.summary_tooling import (
-    SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
-    _draw_area_personality_group_distribution,
-    generate_run_summary_batch2,
-)
+from src.analysis.summary_render_area import _draw_area_personality_group_distribution
+from src.analysis.summary_tooling import SUMMARY_PROFILE_DEBUG_DOE_COMPACT, generate_run_summary_batch2
 
 
 DEFAULT_BUNDLE_DIRNAME = "doe_score_output"
@@ -272,7 +269,7 @@ def _render_run_overview_pdf(
         personality_groups=personality_groups,
         num_colors=int(num_colors),
     )
-    ax_pg_global.set_title("Personality Group Dists (global)")
+    ax_pg_global.set_title("Preference Group Dists (global)")
 
     if area_dist_map:
         area_candidates = []
@@ -292,7 +289,7 @@ def _render_run_overview_pdf(
                 personality_groups=personality_groups,
                 num_colors=int(num_colors),
             )
-            ax_pg_area.set_title(f"Personality Group Dists (area {area_id}, n={area_n})")
+            ax_pg_area.set_title(f"Preference Group Dists (area {area_id}, n={area_n})")
         else:
             ax_pg_area.axis("off")
             ax_pg_area.text(0.5, 0.5, "No area group distribution metadata", ha="center", va="center")
@@ -565,10 +562,6 @@ def build_doe_review_bundle(
         "bundle_raw_packet_dir",
         "bundle_overview_pdf",
         "bundle_used_fallback_scores",
-        "ai_interpretation",
-        "human_feedback",
-        "human_verdict",
-        "adjustment_hint",
     ]
     packet_rows: list[dict[str, Any]] = []
 
@@ -655,15 +648,11 @@ def build_doe_review_bundle(
                     "bundle_raw_packet_dir": str(raw_packet_dir),
                     "bundle_overview_pdf": str(run_overview_pdf),
                     "bundle_used_fallback_scores": False,
-                    "ai_interpretation": "",
-                    "human_feedback": "",
-                    "human_verdict": "",
-                    "adjustment_hint": "",
                 }
             )
             packet_rows.append(packet_meta)
 
-    queue_csv = bundle_root / "doe_hil_queue_v2.csv"
+    queue_csv = bundle_root / "doe_review_queue.csv"
     pd.DataFrame(queue_rows, columns=queue_cols).to_csv(queue_csv, index=False)
     bucket_manifest_csv = raw_dir / "bundle_packets.csv"
     pd.DataFrame(packet_rows).to_csv(bucket_manifest_csv, index=False)

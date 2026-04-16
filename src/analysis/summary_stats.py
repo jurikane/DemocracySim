@@ -5,7 +5,34 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.analysis.thesis_endpoints import step_volatility_l1_normalized, time_mean
+
+def time_mean(values: np.ndarray | list[float]) -> float:
+    arr = np.asarray(values, dtype=float).ravel()
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float("nan")
+    return float(finite.mean())
+
+
+def step_volatility_l1_normalized(
+    values: np.ndarray | list[float],
+    *,
+    value_range: float,
+) -> float:
+    if not np.isfinite(value_range) or value_range <= 0.0:
+        raise ValueError("value_range must be finite and > 0.")
+
+    arr = np.asarray(values, dtype=float).ravel()
+    if arr.size < 2:
+        return float("nan")
+
+    left = arr[:-1]
+    right = arr[1:]
+    valid = np.isfinite(left) & np.isfinite(right)
+    if not valid.any():
+        return float("nan")
+
+    return float(np.abs(right[valid] - left[valid]).mean() / value_range)
 
 def _build_summary_stats(
     *,

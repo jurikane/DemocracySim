@@ -454,7 +454,7 @@ class RunLogger:
         if total <= 0.0:
             raise RuntimeError(f"Invalid model.global_color_dst values at step {step}: sum must be > 0.")
 
-        # Normalize defensively to keep a valid distribution even under tiny drift.
+        # Normalize to absorb tiny floating-point drift.
         return (vals / total).astype(np.float32)
 
     def _extract_area_steps_rows(self, step: int, model: Model) -> List[Dict[str, Any]]:

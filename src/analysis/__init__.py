@@ -1,2 +1,1 @@
-"""Analysis helpers for post-run thesis summaries."""
-
+"""Analysis helpers for post-run summaries and DOE evaluation."""

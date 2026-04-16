@@ -25,16 +25,13 @@ __pycache__/
 .venv/
 venv/
 env/
-ENV/
 .python-version
 pip-log.txt
-pip-delete-this-directory.txt
 
 # Coverage / reports / caches
 .coverage
 .coverage.*
 .cache/
-htmlcov/
 coverage.xml
 *.cover
 *.py,cover
@@ -44,50 +41,22 @@ pytestdebug.log
 # Logs / temp
 logs/
 *.log
-*.log.*
 *.tmp
 tmp/
-temp/
-tmp_check_smoke/
 
 # Jupyter
 *.ipynb
 
-# C extensions
-*.so
-
-# Node / JS
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-.webpack-cache/
-.parcel-cache/
-
 # MkDocs
 site/
-# Keep docs source images versioned; ignore local concept art batches.
-docs/images/CI-images/
 
 # Project data and artifacts
 data/
 !data/.gitkeep
 
-# Generated simulation/analysis artifacts must stay untracked.
-# Use data/simulation_output/ for persistent local runs.
-# Use tmp_check_smoke/ only for ephemeral smoke checks.
-
 # Configs
-# Keep only curated runtime/public configs in git.
 configs/*.yaml
 !configs/default.yaml
 !configs/doe.yaml
 !configs/toy.yaml
-
-# Local env and secrets
-.env
-.env.*
-*.env
-*.secrets
-secrets/
+!configs/demo.yaml

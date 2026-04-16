@@ -1,23 +1,25 @@
 # Demo
 
-This page is the fastest way to experience DemocracySim from the public branch.
+This is the quickest local path into DemocracySim. The demo config is small
+enough to run in seconds, but still shows the main feedback loop between
+elections, participation, inequality, and changing grid conditions.
 
-## What The Bundled Demo Shows
+![DemocracySim demo teaser](../images/demo/demo_teaser.gif)
 
-The bundled demo is a tiny replayable Approval run with:
+## Demo Config
 
+[configs/demo.yaml](https://github.com/jurikane/DemocracySim/blob/main/configs/demo.yaml)
+uses a compact setup:
+
+- 50 agents
 - 4 colors
-- 4 areas
-- 60 agents
-- puzzle-based quality tracking
-- full schema-v2 replay data
+- 4 preference groups
+- 2 areas
+- one headless run with replay output
 
-It is intentionally small so it works from a fresh clone without thesis data,
-DOE bundles, or long preprocessing steps.
+## Generate And Replay
 
-## Launch The Bundled Replay
-
-Create a local environment and install the project once:
+Create a local environment once:
 
 ```bash
 python -m venv .venv
@@ -25,53 +27,59 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optional faster setup with `uv`:
+Generate a demo run:
 
 ```bash
-uv venv --python 3.11 .venv
-source .venv/bin/activate
-uv pip sync requirements.txt
+python -m scripts.run_headless --config configs/demo.yaml --out-root tmp/demo_gif_run
 ```
 
-Start the public demo replay:
+Replay the stored run:
 
 ```bash
-python -m scripts.run_replay --demo
+python -m scripts.run_replay tmp/demo_gif_run/run_0
 ```
 
-For smoke checks or presentation fallback setups without an auto-opened tab:
+Or start an un-seeded live demo:
 
 ```bash
-python -m scripts.run_replay --demo --no-browser
+python -m scripts.run --config configs/demo.yaml
 ```
 
-## What To Look At In The Replay
+## What To Look At
 
-- The grid shows the current election-time world state.
-- Area panels expose turnout, quality distance, and the elected ordering.
-- The replay is deterministic because it reuses recorded schema-v2 outputs.
-- The bundled run is small enough to inspect quickly, but still shows the core
-  feedback loop between voting, participation, and evolving local conditions.
+The grid is the current election-time world state. It is not static: collective
+decisions influence later mutation, so the grid stores part of the system's
+history.
+
+The main plots to watch are:
+
+- turnout
+- asset inequality and dissatisfaction inequality
+- outcome quality and group distance to the elected outcome
+
+For the quality measure used here, see
+[Puzzle Quality Gate](../research/puzzle_quality_gate_concept.md).
+
+![DemocracySim demo preview](../images/demo/demo_view_step_215.webp)
 
 ## Replay Your Own Run
 
-After generating a run locally, replay it with:
+Replay is deterministic because it reads recorded run artifacts rather than
+resimulating the model.
+Replay any stored run with:
 
 ```bash
 python -m scripts.run_replay <run_dir>
 ```
 
-If you want summary PDFs and CSV sidecars for that run as well:
+Or search for runs interactively in `data/`:
+
+```bash
+python -m scripts.run_replay
+```
+
+Generate summary artifacts for a stored run:
 
 ```bash
 python -m scripts.generate_summary --run-dir <run_dir>
 ```
-
-## Demo Asset
-
-The bundled asset lives in:
-
-`examples/demo_runs/approval_sparse_v1/run_0`
-
-It is a curated public demo package, not a thesis freeze artifact and not a
-benchmark reference bundle.

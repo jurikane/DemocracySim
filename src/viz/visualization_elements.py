@@ -392,7 +392,7 @@ class AreaPersonalityGroupDists(TextElement):
                                              color=colors[color_idx])
                     ax.add_patch(rect)
 
-            ax.set_xlabel('"Personality Group" ID')
+            ax.set_xlabel('"Preference Group" ID')
             ax.set_ylabel('Number of Agents')
             ax.set_title(f'Area {area.unique_id}')
 

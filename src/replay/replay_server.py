@@ -620,6 +620,10 @@ class ReplayModel(mesa.Model):
         return len(self.voting_agents)
 
     @property
+    def num_personality_groups(self) -> int:
+        return len(self.personality_groups)
+
+    @property
     def num_colors(self) -> int:
         return self._num_colors
 

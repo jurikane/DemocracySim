@@ -40,7 +40,7 @@ def test_output_directory_integration_batch_run_writes_to_configured_location(tm
         assert (run_dir / artifact).exists(), artifact
 
 
-def test_schema_coverage_thesis_fields_exist_in_logged_tables(tmp_path: Path) -> None:
+def test_schema_coverage_public_logged_fields_exist_in_logged_tables(tmp_path: Path) -> None:
     cfg = load_config("toy.yaml").model_copy(deep=True)
     cfg.simulation.num_steps = 2
     cfg.simulation.store_grid = False

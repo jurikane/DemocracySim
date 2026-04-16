@@ -128,9 +128,9 @@ class ParticipationModel(mesa.Model):
             Initialized during the model setup.
         voting_agents (list[VoteAgent]): List of all voting agents.
             Initialized during the model setup.
-        personality_groups (list): List of personality groups available for agents.
+        personality_groups (list): List of personality (preference) groups available for agents.
         personality_group_distribution (ndarray): The (global) probability
-            distribution of personality groups among all agents.
+            distribution of personality (preference) groups among all agents.
         areas (list[Area]): List of areas (regions or territories within the
             grid) in which elections take place. Initialized during model setup.
         global_area (Area): The area encompassing the entire grid.
@@ -781,7 +781,7 @@ class ParticipationModel(mesa.Model):
         standing on.
         Args:
             id_start (int): The starting ID for agents to ensure unique IDs.
-            intended_dst (np.ndarray): The intended distribution of personality groups.
+            intended_dst (np.ndarray): The intended distribution of personality (preference) groups.
         """
         # Testing parameter validity
         if self.num_agents < 1:

@@ -64,7 +64,7 @@ def _assert_runs_identical(out_a: Path, out_b: Path, *, pad: int) -> None:
 
 
 def test_headless_same_seed_produces_identical_first_steps(tmp_path: Path):
-    """Critical determinism check for thesis runs.
+    """Critical determinism check for logged runs.
 
     Contract (schema v2): with same config + run_id (=> same run_seed), the first few
     logged artifacts should be identical in meaning.

@@ -1,10 +1,11 @@
-# Output schema v2
+# Output schema v3
 
-**Schema name:** `output_schema_v2`  
-**Schema version:** `2`  
+**Schema name:** `output_schema_v3`  
 **Step indexing meaning:** `post_election_pre_mutation`
 
-This document is the human-readable contract for the on-disk outputs produced by headless batch runs.
+The output schema defines the on-disk outputs produced by headless batch runs.
+Replay remains backward-compatible with both schema `v2` and schema `v3`, but
+the active writer contract is `v3`.
 
 ## Specification
 
@@ -26,12 +27,12 @@ Per run directory (e.g. `.../data/simulation_output/<ts>/run_<i>/`):
   - `grid_000` (pre-election convenience snapshot) is written only when `store_grid=true`
   - additional sparse snapshots follow `store_grid` + `grid_interval`
 
-Legacy replay-side `.npy` overlays (`area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`) are not required artifacts for current schema-v2 headless runs.
+Legacy replay-side `.npy` overlays (`area_borders.npy`, `agents_per_cell.npy`, `area_strings_per_cell.npy`, `agent_strings_per_cell.npy`) are not required artifacts for current schema-v3 headless runs.
 
 ### Voting rule identification (reproducibility)
 
-The *primary independent variable* for the thesis experiments is `rule_idx`.
-To make `rule_idx` unambiguous across code changes, schema v2 stores:
+For rule-comparison runs, `rule_idx` is the canonical voting-rule selector.
+To make `rule_idx` unambiguous across code changes, schema v3 stores:
 
 - `meta.yaml`: `run.rule_idx`, `run.rule_name`, `run.rule_impl_name`
 - `static.json`: `voting_rules.names`, `voting_rules.impl_names`, plus the selected index/name

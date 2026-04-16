@@ -4,12 +4,12 @@ This folder contains non-core CLI utilities used for analysis, diagnostics, and 
 
 ## Boundary
 
-- Use `scripts/` for stable, thesis-facing pipeline entrypoints (`run_doe`, `score_doe`, `generate_summary`, etc.).
+- Use `scripts/` for stable pipeline entrypoints (`run_doe`, `score_doe`, `generate_summary`, etc.).
 - Use `tools/` for helper workflows that support exploration, validation, and debugging.
 
 ## Subfolders
 
-- `tools/doe/`: DOE helper utilities (HIL queues/review, probing, recovery scans, seed tooling, sanity matrix).
+- `tools/doe/`: DOE helper utilities (review bundles, probing, seed tooling, sanity matrix, inference).
 
 ## Stability
 

@@ -15,9 +15,21 @@ class _DummyServer:
         self.open_browser = bool(open_browser)
 
 
-def test_demo_flag_uses_bundled_demo_run(monkeypatch: pytest.MonkeyPatch) -> None:
+def _write_fake_run_dir(tmp_path: Path) -> Path:
+    run_dir = tmp_path / "run_0"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "meta.yaml").write_text("config_ref: cfg.yaml\n", encoding="utf-8")
+    (run_dir / "cfg.yaml").write_text("{}\n", encoding="utf-8")
+    return run_dir
+
+
+def test_explicit_run_dir_launches_with_browser_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     server = _DummyServer()
     called: dict[str, object] = {}
+    run_dir = _write_fake_run_dir(tmp_path)
 
     monkeypatch.setattr(run_replay.AppConfig, "model_validate", staticmethod(lambda cfg: cfg))
     monkeypatch.setattr(run_replay, "normalize_selected_run_dir", lambda run_dir, *, action_label: run_dir)
@@ -28,33 +40,41 @@ def test_demo_flag_uses_bundled_demo_run(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(run_replay, "make_replay_server", _capture_make_server)
 
-    rc = run_replay.replay_main(["--demo", "--no-browser"])
+    rc = run_replay.replay_main([str(run_dir)])
 
     assert rc == 0
-    assert called["run_dir"] == run_replay.DEMO_RUN_DIR
-    assert server.open_browser is False
-
-
-def test_explicit_run_dir_launches_with_browser_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    server = _DummyServer()
-    called: dict[str, object] = {}
-
-    monkeypatch.setattr(run_replay, "normalize_selected_run_dir", lambda run_dir, *, action_label: run_dir)
-    monkeypatch.setattr(run_replay.AppConfig, "model_validate", staticmethod(lambda cfg: cfg))
-
-    def _capture_make_server(appcfg, run_dir):
-        called["run_dir"] = Path(run_dir)
-        return server
-
-    monkeypatch.setattr(run_replay, "make_replay_server", _capture_make_server)
-
-    rc = run_replay.replay_main([str(run_replay.DEMO_RUN_DIR)])
-
-    assert rc == 0
-    assert called["run_dir"] == run_replay.DEMO_RUN_DIR
+    assert called["run_dir"] == run_dir
     assert server.open_browser is True
 
 
-def test_demo_and_run_dir_are_mutually_exclusive() -> None:
-    with pytest.raises(SystemExit):
-        run_replay.replay_main(["--demo", str(run_replay.DEMO_RUN_DIR)])
+def test_interactive_picker_launches_selected_run_without_browser(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    server = _DummyServer()
+    called: dict[str, object] = {}
+    run_dir = _write_fake_run_dir(tmp_path)
+
+    monkeypatch.setattr(run_replay, "pick_run_dir_interactive", lambda *, action_label: run_dir)
+    monkeypatch.setattr(run_replay.AppConfig, "model_validate", staticmethod(lambda cfg: cfg))
+    monkeypatch.setattr(run_replay, "normalize_selected_run_dir", lambda run_dir, *, action_label: run_dir)
+
+    def _capture_make_server(appcfg, run_dir):
+        called["run_dir"] = Path(run_dir)
+        return server
+
+    monkeypatch.setattr(run_replay, "make_replay_server", _capture_make_server)
+
+    rc = run_replay.replay_main(["--no-browser"])
+
+    assert rc == 0
+    assert called["run_dir"] == run_dir
+    assert server.open_browser is False
+
+
+def test_no_selection_returns_nonzero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(run_replay, "pick_run_dir_interactive", lambda *, action_label: None)
+
+    rc = run_replay.replay_main([])
+
+    assert rc == 1

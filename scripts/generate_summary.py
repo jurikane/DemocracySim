@@ -9,7 +9,6 @@ from src.analysis.summary_tooling import (
     generate_run_summary_batch2,
     SUMMARY_PROFILE_FULL,
     SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
-    SUMMARY_PROFILE_THESIS_CORE,
 )
 from src.utils.run_path_picker import (
     normalize_selected_run_dir,
@@ -20,7 +19,7 @@ from src.utils.run_path_picker import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate thesis summary sidecars + run-level PDFs from one run directory."
+        description="Generate summary sidecars and run-level PDFs from one run directory."
     )
     parser.add_argument("--run-dir", type=str, default=None, help="Path to a single run directory")
     parser.add_argument(
@@ -47,13 +46,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--profile",
-        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT, SUMMARY_PROFILE_THESIS_CORE),
+        choices=(SUMMARY_PROFILE_FULL, SUMMARY_PROFILE_DEBUG_DOE_COMPACT),
         default=SUMMARY_PROFILE_FULL,
         help=(
             "Summary render profile: "
             "'full' keeps all pages, "
-            "'debug_doe_compact' keeps DOE review pages, "
-            "'thesis_core' currently aliases full."
+            "'debug_doe_compact' keeps DOE review pages."
         ),
     )
     args = parser.parse_args()

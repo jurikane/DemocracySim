@@ -1,37 +1,36 @@
 model:
-  # seed: 10  # (optional)
-  num_agents: 200
+  # seed: 42  # Run SEED (optional)
+  num_agents: 50
   num_colors: 4
-  rule_idx: 1  # Voting rule
-  distance_idx: 0  # Distance metric
+  rule_idx: 1
+  distance_idx: 0
   election_impact_on_mutation: 1.5
-  mu: 0.1  # Mutation rate
+  mu: 0.1
 
   # Elections
   election_cost_rate: 0.01  # As fraction of common assets
   reward_rate_personal: 0.02
-  break_even_distance_common: 0.4 # Quality threshold for the puzzle
+  break_even_distance_common: 0.4 # Quality threshold for the mode-aware quality_distance gate
   quality_target_mode: puzzle
   puzzle_local_kappa: 90.0
   puzzle_shock_prob: 0.05
 
   # Voting Agents
   num_personality_groups: 4
-  known_cells: 10
+  known_cells: 3
 
   # Grid parameters
-  height: 40
-  width: 100
+  height: 10
+  width: 50
   color_patches_steps: 3
   patch_power: 1.0
   heterogeneity: 0.3
 
   # Voting Areas
-  num_areas: 4
-  av_area_height: 20
-  av_area_width: 50
+  num_areas: 2
+  av_area_height: 10
+  av_area_width: 25
   area_size_variance: 0.0
-  initial_agent_assets: 100
 
   # Adaptive participation learning
   participation_alpha: 0.1
@@ -69,7 +68,7 @@ model:
   satisfaction_baseline_alpha: 0.1
 
 visualization:
-  cell_size: 9
+  cell_size: 17
   draw_borders: true
   show_area_stats: false
   calibration_mode: false
@@ -80,8 +79,8 @@ visualization:
   agent_debug_max_field_len: 180
 
 simulation:  # Config for headless runs
-  runs: 3
-  num_steps: 250
+  runs: 1
+  num_steps: 150
   store_grid: true
   grid_interval: 1
-  base_seed: 10  # Determines model seeds per run
+  base_seed: 0  # Determines model seeds per run

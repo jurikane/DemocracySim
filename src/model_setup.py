@@ -114,7 +114,7 @@ def build_model_params(model_cfg: ModelConfig) -> dict:
     # Add the rest of the params (except seed, which is optional) as sliders
     params.update({
         "rule_idx": mesa.visualization.Slider(
-            name=f"Rule [{', '.join(social_welfare_function_short_names)}]",
+            name=f"[{', '.join(social_welfare_function_short_names)}]",
             value=model_cfg.rule_idx,
             min_value=0,
             max_value=len(social_welfare_functions) - 1,

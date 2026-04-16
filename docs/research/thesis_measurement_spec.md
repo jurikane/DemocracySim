@@ -3,8 +3,8 @@
 This document defines how thesis metrics are computed and interpreted.
 It is coupled with:
 
-- `docs/research/thesis_contract.md`
-- `docs/research/metric_glossary.md`
+- [docs/research/thesis_contract.md](thesis_contract.md)
+- [docs/research/metric_glossary.md](metric_glossary.md)
 
 ## Specification
 

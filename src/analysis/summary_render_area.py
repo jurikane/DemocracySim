@@ -1870,10 +1870,10 @@ def _build_elected_ordering_background_image(
     return rgba
 
 def _draw_personality_group_order_block(*, ax, personality_groups: np.ndarray, num_colors: int) -> None:
-    ax.set_title("Personality Group -> Color Preference Order")
+    ax.set_title("Preference Group -> Color Preference Order")
     if personality_groups.ndim != 2 or personality_groups.shape[0] == 0:
         ax.axis("off")
-        ax.text(0.5, 0.5, "No personality group metadata", ha="center", va="center")
+        ax.text(0.5, 0.5, "No preference group metadata", ha="center", va="center")
         return
 
     n_groups = int(personality_groups.shape[0])

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 import json
 import re
 
@@ -27,7 +26,6 @@ from src.analysis.summary_io import (
 from src.analysis.summary_render_area import (
     _build_elected_ordering_background_image,
     _compute_area_power_direction_orderings,
-    _draw_area_personality_group_distribution,
     _render_area_detail_pdfs,
     _sim_color,
 )
@@ -53,11 +51,9 @@ _SUMMARY_MODES = {SUMMARY_MODE_FULL, SUMMARY_MODE_FAST}
 
 SUMMARY_PROFILE_FULL = "full"
 SUMMARY_PROFILE_DEBUG_DOE_COMPACT = "debug_doe_compact"
-SUMMARY_PROFILE_THESIS_CORE = "thesis_core"
 _SUMMARY_PROFILES = {
     SUMMARY_PROFILE_FULL,
     SUMMARY_PROFILE_DEBUG_DOE_COMPACT,
-    SUMMARY_PROFILE_THESIS_CORE,
 }
 
 
@@ -333,26 +329,6 @@ def _resolve_summary_render_profile(*, profile: str, num_areas: int) -> _Summary
             area_learning_causal_page=True,
             area_assets_page=False,
             area_group_means_page=False,
-            area_dist_to_ref_page=False,
-        )
-    if profile == SUMMARY_PROFILE_THESIS_CORE:
-        return _SummaryRenderProfile(
-            name=SUMMARY_PROFILE_THESIS_CORE,
-            global_colors_and_grids=False,
-            global_static_overview=True,
-            global_per_area_group_distribution=False,
-            global_core_metrics=True,
-            global_step_volatility_page=True,
-            global_distance_metrics=True,
-            area_core_page=True,
-            area_puzzle_page=True,
-            area_vote_mode_alignment_page=False,
-            area_group_opportunity_page=True,
-            area_puzzle_gate_page=True,
-            area_group_diagnostics_pages=True,
-            area_learning_causal_page=True,
-            area_assets_page=False,
-            area_group_means_page=True,
             area_dist_to_ref_page=False,
         )
     return _SummaryRenderProfile(

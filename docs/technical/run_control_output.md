@@ -1,40 +1,57 @@
 # Run Control & Output
 
-This page documents how to run simulations, DOE workflows, and summary generation.
+This page collects the main runtime entry points, the output structure of a
+stored run, and the basic reproducibility conventions used by the project.
 
-## Main Commands
+## Main Runtime Paths
 
-### Single run (UI)
+Start the interactive Mesa server:
 
 ```bash
 python -m scripts.run --config configs/default.yaml
 ```
 
-### Headless batch run
+Run a headless batch:
 
 ```bash
 python -m scripts.run_headless --config configs/default.yaml
 ```
 
-### Replay an existing run
+Replay a stored run:
 
 ```bash
 python -m scripts.run_replay <run_dir>
 ```
 
-### Generate run summary artifacts
+Generate run-level summary artifacts:
 
 ```bash
 python -m scripts.generate_summary --run-dir <run_dir>
 ```
 
-Optional:
+A faster summary variant is also available:
 
 ```bash
 python -m scripts.generate_summary --run-dir <run_dir> --mode fast --closed
 ```
 
-### Run DOE
+## Voting Rule Selection In Config
+
+The active aggregation rule is selected by `model.rule_idx`:
+
+- `0 = plurality`
+- `1 = approval`
+- `2 = utilitarian`
+- `3 = borda`
+- `4 = schulze`
+- `5 = random`
+
+For what these rules mean conceptually and operationally, see
+[voting_rules.md](voting_rules.md).
+
+## DOE Entry Points
+
+Run a DOE batch:
 
 ```bash
 python -m scripts.run_doe --config doe.yaml --doe-profile <profile> --points <n>
@@ -47,7 +64,7 @@ python -m scripts.run_doe --seed-mode fixed --seeds 101,202,303
 python -m scripts.run_doe --seed-mode stratified --seed-target 75 --seed-candidate-start 100 --seed-candidate-count 300
 ```
 
-### Score DOE
+Score a DOE result set:
 
 ```bash
 python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp>
@@ -59,53 +76,19 @@ Optional objective override:
 python -m scripts.score_doe --doe-root data/simulation_output/doe_<timestamp> --objective-config configs/doe_selection_objective_v1.json
 ```
 
-## DOE Support Tools
-
-### Build HIL queue
-
-```bash
-python -m tools.doe.build_doe_hil_queue --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Review HIL queue
-
-```bash
-python -m tools.doe.doe_hil_review --print-commands
-python -m tools.doe.doe_hil_review --populate-ai
-python -m tools.doe.doe_hil_review --bucket top --limit 5 --run-fast
-```
-
-### Probe scoring dimensions
-
-```bash
-python -m tools.doe.probe_scoring_dimensions --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Recovery scan
-
-```bash
-python -m tools.doe.recovery_scan --doe-root data/simulation_output/doe_<timestamp>
-```
-
-### Seed selection helper
+Additional DOE tools:
 
 ```bash
 python -m tools.doe.select_balanced_seeds --config doe.yaml --doe-profile <profile> --target <n>
-```
-
-### DOE inference report
-
-```bash
 python -m tools.doe.doe_inference --doe-root data/simulation_output/doe_<timestamp>
 ```
 
-## Output Structure (Headless/DOE)
+## Output Structure
 
-Typical run output root:
+Headless and DOE runs write into a run root under `data/simulation_output/`
+unless an explicit output path is supplied.
 
-- `data/simulation_output/<run_or_doe_root>/`
-
-Common files:
+A typical stored run contains:
 
 - `config_used.yaml`
 - `meta.yaml`
@@ -114,16 +97,27 @@ Common files:
 - `steps.parquet`
 - `area_steps.parquet`
 - `votes.parquet`
-- `analysis/` (summary CSV/JSON/PDF artifacts)
+- `analysis/` for derived CSV, JSON, and PDF summary artifacts
 
-## Determinism and Seeds
+The schema records consistent step timing, rule labels, and run metadata so
+that replay, summaries, and downstream analysis can read the same run
+artifact set.
 
-- Per-run seed: `run_seed = base_seed + run_id`
-- Reproducibility requires same code, config, seed, and run length.
+## Determinism And Seeds
+
+Per-run seeding follows:
+
+- `run_seed = base_seed + run_id`
+
+Reproducibility therefore requires the same code, config, seed, and run length.
+Replay is deterministic because it reads the stored artifacts rather than
+resimulating the election path.
 
 ## Practical Workflow
 
-1. Run simulations or DOE.
-2. Score DOE outputs.
-3. Inspect top/mid/bottom designs with HIL queue + summaries.
-4. Freeze selected configuration and generate thesis runs.
+The normal workflow is:
+
+1. run a live or headless simulation
+2. replay or inspect the stored run
+3. generate summary artifacts if needed
+4. for DOE work, score the result set and continue with selected designs

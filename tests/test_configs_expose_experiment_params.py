@@ -33,14 +33,14 @@ def _load_yaml(path: Path) -> dict:
 def test_main_configs_expose_experiment_params() -> None:
     """Guardrail: ensure key experiment knobs are present in the main configs.
 
-    These parameters are meant to be tuned frequently during thesis experiments.
+    These parameters are meant to stay explicit in the public experiment configs.
     Keeping them explicit in YAML avoids relying on code defaults.
     """
 
     repo_root = Path(__file__).resolve().parents[1]
     configs_dir = repo_root / "configs"
 
-    for name in ["default.yaml", "doe.yaml", "thesis/final_model_v1.yaml"]:
+    for name in ["default.yaml", "doe.yaml"]:
         cfg = _load_yaml(configs_dir / name)
         assert "model" in cfg, f"{name} missing 'model' section"
         model_cfg = cfg["model"]
